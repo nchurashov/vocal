@@ -24,7 +24,7 @@ let AC = null, master = null, wave = null, playing = [];
 // iPhone: в беззвучном режиме Safari глушит Web Audio. Переводим звук в режим «проигрывание», как у музыки
 let iosUnlocked = false;
 function unlockIOS() {
-  if (iosUnlocked || window.Capacitor) return; iosUnlocked = true;
+  if (iosUnlocked || window.Capacitor || micOn) return; iosUnlocked = true;
   if (!AC) setSession('playback');
   try {
     // для старых iOS: короткий тихий звук через обычный <audio> переключает режим звука
@@ -46,7 +46,7 @@ function ac() {
     const r = AC.resume(); if (r && r.catch) r.catch(() => { });
     // если движок так и не проснулся, к следующему нажатию создаём новый
     clearTimeout(resumeWatch); const dead = AC;
-    resumeWatch = setTimeout(() => { if (AC === dead && AC.state !== 'running' && !busy) resetAudio(); }, 700);
+    resumeWatch = setTimeout(() => { if (AC === dead && AC.state !== 'running' && !busy && !micOn) resetAudio(); }, 700);
   }
   return AC;
 }
@@ -54,9 +54,21 @@ function ac() {
 // Закрываем звуковой движок, когда приложение уходит в фон, и создаём новый при следующем нажатии
 function setSession(t) { try { if (!window.Capacitor && navigator.audioSession) navigator.audioSession.type = t; } catch (e) { } }
 // после микрофона: закрываем движок и только потом возвращаем режим «проигрывание» (менять его на ходу в Safari глушит звук)
-function afterMic() { resetAudio(); setSession('playback'); }
+function afterMic() { micOn = false; resetAudio(); setSession('playback'); }
+// перед микрофоном: закрываем движок, ставим режим «запись и проигрывание» и только потом создаём новый движок.
+// Раньше движок в режиме «проигрывание» жил во время записи: iOS его глушил, а сторож через 0.7 с закрывал его прямо под игрой
+let micOn = false;
+async function openMic() {
+  stopAll(); resetAudio(); micOn = true; setSession('play-and-record');
+  const c = ac();
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    if (c.state !== 'running') { const r = c.resume(); if (r && r.catch) r.catch(() => { }); }
+    return s;
+  } catch (e) { afterMic(); throw e; }
+}
 function resetAudio() { try { if (AC) AC.close(); } catch (e) { } AC = null; master = null; wave = null; noiseBuf = null; iosUnlocked = false; }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !busy) resetAudio(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !busy && !micOn) resetAudio(); });
 window.addEventListener('pageshow', e => { if (e.persisted) resetAudio(); });
 let resumeWatch = 0;
 function stopAll() { playing.forEach(n => { try { n.stop(); } catch (e) { } }); playing = []; }
@@ -511,11 +523,10 @@ function recorderUI(box, getRef, opts) {
   $('#' + id + '-mic')?.addEventListener('click', async () => {
     const btn = $('#' + id + '-mic');
     if (rec && rec.mr && rec.mr.state === 'recording') { rec.mr.stop(); return; }
-    ac();
     let stream;
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) throw new Error('no');
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      stream = await openMic();
     } catch (e) {
       msg.innerHTML = `<div class="note"><b>Нет доступа к микрофону.</b><br>1. Если открыл ссылку из Telegram или другого приложения, нажми «Открыть в Safari» (или скопируй ссылку в Safari).<br>2. В Safari нажми «аА» слева от адреса → «Настройки веб-сайта» → «Микрофон» → «Разрешить», потом обнови страницу.<br>3. Если не помогло: Настройки iPhone → Приложения → Safari → Микрофон → «Спросить» или «Разрешить».</div>`;
       return;
