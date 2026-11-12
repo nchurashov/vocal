@@ -1318,7 +1318,7 @@ function viewGameLevel(n) {
   if (!gameUnlocked(n)) return `<button class="back" onclick="go('game')">${ICON.back} Уровни</button><div class="note">🔒 Сначала пройди уровень ${n - 1} хотя бы на одну звезду.</div>`;
   const best = gameState().best[n];
   let h = `<button class="back" onclick="go('game')">${ICON.back} Все уровни</button>
-    <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${GAME_LEVELS.length} · полоса ±${lv.tol} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px">${starStr(best ? best.stars : 0)}</div></div>
+    <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${GAME_LEVELS.length} · полоса ±${lv.tol} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="gstars">${starStr(best ? best.stars : 0)}</div></div>
     <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. Первая нота: ${VA.noteName(base() + lv.notes.find(x => x[0] != null)[0])}.</p>
     <div class="gstage sec"><canvas id="gcv"></canvas><div id="gover" class="gover"></div></div>
     <div id="gctl" class="stack" style="margin-top:12px"></div><div id="gres"></div>`;
@@ -1409,13 +1409,13 @@ function gameCountIn() {
 // ----- Просмотр с подсказкой -----
 function gamePreview() {
   if (G.mode === 'live') return;
-  const lv = G.lv, c = ac(); gameReset(); G.mode = 'preview';
+  const lv = G.lv, c = ac(); G.keepRes = true; gameReset(); G.mode = 'preview';
   const t0 = gameCountIn();
   G.tl.forEach(n => tone(base() + n.rel, t0 + n.start, n.end - n.start));
   const loop = () => { if (!G || G.stopped || G.mode !== 'preview') return; const now = c.currentTime - t0; gameDraw(now); if (now < G.D + .5) G.raf = requestAnimationFrame(loop); else { G.mode = 'idle'; gameDraw(-1.5); } };
   loop();
 }
-function gameReset() { cancelAnimationFrame(G.raf); stopAll(); G.tl.forEach(n => Object.assign(n, { in: 0, tot: 0, done: false, score: 0 })); G.trail = []; G.pops = []; G.combo = 0; G.maxCombo = 0; G.voice = null; $('#gres').innerHTML = ''; }
+function gameReset() { cancelAnimationFrame(G.raf); stopAll(); G.tl.forEach(n => Object.assign(n, { in: 0, tot: 0, done: false, score: 0 })); G.trail = []; G.pops = []; G.combo = 0; G.maxCombo = 0; G.voice = null; G.devs = null; if (!G.keepRes) $('#gres').innerHTML = ''; G.keepRes = false; }
 
 // ----- Живая игра -----
 async function gameLive() {
@@ -1504,6 +1504,7 @@ function gameResult(scores, mode) {
   const record = !prev || acc > prev.acc;
   if (record) g.best[lv.n] = { acc, stars: Math.max(st, prev ? prev.stars : 0), date: nowLocal() };
   save();
+  $('#gstars').innerHTML = starStr(g.best[lv.n] ? g.best[lv.n].stars : 0);
   const opened = !wasOpen && gameUnlocked(lv.n + 1) && lv.n < GAME_LEVELS.length;
   const msg = st === 0 ? `Нужно ${STAR_AT[0]}%, чтобы пройти уровень. Послушай его ещё раз и попробуй снова.` : opened ? `Уровень ${lv.n + 1} открыт!` : st === 3 ? 'Максимум звёзд!' : `До следующей звезды нужно ${STAR_AT[st]}%.`;
   const notesTxt = G.devs ? G.tl.map((n, i) => { const d = G.devs[i]; const nm = VA.noteName(base() + n.rel); return d == null ? `${nm} ✗` : Math.abs(d) <= lv.tol ? `${nm} ✓` : `${nm} ${d > 0 ? '↑' : '↓'}${Math.abs(d)}ц`; }).join(' · ') : '';
@@ -1581,12 +1582,19 @@ function viewBallLevel(n) {
   const best = ballState().best[n];
   afterHooks.push(() => ballSetup(lv));
   return `<button class="back" onclick="go('ball')">${ICON.back} Все уровни</button>
-    <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${BALL_LEVELS.length} · точность ±${lv.tol} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px">${starStr(best ? best.stars : 0)}</div></div>
+    <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${BALL_LEVELS.length} · точность ±${lv.tol} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
     <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}.</p>
+    <div id="bbest">${ballBestHTML(lv)}</div>
     <div class="gstage sec"><canvas id="bcv"></canvas></div>
-    <div id="bctl" class="stack" style="margin-top:12px"></div><div id="bres"></div>`;
+    <div id="bctl" class="stack" style="margin-top:12px"></div><div id="bnote"></div><div id="bres"></div>`;
 }
 
+function ballBestHTML(lv) {
+  const best = ballState().best[lv.n]; if (!best) return '';
+  const next = lv.n < BALL_LEVELS.length && ballUnlocked(lv.n + 1);
+  return `<div class="card row between wrap" style="margin-top:12px;gap:8px;padding:12px 14px"><div><div class="tiny muted">Твой рекорд сохранён</div><b>${starStr(best.stars)} ${best.pct}% стен</b></div>
+    ${next ? `<button class="btn soft" style="min-height:40px" onclick="go('ball-${lv.n + 1}')">Уровень ${lv.n + 1} →</button>` : ''}</div>`;
+}
 function ballBuild(lv) {
   const b = 60 / lv.bpm; let t = 0; const walls = [];
   lv.walls.forEach(([s, len, gap], i) => {
@@ -1724,7 +1732,7 @@ function ballStep(now, dt, voiceRel) {
   }
 }
 function buzz() { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.type = 'sawtooth'; o.frequency.value = 90; g.gain.setValueAtTime(.12, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .25); o.connect(g).connect(master); o.start(); o.stop(c.currentTime + .3); }
-function ballReset() { cancelAnimationFrame(B.raf); stopAll(); B.walls.forEach(w => Object.assign(w, { crashed: false, passed: false, inT: 0, outT: 0 })); B.lives = 3; B.trail = []; B.parts = []; B.voice = null; B.y = B.floor - B.r; B.vy = 0; B.banner = null; $('#bres').innerHTML = ''; }
+function ballReset(keepResult) { cancelAnimationFrame(B.raf); stopAll(); B.walls.forEach(w => Object.assign(w, { crashed: false, passed: false, inT: 0, outT: 0 })); B.lives = 3; B.trail = []; B.parts = []; B.voice = null; B.y = B.floor - B.r; B.vy = 0; B.banner = null; B.devs = null; $('#bnote').innerHTML = ''; if (!keepResult) $('#bres').innerHTML = ''; }
 function ballSchedule(t0, withMelody) {
   const b = 60 / B.lv.bpm;
   B.walls.forEach((w, i) => {
@@ -1741,7 +1749,7 @@ function ballCountIn() {
 // демо: автопилот поёт правильные ноты
 function ballRun(mode) {
   if (B.mode === 'live') return;
-  const c = ac(); ballReset(); B.mode = mode;
+  const c = ac(); ballReset(true); B.mode = mode;
   const t0 = ballCountIn(); ballSchedule(t0, true);
   let last = -9;
   const loop = () => {
@@ -1750,7 +1758,7 @@ function ballRun(mode) {
     const w = B.walls.find(w => now < w.t1 + .05);
     let v = null; if (w && now > w.t0 - .35) v = w.rel; else if (w && now > -.2) v = null;
     ballStep(now, dt, v); ballDraw(now);
-    if (now < B.D + .8) B.raf = requestAnimationFrame(loop); else { B.mode = 'idle'; $('#bres').innerHTML = '<div class="info small" style="margin-top:10px">Это демо, оно не засчитывается. Теперь твоя очередь!</div>'; }
+    if (now < B.D + .8) B.raf = requestAnimationFrame(loop); else { B.mode = 'idle'; $('#bnote').innerHTML = `<div class="info small" style="margin-top:10px">Это было демо, на твои результаты оно не влияет.${ballState().best[B.lv.n] ? ' Твой рекорд на этом уровне сохранён.' : ' Теперь твоя очередь!'}</div>`; }
   };
   loop();
 }
@@ -1821,6 +1829,7 @@ function ballResult(mode) {
   const record = !prev || pct > prev.pct || (pct === prev.pct && st > prev.stars);
   if (record) g.best[lv.n] = { pct, stars: Math.max(st, prev ? prev.stars : 0), date: nowLocal() };
   save();
+  $('#bstars').innerHTML = starStr(g.best[lv.n] ? g.best[lv.n].stars : 0); $('#bbest').innerHTML = ballBestHTML(lv);
   const opened = !wasOpen && ballUnlocked(lv.n + 1) && lv.n < BALL_LEVELS.length;
   const msg = B.lives <= 0 ? 'Шарик разбился. Посмотри демо и попробуй снова, можно включить подсказку нотой.' : st === 0 ? 'Нужно пролететь 60% стен, чтобы пройти уровень.' : opened ? `Уровень ${lv.n + 1} открыт!` : st === 3 ? 'Все стены чисто! Максимум звёзд.' : `Для следующей звезды нужно ${st === 1 ? '80%' : 'все стены'}.`;
   const notesTxt = B.devs ? B.walls.map((w, i) => { const d = B.devs[i], nm = VA.noteName(base() + w.rel); return d == null ? `${nm} ✗` : w.passed ? `${nm} ✓` : `${nm} ${d > 0 ? '↑' : '↓'}${Math.abs(d)}ц`; }).join(' · ') : B.walls.map(w => `${VA.noteName(base() + w.rel)} ${w.passed ? '✓' : w.crashed ? '✗' : '·'}`).join(' · ');
