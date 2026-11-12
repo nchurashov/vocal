@@ -807,7 +807,7 @@ function viewToday() {
     h += `<div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">За 7 дней: ${n7} ${plural(n7, 'занятие', 'занятия', 'занятий')}</span><span class="pill">Дней подряд: ${st}</span></div>`;
   }
   { const g = state.ball || { best: {} }; const nx = BALL_LEVELS.find(l => ballUnlocked(l.n) && !(g.best[l.n]?.stars >= 1)) || BALL_LEVELS[BALL_LEVELS.length - 1];
-    h += `<button class="item sec" style="margin-top:18px" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в дыру</span></div><span class="muted">›</span></button>`; }
+    h += `<button class="item sec" style="margin-top:18px" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в окно</span></div><span class="muted">›</span></button>`; }
   h += `<div class="sec"><h2>Повторить сегодня</h2>`;
   if (due.length) h += due.map(e => { const s = state.srs[e.id]; return exItem(e, `В прошлый раз: ${RATINGS[s.lastRating].label.toLowerCase()} · ${fmtDay(s.last).toLowerCase()}`); }).join('');
   else h += `<div class="card small muted">${state.sessions.length ? 'На сегодня повторов нет. Можно взять новое упражнение ниже.' : 'Повторы появятся после первых отметок: что не получилось, вернётся раньше, что получилось уверенно, реже.'}</div>`;
@@ -1555,10 +1555,10 @@ function gameResult(scores, mode) {
 }
 window.addEventListener('resize', () => { if (G && G.mode === 'idle') { gameResize(); gameDraw(-1.5); } });
 
-// ===== Игра «Шарик»: пой ноту, чтобы пролететь в дыру =====
+// ===== Игра «Шарик»: пой ноту, чтобы пролететь в окно =====
 // walls: [полутон, длина тоннеля в долях, пауза после в долях]
 const BALL_LEVELS = [
-  { n: 1, title: 'Первая дырка', hint: 'Все дырки на одной высоте: тяни одну ноту', tol: 100, bpm: 60, guide: true,
+  { n: 1, title: 'Первое окно', hint: 'Все окна на одной высоте: тяни одну ноту', tol: 100, bpm: 60, guide: true,
     walls: [[0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2]] },
   { n: 2, title: 'Две высоты', hint: 'Дырки на двух высотах: до и ре', tol: 90, bpm: 60, guide: true,
     walls: [[0, 1, 2], [2, 1, 2], [0, 1, 2], [2, 1, 2], [2, 1, 2], [0, 1, 2]] },
@@ -1594,10 +1594,10 @@ function setTol(v, rerender) { state.settings.tol = Math.max(1, Math.min(50, +v)
 function tolLabel(t) { return `±${t} центов · ${tolZone(t)}${t <= 5 ? ' (нужен очень ровный голос)' : ''}`; }
 function diffSeg() {
   const t = ballTol();
-  return `<div class="card sec stack" style="padding:14px"><div class="row between"><span class="small"><b>Ширина дырки</b></span><span class="small" id="tolLbl">${tolLabel(t)}</span></div>
-    <input type="range" min="1" max="50" step="1" value="${t}" style="width:100%;accent-color:var(--accent)" aria-label="Ширина дырки в центах"
+  return `<div class="card sec stack" style="padding:14px"><div class="row between"><span class="small"><b>Точность попадания</b></span><span class="small" id="tolLbl">${tolLabel(t)}</span></div>
+    <input type="range" min="1" max="50" step="1" value="${t}" style="width:100%;accent-color:var(--accent)" aria-label="Точность попадания в центах"
       oninput="document.getElementById('tolLbl').textContent=tolLabel(+this.value)" onchange="setTol(this.value,true)">
-    <div class="row" style="justify-content:space-between"><span class="tiny muted">±1 узко</span><span class="tiny muted">±50 широко</span></div>
+    <div class="row" style="justify-content:space-between"><span class="tiny muted">±1 строже</span><span class="tiny muted">±50 мягче</span></div>
     <div class="row wrap" style="gap:6px">${PRESETS.map(([n, v]) => `<button class="btn ${t === v ? 'soft' : 'ghost'}" style="min-height:36px;padding:6px 12px;flex:1" onclick="setTol(${v},true)">${n} ±${v}</button>`).join('')}</div></div>`;
 }
 const ballUnlocked = n => n === 1 || (ballState().best[n - 1]?.stars || 0) >= 1;
@@ -1605,7 +1605,7 @@ const ballStarsFor = (pct, lives) => lives <= 0 ? 0 : pct >= 100 ? 3 : pct >= 80
 
 function viewBall() {
   const g = ballState(), total = Object.values(g.best).reduce((a, x) => a + x.stars, 0);
-  let h = `<h1>Шарик</h1><p class="muted" style="margin:6px 0 0">Шарик катится по дорожке, впереди стены с дырками. Пой ноту, и шарик поднимется на её высоту: чем выше дырка, тем выше нота. Сначала отдельные ноты, потом тоннели и мелодии.</p>
+  let h = `<h1>Шарик</h1><p class="muted" style="margin:6px 0 0">Шарик катится по дорожке, впереди стены с окнами. Пой ноту, и шарик поднимется на её высоту: чем выше окно, тем выше нота. Сначала отдельные ноты, потом тоннели и мелодии.</p>
     ${diffSeg()}
     <div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">★ ${total} из ${BALL_LEVELS.length * 3}</span><span class="pill">Пройдено: ${Object.values(g.best).filter(x => x.stars >= 1).length} из ${BALL_LEVELS.length}</span></div>
     <div class="ggrid sec">`;
@@ -1615,7 +1615,7 @@ function viewBall() {
       <span class="gnum">${open ? lv.n : '🔒'}</span><b>${esc(lv.title)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
       <span class="tiny muted">${best ? 'лучший ' + best.pct + '% при ±' + bestTol(best, lv.n) : open ? (lv.n >= 7 ? 'мелодия' : 'ноты') : 'пройди уровень ' + (lv.n - 1)}</span></button>`;
   }
-  h += `</div><p class="tiny muted">3 жизни. Звёзды: 1 за 60% стен, 2 за 80%, 3 за все стены. Уровень пройден с одной звезды, тогда открывается следующий. В рекорде запоминается ширина дырки: чем уже, тем ценнее.</p>
+  h += `</div><p class="tiny muted">3 жизни. Звёзды: 1 за 60% стен, 2 за 80%, 3 за все стены. Уровень пройден с одной звезды, тогда открывается следующий. В рекорде запоминается точность: чем она строже, тем ценнее рекорд.</p>
     <button class="item sec" onclick="go('game')"><div class="dot pitch">🎯</div><div class="t"><b>Ещё игра: «Попади в ноту»</b><span class="small muted">Ноты-полосы, 12 уровней</span></div><span class="muted">›</span></button>`;
   return h;
 }
@@ -1634,7 +1634,7 @@ function viewBallLevel(n) {
   const best = ballState().best[n];
   afterHooks.push(() => ballSetup(lv));
   return `<button class="back" onclick="go('ball')">${ICON.back} Все уровни</button>
-    <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${BALL_LEVELS.length} · дырка ±${ballTol()} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
+    <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${BALL_LEVELS.length} · точность ±${ballTol()} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
     <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}.</p>
     ${diffSeg()}
     <div id="bbest">${ballBestHTML(lv)}</div>
@@ -1774,7 +1774,7 @@ function ballStep(now, dt, voiceRel) {
       const inGap = Math.abs(B.y - bY(w.rel)) <= ballGap(w);
       const grace = Math.min(.22, .3 * (w.t1 - w.t0));
       if (now > w.t0 + grace && now <= w.t1) { if (inGap) w.inT += dt; else w.outT += dt; }
-      // промах: долго вне дырки, или на выходе из тоннеля внутри меньше половины времени
+      // промах: долго вне окна, или на выходе из тоннеля внутри меньше половины времени
       const fail = w.outT > .35 || (now > w.t1 && w.inT + w.outT > 0 && w.inT < w.outT);
       if (fail) {
         w.crashed = true; B.lives--; B.hurt = now + .4; B.banner = { t: now, text: 'Бум! ' + (B.lives > 0 ? 'Осталось жизней: ' + B.lives : ''), good: false };

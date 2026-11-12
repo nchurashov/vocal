@@ -298,7 +298,7 @@ function viewToday() {
     h += `<div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">За 7 дней: ${n7} ${plural(n7, 'занятие', 'занятия', 'занятий')}</span><span class="pill">Дней подряд: ${st}</span></div>`;
   }
   { const g = state.ball || { best: {} }; const nx = BALL_LEVELS.find(l => ballUnlocked(l.n) && !(g.best[l.n]?.stars >= 1)) || BALL_LEVELS[BALL_LEVELS.length - 1];
-    h += `<button class="item sec" style="margin-top:18px" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в дыру</span></div><span class="muted">›</span></button>`; }
+    h += `<button class="item sec" style="margin-top:18px" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в окно</span></div><span class="muted">›</span></button>`; }
   h += `<div class="sec"><h2>Повторить сегодня</h2>`;
   if (due.length) h += due.map(e => { const s = state.srs[e.id]; return exItem(e, `В прошлый раз: ${RATINGS[s.lastRating].label.toLowerCase()} · ${fmtDay(s.last).toLowerCase()}`); }).join('');
   else h += `<div class="card small muted">${state.sessions.length ? 'На сегодня повторов нет. Можно взять новое упражнение ниже.' : 'Повторы появятся после первых отметок: что не получилось, вернётся раньше, что получилось уверенно, реже.'}</div>`;
