@@ -1575,7 +1575,13 @@ function viewBallLevel(n) {
 
 function ballBuild(lv) {
   const b = 60 / lv.bpm; let t = 0; const walls = [];
-  for (const [s, len, gap] of lv.walls) { walls.push({ rel: s, t0: t, t1: t + len * b, crashed: false, passed: false, inT: 0, outT: 0 }); t += (len + gap) * b; }
+  lv.walls.forEach(([s, len, gap], i) => {
+    // окно для смены ноты: если нота идёт сразу за другой, тоннель начинается чуть позже её начала
+    const prev = lv.walls[i - 1];
+    const open = prev && prev[2] < .5 && prev[0] !== s ? Math.min(Math.max(.4, .45 * b), len * b * .55) : 0;
+    walls.push({ rel: s, t0: t + open, t1: t + len * b, crashed: false, passed: false, inT: 0, outT: 0 });
+    t += (len + gap) * b;
+  });
   // соседние тоннели без паузы склеиваются визуально
   return { walls, D: t };
 }
@@ -1597,7 +1603,7 @@ function ballSetup(lv) {
   document.querySelectorAll('.bfile').forEach(inp => inp.addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; e.target.value = ''; ballTake(await f.arrayBuffer()); }));
 }
 function ballResize() {
-  const cv = B.cv, w = cv.parentElement.clientWidth, h = Math.round(Math.min(420, Math.max(280, w * .7))), dpr = window.devicePixelRatio || 1;
+  const cv = B.cv, w = cv.parentElement.clientWidth, h = Math.round(Math.min(460, Math.max(300, w * .85))), dpr = window.devicePixelRatio || 1;
   cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + 'px'; cv.style.height = h + 'px';
   B.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); B.W = w; B.H = h;
   const rels = B.walls.map(x => x.rel); B.lo = Math.min(...rels) - 2; B.hi = Math.max(...rels) + 2.5;
@@ -1608,7 +1614,7 @@ function ballResize() {
 }
 const bY = r => B.floor - (r - B.lo) * B.semi;
 const bRel = y => B.lo + (B.floor - y) / B.semi;
-function ballGap(w) { return Math.max(9, B.lv.tol / 100 * B.semi); }
+function ballGap(w) { return Math.max(6, B.lv.tol / 100 * B.semi); }
 
 // ----- Отрисовка -----
 function ballDraw(now) {
@@ -1687,9 +1693,11 @@ function ballStep(now, dt, voiceRel) {
     if (w.passed || w.crashed) continue;
     if (now >= w.t0 - half && now <= w.t1 + half) {
       const inGap = Math.abs(B.y - bY(w.rel)) <= ballGap(w);
-      if (now > w.t0 + .12) { if (inGap) w.inT += dt; else w.outT += dt; }
-      else if (!inGap) w.outT += dt * .3;
-      if (w.outT > .22) {
+      const grace = Math.min(.22, .3 * (w.t1 - w.t0));
+      if (now > w.t0 + grace && now <= w.t1) { if (inGap) w.inT += dt; else w.outT += dt; }
+      // промах: долго вне дырки, или на выходе из тоннеля внутри меньше половины времени
+      const fail = w.outT > .35 || (now > w.t1 && w.inT + w.outT > 0 && w.inT < w.outT);
+      if (fail) {
         w.crashed = true; B.lives--; B.hurt = now + .4; B.banner = { t: now, text: 'Бум! ' + (B.lives > 0 ? 'Осталось жизней: ' + B.lives : ''), good: false };
         for (let i = 0; i < 14; i++) B.parts.push({ t: now, x: B.bx, y: B.y, vx: (Math.random() - .8) * 160, vy: (Math.random() - .7) * 200, c: i % 2 ? '#FFD27A' : '#E8695E' });
         if (B.mode !== 'replay') buzz();
