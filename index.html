@@ -530,14 +530,28 @@ const ICON = {
 
 // ===== Звук =====
 let AC = null, master = null, wave = null, playing = [];
+// iPhone: в беззвучном режиме Safari глушит Web Audio. Переводим звук в режим «проигрывание», как у музыки
+let iosUnlocked = false;
+function unlockIOS() {
+  if (iosUnlocked) return; iosUnlocked = true;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }
+  try {
+    // для старых iOS: короткий тихий звук через обычный <audio> переключает режим звука
+    const a = new Audio('data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+    a.setAttribute('playsinline', ''); a.volume = 0.01; const pr = a.play(); if (pr && pr.catch) pr.catch(() => { });
+  } catch (e) { }
+}
+document.addEventListener('pointerdown', unlockIOS, { capture: true });
+document.addEventListener('touchend', unlockIOS, { capture: true });
 function ac() {
+  unlockIOS();
   if (!AC) {
     AC = new (window.AudioContext || window.webkitAudioContext)();
     master = AC.createDynamicsCompressor(); master.connect(AC.destination);
     const real = new Float32Array([0, 1, .45, .25, .12, .08, .04]), imag = new Float32Array(real.length);
     wave = AC.createPeriodicWave(real, imag);
   }
-  if (AC.state === 'suspended') AC.resume();
+  if (AC.state !== 'running') { const r = AC.resume(); if (r && r.catch) r.catch(() => { }); }
   return AC;
 }
 function stopAll() { playing.forEach(n => { try { n.stop(); } catch (e) { } }); playing = []; }
@@ -994,7 +1008,7 @@ function recorderUI(box, getRef, opts) {
     const chunks = []; const mr = new MediaRecorder(stream); rec = { mr, cancel: false }; busy = true;
     mr.ondataavailable = e => e.data.size && chunks.push(e.data);
     mr.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop()); clearInterval(rec.tick);
+      stream.getTracks().forEach(t => t.stop()); clearInterval(rec.tick); try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }
       btn.innerHTML = ICON.mic + ' Записать с микрофона';
       if (rec.cancel) return;
       const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
@@ -1444,7 +1458,7 @@ async function gameLive() {
 }
 function gameFinish(aborted) {
   if (!G) return;
-  cancelAnimationFrame(G.raf); if (G.stream) G.stream.getTracks().forEach(t => t.stop()); G.stream = null;
+  cancelAnimationFrame(G.raf); if (G.stream) G.stream.getTracks().forEach(t => t.stop()); G.stream = null; try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }
   const wasLive = G.mode === 'live'; G.mode = 'idle'; busy = false;
   const b = $('#glive'); if (b) { b.innerHTML = ICON.play + ' Играть ещё раз'; b.onclick = () => gameLive(); }
   if (aborted) { gameReset(); gameDraw(-1.5); return; }
@@ -1765,7 +1779,7 @@ async function ballLive() {
 }
 function ballFinish(aborted) {
   if (!B) return;
-  cancelAnimationFrame(B.raf); if (B.stream) B.stream.getTracks().forEach(t => t.stop()); B.stream = null;
+  cancelAnimationFrame(B.raf); if (B.stream) B.stream.getTracks().forEach(t => t.stop()); B.stream = null; try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }
   const mode = B.mode; B.mode = 'idle'; busy = false;
   const btn = $('#blive'); if (btn) btn.innerHTML = ICON.play + ' Играть ещё раз';
   if (aborted) { ballReset(); ballDraw(-2); return; }
