@@ -551,9 +551,20 @@ function ac() {
     const real = new Float32Array([0, 1, .45, .25, .12, .08, .04]), imag = new Float32Array(real.length);
     wave = AC.createPeriodicWave(real, imag);
   }
-  if (AC.state !== 'running') { const r = AC.resume(); if (r && r.catch) r.catch(() => { }); }
+  if (AC.state !== 'running') {
+    const r = AC.resume(); if (r && r.catch) r.catch(() => { });
+    // если движок так и не проснулся, к следующему нажатию создаём новый
+    clearTimeout(resumeWatch); const dead = AC;
+    resumeWatch = setTimeout(() => { if (AC === dead && AC.state !== 'running' && !busy) resetAudio(); }, 700);
+  }
   return AC;
 }
+// iOS 26: у сайтов на экране «Домой» звук после сворачивания часто «зависает».
+// Закрываем звуковой движок, когда приложение уходит в фон, и создаём новый при следующем нажатии
+function resetAudio() { try { if (AC) AC.close(); } catch (e) { } AC = null; master = null; wave = null; noiseBuf = null; iosUnlocked = false; }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !busy) resetAudio(); });
+window.addEventListener('pageshow', e => { if (e.persisted) resetAudio(); });
+let resumeWatch = 0;
 function stopAll() { playing.forEach(n => { try { n.stop(); } catch (e) { } }); playing = []; }
 function tone(midi, t, dur, vol = .22) {
   const c = ac(), o = c.createOscillator(), g = c.createGain();
