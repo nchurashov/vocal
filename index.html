@@ -1013,7 +1013,7 @@ function recorderUI(box, getRef, opts) {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) throw new Error('no');
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
     } catch (e) {
-      msg.innerHTML = `<div class="note"><b>Микрофон в этом окне недоступен.</b> Разреши браузеру доступ к микрофону (значок слева от адреса) или загрузи готовую запись.</div>`;
+      msg.innerHTML = `<div class="note"><b>Нет доступа к микрофону.</b><br>1. Если открыл ссылку из Telegram или другого приложения, нажми «Открыть в Safari» (или скопируй ссылку в Safari).<br>2. В Safari нажми «аА» слева от адреса → «Настройки веб-сайта» → «Микрофон» → «Разрешить», потом обнови страницу.<br>3. Если не помогло: Настройки iPhone → Приложения → Safari → Микрофон → «Спросить» или «Разрешить».</div>`;
       return;
     }
     const chunks = []; const mr = new MediaRecorder(stream); rec = { mr, cancel: false }; busy = true;
@@ -1434,7 +1434,7 @@ async function gameLive() {
   const c = ac();
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
-  catch (e) { $('#gres').innerHTML = '<div class="note" style="margin-top:10px">Нет доступа к микрофону. Разреши его в браузере или запиши попытку файлом.</div>'; return; }
+  catch (e) { $('#gres').innerHTML = '<div class="note" style="margin-top:10px"><b>Нет доступа к микрофону.</b><br>1. Если открыл ссылку из Telegram или другого приложения, нажми «Открыть в Safari» (или скопируй ссылку в Safari).<br>2. В Safari нажми «аА» слева от адреса → «Настройки веб-сайта» → «Микрофон» → «Разрешить», потом обнови страницу.<br>3. Если не помогло: Настройки iPhone → Приложения → Safari → Микрофон → «Спросить» или «Разрешить».</div>'; return; }
   gameReset(); G.mode = 'live'; G.stream = stream; busy = true;
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
@@ -1777,7 +1777,7 @@ async function ballLive() {
   if (B.mode === 'live') { ballFinish(true); return; }
   const c = ac(); let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
-  catch (e) { $('#bres').innerHTML = '<div class="note" style="margin-top:10px">Нет доступа к микрофону. Разреши его в браузере.</div>'; return; }
+  catch (e) { $('#bres').innerHTML = '<div class="note" style="margin-top:10px"><b>Нет доступа к микрофону.</b><br>1. Если открыл ссылку из Telegram или другого приложения, нажми «Открыть в Safari» (или скопируй ссылку в Safari).<br>2. В Safari нажми «аА» слева от адреса → «Настройки веб-сайта» → «Микрофон» → «Разрешить», потом обнови страницу.<br>3. Если не помогло: Настройки iPhone → Приложения → Safari → Микрофон → «Спросить» или «Разрешить».</div>'; return; }
   ballReset(); B.mode = 'live'; B.stream = stream; busy = true;
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
