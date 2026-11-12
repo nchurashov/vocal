@@ -622,9 +622,12 @@ function playRhythm(ex, withClaps = true) {
 
 // Октава голоса: определяется по первым нотам и дальше не меняется,
 // чтобы мужской и женский голос подходили, но нижнее и верхнее До различались
-function octLock(S, v, target) {
+// collect=false: кадр не идёт в определение октавы (например, до первой ноты микрофон слышит подсказку пианино из динамика)
+// подсказка про октаву на экранах игр
+function octaveHint() { const b = BASES.find(x => x[0] === base()); return `<p class="tiny muted" style="margin:6px 0 0">Подсказки звучат от ноты ${b ? b[1].split(',')[0] : VA.noteName(base())}. Пой в своей октаве: женский голос октавой выше тоже засчитается. <a href="#" onclick="openSettings();return false">Сменить ноту</a></p>`; }
+function octLock(S, v, target, collect = true) {
   if (S.oct == null) {
-    (S.octBuf ||= []).push(v - target);
+    if (collect) (S.octBuf ||= []).push(v - target);
     if (S.octBuf.length >= 8) S.oct = 12 * Math.round(VA.median(S.octBuf) / 12);
     return v - 12 * Math.round((v - target) / 12);
   }
@@ -1355,7 +1358,7 @@ function viewGameLevel(n) {
   const best = gameState().best[n];
   let h = `<button class="back" onclick="go('game')">${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${GAME_LEVELS.length} · полоса ±${lv.tol} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="gstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. Первая нота: ${VA.noteName(base() + lv.notes.find(x => x[0] != null)[0])}.</p>
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. Первая нота: ${VA.noteName(base() + lv.notes.find(x => x[0] != null)[0])}.</p>${octaveHint()}
     <div class="gstage sec"><canvas id="gcv"></canvas><div id="gover" class="gover"></div></div>
     <div id="gctl" class="stack" style="margin-top:12px"></div><div id="gres"></div>`;
   afterHooks.push(() => gameSetup(lv));
@@ -1473,7 +1476,7 @@ async function gameLive() {
     const valid = hist.filter(v => v != null), rel = valid.length >= 2 ? VA.median(valid) - base() : null;
     const act = G.tl.find(n => now >= n.start && now < n.end);
     const near = act || G.tl.find(n => n.start > now) || G.tl[G.tl.length - 1];
-    G.voice = rel == null ? null : octLock(G, rel, near.rel);
+    G.voice = rel == null ? null : octLock(G, rel, near.rel, !!act && now > act.start + .1);
     G.voiceHit = false;
     if (act && now > act.start + .15) {
       act.tot += dt;
@@ -1560,7 +1563,7 @@ window.addEventListener('resize', () => { if (G && G.mode === 'idle') { gameResi
 const BALL_LEVELS = [
   { n: 1, title: 'Первое окно', hint: 'Все окна на одной высоте: тяни одну ноту', tol: 100, bpm: 60, guide: true,
     walls: [[0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2]] },
-  { n: 2, title: 'Две высоты', hint: 'Дырки на двух высотах: до и ре', tol: 90, bpm: 60, guide: true,
+  { n: 2, title: 'Две высоты', hint: 'Окна на двух высотах: до и ре', tol: 90, bpm: 60, guide: true,
     walls: [[0, 1, 2], [2, 1, 2], [0, 1, 2], [2, 1, 2], [2, 1, 2], [0, 1, 2]] },
   { n: 3, title: 'Три ступени', hint: 'До, ре, ми вразнобой', tol: 80, bpm: 64, guide: true,
     walls: [[0, 1, 2], [2, 1, 2], [4, 1, 2], [2, 1, 2], [4, 1, 2], [0, 1, 2], [4, 1, 2]] },
@@ -1635,7 +1638,7 @@ function viewBallLevel(n) {
   afterHooks.push(() => ballSetup(lv));
   return `<button class="back" onclick="go('ball')">${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${BALL_LEVELS.length} · точность ±${ballTol()} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}.</p>
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}.</p>${octaveHint()}
     ${diffSeg()}
     <div id="bbest">${ballBestHTML(lv)}</div>
     <div class="gstage sec"><canvas id="bcv"></canvas></div>
@@ -1758,7 +1761,7 @@ function ballDraw(now) {
 function ballStep(now, dt, voiceRel) {
   // привязка октавы к ближайшей стене
   const next = B.walls.find(w => now < w.t1 + .1) || B.walls[B.walls.length - 1];
-  B.voice = voiceRel == null ? null : octLock(B, voiceRel, next.rel);
+  B.voice = voiceRel == null ? null : octLock(B, voiceRel, next.rel, now >= next.t0 + .1 && now <= next.t1);
   if (B.voice != null) {
     const ty = Math.max(B.ceil, Math.min(B.floor - B.r, bY(B.voice)));
     B.y += (ty - B.y) * Math.min(1, dt * 14); B.vy = 0;

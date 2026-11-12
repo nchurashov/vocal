@@ -57,7 +57,7 @@ function viewGameLevel(n) {
   const best = gameState().best[n];
   let h = `<button class="back" onclick="go('game')">${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${GAME_LEVELS.length} · полоса ±${lv.tol} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="gstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. Первая нота: ${VA.noteName(base() + lv.notes.find(x => x[0] != null)[0])}.</p>
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. Первая нота: ${VA.noteName(base() + lv.notes.find(x => x[0] != null)[0])}.</p>${octaveHint()}
     <div class="gstage sec"><canvas id="gcv"></canvas><div id="gover" class="gover"></div></div>
     <div id="gctl" class="stack" style="margin-top:12px"></div><div id="gres"></div>`;
   afterHooks.push(() => gameSetup(lv));
@@ -175,7 +175,7 @@ async function gameLive() {
     const valid = hist.filter(v => v != null), rel = valid.length >= 2 ? VA.median(valid) - base() : null;
     const act = G.tl.find(n => now >= n.start && now < n.end);
     const near = act || G.tl.find(n => n.start > now) || G.tl[G.tl.length - 1];
-    G.voice = rel == null ? null : octLock(G, rel, near.rel);
+    G.voice = rel == null ? null : octLock(G, rel, near.rel, !!act && now > act.start + .1);
     G.voiceHit = false;
     if (act && now > act.start + .15) {
       act.tot += dt;

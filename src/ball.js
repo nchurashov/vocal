@@ -3,7 +3,7 @@
 const BALL_LEVELS = [
   { n: 1, title: 'Первое окно', hint: 'Все окна на одной высоте: тяни одну ноту', tol: 100, bpm: 60, guide: true,
     walls: [[0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2]] },
-  { n: 2, title: 'Две высоты', hint: 'Дырки на двух высотах: до и ре', tol: 90, bpm: 60, guide: true,
+  { n: 2, title: 'Две высоты', hint: 'Окна на двух высотах: до и ре', tol: 90, bpm: 60, guide: true,
     walls: [[0, 1, 2], [2, 1, 2], [0, 1, 2], [2, 1, 2], [2, 1, 2], [0, 1, 2]] },
   { n: 3, title: 'Три ступени', hint: 'До, ре, ми вразнобой', tol: 80, bpm: 64, guide: true,
     walls: [[0, 1, 2], [2, 1, 2], [4, 1, 2], [2, 1, 2], [4, 1, 2], [0, 1, 2], [4, 1, 2]] },
@@ -78,7 +78,7 @@ function viewBallLevel(n) {
   afterHooks.push(() => ballSetup(lv));
   return `<button class="back" onclick="go('ball')">${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${BALL_LEVELS.length} · точность ±${ballTol()} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}.</p>
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}.</p>${octaveHint()}
     ${diffSeg()}
     <div id="bbest">${ballBestHTML(lv)}</div>
     <div class="gstage sec"><canvas id="bcv"></canvas></div>
@@ -201,7 +201,7 @@ function ballDraw(now) {
 function ballStep(now, dt, voiceRel) {
   // привязка октавы к ближайшей стене
   const next = B.walls.find(w => now < w.t1 + .1) || B.walls[B.walls.length - 1];
-  B.voice = voiceRel == null ? null : octLock(B, voiceRel, next.rel);
+  B.voice = voiceRel == null ? null : octLock(B, voiceRel, next.rel, now >= next.t0 + .1 && now <= next.t1);
   if (B.voice != null) {
     const ty = Math.max(B.ceil, Math.min(B.floor - B.r, bY(B.voice)));
     B.y += (ty - B.y) * Math.min(1, dt * 14); B.vy = 0;

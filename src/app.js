@@ -113,9 +113,12 @@ function playRhythm(ex, withClaps = true) {
 
 // Октава голоса: определяется по первым нотам и дальше не меняется,
 // чтобы мужской и женский голос подходили, но нижнее и верхнее До различались
-function octLock(S, v, target) {
+// collect=false: кадр не идёт в определение октавы (например, до первой ноты микрофон слышит подсказку пианино из динамика)
+// подсказка про октаву на экранах игр
+function octaveHint() { const b = BASES.find(x => x[0] === base()); return `<p class="tiny muted" style="margin:6px 0 0">Подсказки звучат от ноты ${b ? b[1].split(',')[0] : VA.noteName(base())}. Пой в своей октаве: женский голос октавой выше тоже засчитается. <a href="#" onclick="openSettings();return false">Сменить ноту</a></p>`; }
+function octLock(S, v, target, collect = true) {
   if (S.oct == null) {
-    (S.octBuf ||= []).push(v - target);
+    if (collect) (S.octBuf ||= []).push(v - target);
     if (S.octBuf.length >= 8) S.oct = 12 * Math.round(VA.median(S.octBuf) / 12);
     return v - 12 * Math.round((v - target) / 12);
   }

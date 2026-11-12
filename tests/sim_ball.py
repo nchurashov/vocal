@@ -7,8 +7,8 @@ from playwright.sync_api import sync_playwright
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 URL = 'file://' + os.path.join(ROOT, 'index.html')
 CHROME = os.environ.get('CHROME', '/usr/bin/google-chrome')
-# голос: [опоздание с, скольжение с, вибрато полутонов, сдвиг всей мелодии, заменить ноту from, на to]
-SIM = """(([lat, glide, vib, shift, subFrom, subTo]) => {
+# голос: [опоздание с, скольжение с, вибрато полутонов, сдвиг всей мелодии, заменить ноту from, на to, в паузах микрофон слышит подсказку пианино]
+SIM = """(([lat, glide, vib, shift, subFrom, subTo, leak]) => {
   ballReset(true); const lv=B.lv, b=60/lv.bpm, ons=[]; let t=0;
   lv.walls.forEach(([s,len,gap])=>{ons.push({s:(s===subFrom?subTo:s),t0:t,t1:t+len*b}); t+=(len+gap)*b;});
   let now=-1.5; const dt=1/60, h=[];
@@ -16,10 +16,12 @@ SIM = """(([lat, glide, vib, shift, subFrom, subTo]) => {
     for(let i=0;i<ons.length;i++){const o=ons[i],n=ons[i+1],end=n&&n.t0-o.t1<.01?n.t0:o.t1;
       if(now>=o.t0-.3+lat&&now<end+lat){const from=(i>0&&ons[i-1].t1>=o.t0-.01)?ons[i-1].s:o.s,k=Math.min(1,Math.max(0,(now-(o.t0+lat))/glide));
         v=from+(o.s-from)*k+vib*Math.sin(now*2*Math.PI*5.5)+shift;break;}}
+    if(v==null&&leak){const nx=ons.find(o=>o.t0>now);if(nx&&nx.t0-now<1.6&&nx.t0-now>.9)v=nx.s;}
     h.push(v); ballStep(now, dt, h.length>6?h[h.length-6]:null); now+=dt; }
   return B.walls.map(w=>w.passed?'P':w.crashed?'X':'.').join(''); })"""
 FAIR = {'вовремя': [.12, .08, .15, 0, -99, 0], 'опоздание 0.2с': [.2, .12, .2, 0, -99, 0], 'раньше 0.1с': [-.1, .08, .15, 0, -99, 0],
-        'октавой выше': [.12, .08, .15, 12, -99, 0], 'октавой ниже': [.12, .08, .15, -12, -99, 0]}
+        'октавой выше': [.12, .08, .15, 12, -99, 0], 'октавой ниже': [.12, .08, .15, -12, -99, 0],
+        'октавой выше, динамик слышен': [.12, .08, .15, 12, -99, 0, 1]}
 fails = []
 with sync_playwright() as p:
     br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(viewport={'width': 390, 'height': 844})
