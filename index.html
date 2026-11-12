@@ -605,6 +605,16 @@ function playRhythm(ex, withClaps = true) {
   return { t0, b, end: t0 + (4 + bars) * b };
 }
 
+// Октава голоса: определяется по первым нотам и дальше не меняется,
+// чтобы мужской и женский голос подходили, но нижнее и верхнее До различались
+function octLock(S, v, target) {
+  if (S.oct == null) {
+    (S.octBuf ||= []).push(v - target);
+    if (S.octBuf.length >= 8) S.oct = 12 * Math.round(VA.median(S.octBuf) / 12);
+    return v - 12 * Math.round((v - target) / 12);
+  }
+  return v - S.oct;
+}
 // ===== Хранилище =====
 const DEFAULT = () => ({ v: 1, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] } });
 let state = DEFAULT();
@@ -1426,7 +1436,7 @@ function gamePreview() {
   const loop = () => { if (!G || G.stopped || G.mode !== 'preview') return; const now = c.currentTime - t0; gameDraw(now); if (now < G.D + .5) G.raf = requestAnimationFrame(loop); else { G.mode = 'idle'; gameDraw(-1.5); } };
   loop();
 }
-function gameReset() { cancelAnimationFrame(G.raf); stopAll(); G.tl.forEach(n => Object.assign(n, { in: 0, tot: 0, done: false, score: 0 })); G.trail = []; G.pops = []; G.combo = 0; G.maxCombo = 0; G.voice = null; G.devs = null; if (!G.keepRes) $('#gres').innerHTML = ''; G.keepRes = false; }
+function gameReset() { cancelAnimationFrame(G.raf); stopAll(); G.tl.forEach(n => Object.assign(n, { in: 0, tot: 0, done: false, score: 0 })); G.trail = []; G.pops = []; G.combo = 0; G.maxCombo = 0; G.voice = null; G.oct = null; G.octBuf = []; G.devs = null; if (!G.keepRes) $('#gres').innerHTML = ''; G.keepRes = false; }
 
 // ----- Живая игра -----
 async function gameLive() {
@@ -1449,7 +1459,7 @@ async function gameLive() {
     const valid = hist.filter(v => v != null), rel = valid.length >= 2 ? VA.median(valid) - base() : null;
     const act = G.tl.find(n => now >= n.start && now < n.end);
     const near = act || G.tl.find(n => n.start > now) || G.tl[G.tl.length - 1];
-    G.voice = rel == null ? null : fold(rel, near.rel);
+    G.voice = rel == null ? null : octLock(G, rel, near.rel);
     G.voiceHit = false;
     if (act && now > act.start + .15) {
       act.tot += dt;
@@ -1560,21 +1570,38 @@ const BALL_LEVELS = [
     walls: [[0, 1, 0], [4, 1, 0], [7, 1, 0], [9, 2, 0], [7, 1, 0], [5, 1, 0], [4, 1, 0], [2, 1, 0], [4, 1, 0], [7, 2, 0], [12, 2, 0], [7, 1, 0], [4, 1, 0], [0, 3, 1]] },
 ];
 const ballState = () => { state.ball ||= { best: {}, plays: [] }; return state.ball; };
+const PRESETS = [['Простой', 40], ['Средний', 20], ['Сложный', 10]];
+const ballTol = () => Math.max(1, Math.min(50, Math.round(state.settings.tol || 40)));
+const tolZone = t => t >= 30 ? 'простой' : t >= 15 ? 'средний' : t >= 6 ? 'сложный' : 'экстрим';
+// рекорд уровня с учётом ширины окошка: уже окошко = ценнее
+const bestTol = (b, n) => b.tol || (BALL_LEVELS.find(l => l.n === n) || {}).tol || 40;
+const rank = (stars, pct, tol) => stars >= 1 ? 1e5 + (60 - tol) * 1000 + stars * 100 + pct : pct;
+function setTol(v, rerender) { state.settings.tol = Math.max(1, Math.min(50, +v)); save(); if (rerender) render(); }
+function tolLabel(t) { return `±${t} центов · ${tolZone(t)}${t <= 5 ? ' (нужен очень ровный голос)' : ''}`; }
+function diffSeg() {
+  const t = ballTol();
+  return `<div class="card sec stack" style="padding:14px"><div class="row between"><span class="small"><b>Ширина дырки</b></span><span class="small" id="tolLbl">${tolLabel(t)}</span></div>
+    <input type="range" min="1" max="50" step="1" value="${t}" style="width:100%;accent-color:var(--accent)" aria-label="Ширина дырки в центах"
+      oninput="document.getElementById('tolLbl').textContent=tolLabel(+this.value)" onchange="setTol(this.value,true)">
+    <div class="row" style="justify-content:space-between"><span class="tiny muted">±1 узко</span><span class="tiny muted">±50 широко</span></div>
+    <div class="row wrap" style="gap:6px">${PRESETS.map(([n, v]) => `<button class="btn ${t === v ? 'soft' : 'ghost'}" style="min-height:36px;padding:6px 12px;flex:1" onclick="setTol(${v},true)">${n} ±${v}</button>`).join('')}</div></div>`;
+}
 const ballUnlocked = n => n === 1 || (ballState().best[n - 1]?.stars || 0) >= 1;
 const ballStarsFor = (pct, lives) => lives <= 0 ? 0 : pct >= 100 ? 3 : pct >= 80 ? 2 : pct >= 60 ? 1 : 0;
 
 function viewBall() {
   const g = ballState(), total = Object.values(g.best).reduce((a, x) => a + x.stars, 0);
   let h = `<h1>Шарик</h1><p class="muted" style="margin:6px 0 0">Шарик катится по дорожке, впереди стены с дырками. Пой ноту, и шарик поднимется на её высоту: чем выше дырка, тем выше нота. Сначала отдельные ноты, потом тоннели и мелодии.</p>
+    ${diffSeg()}
     <div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">★ ${total} из ${BALL_LEVELS.length * 3}</span><span class="pill">Пройдено: ${Object.values(g.best).filter(x => x.stars >= 1).length} из ${BALL_LEVELS.length}</span></div>
     <div class="ggrid sec">`;
   for (const lv of BALL_LEVELS) {
     const best = g.best[lv.n], open = ballUnlocked(lv.n);
     h += `<button class="gtile ${open ? '' : 'locked'}" ${open ? `onclick="go('ball-${lv.n}')"` : ''}>
       <span class="gnum">${open ? lv.n : '🔒'}</span><b>${esc(lv.title)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
-      <span class="tiny muted">${best ? 'лучший ' + best.pct + '%' : open ? (lv.n >= 7 ? 'мелодия' : 'ноты') : 'пройди уровень ' + (lv.n - 1)}</span></button>`;
+      <span class="tiny muted">${best ? 'лучший ' + best.pct + '% при ±' + bestTol(best, lv.n) : open ? (lv.n >= 7 ? 'мелодия' : 'ноты') : 'пройди уровень ' + (lv.n - 1)}</span></button>`;
   }
-  h += `</div><p class="tiny muted">3 жизни. Звёзды: 1 за 60% стен, 2 за 80%, 3 за все стены. Уровень пройден с одной звезды, тогда открывается следующий.</p>
+  h += `</div><p class="tiny muted">3 жизни. Звёзды: 1 за 60% стен, 2 за 80%, 3 за все стены. Уровень пройден с одной звезды, тогда открывается следующий. В рекорде запоминается ширина дырки: чем уже, тем ценнее.</p>
     <button class="item sec" onclick="go('game')"><div class="dot pitch">🎯</div><div class="t"><b>Ещё игра: «Попади в ноту»</b><span class="small muted">Ноты-полосы, 12 уровней</span></div><span class="muted">›</span></button>`;
   return h;
 }
@@ -1593,8 +1620,9 @@ function viewBallLevel(n) {
   const best = ballState().best[n];
   afterHooks.push(() => ballSetup(lv));
   return `<button class="back" onclick="go('ball')">${ICON.back} Все уровни</button>
-    <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${BALL_LEVELS.length} · точность ±${lv.tol} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
+    <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${BALL_LEVELS.length} · дырка ±${ballTol()} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
     <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}.</p>
+    ${diffSeg()}
     <div id="bbest">${ballBestHTML(lv)}</div>
     <div class="gstage sec"><canvas id="bcv"></canvas></div>
     <div id="bctl" class="stack" style="margin-top:12px"></div><div id="bnote"></div><div id="bres"></div>`;
@@ -1603,7 +1631,7 @@ function viewBallLevel(n) {
 function ballBestHTML(lv) {
   const best = ballState().best[lv.n]; if (!best) return '';
   const next = lv.n < BALL_LEVELS.length && ballUnlocked(lv.n + 1);
-  return `<div class="card row between wrap" style="margin-top:12px;gap:8px;padding:12px 14px"><div><div class="tiny muted">Твой рекорд сохранён</div><b>${starStr(best.stars)} ${best.pct}% стен</b></div>
+  return `<div class="card row between wrap" style="margin-top:12px;gap:8px;padding:12px 14px"><div><div class="tiny muted">Твой рекорд сохранён</div><b>${starStr(best.stars)} ${best.pct}% стен при ±${bestTol(best, lv.n)}</b></div>
     ${next ? `<button class="btn soft" style="min-height:40px" onclick="go('ball-${lv.n + 1}')">Уровень ${lv.n + 1} →</button>` : ''}</div>`;
 }
 function ballBuild(lv) {
@@ -1647,7 +1675,7 @@ function ballResize() {
 }
 const bY = r => B.floor - (r - B.lo) * B.semi;
 const bRel = y => B.lo + (B.floor - y) / B.semi;
-function ballGap(w) { return Math.max(6, B.lv.tol / 100 * B.semi); }
+function ballGap(w) { return Math.max(1.5, ballTol() / 100 * B.semi); }
 
 // ----- Отрисовка -----
 function ballDraw(now) {
@@ -1677,6 +1705,10 @@ function ballDraw(now) {
     roundRect(ctx, x1, B.ceil - 30, x2 - x1, gy - gh - (B.ceil - 30), 6); ctx.fill();
     roundRect(ctx, x1, gy + gh, x2 - x1, floor - (gy + gh), 6); ctx.fill();
     ctx.fillStyle = edge; ctx.fillRect(x1, gy - gh - 4, x2 - x1, 4); ctx.fillRect(x1, gy + gh, x2 - x1, 4);
+    // мишень: зона, куда должен попасть центр шарика
+    const tz = ballGap(w);
+    ctx.fillStyle = w.crashed ? 'rgba(255,140,120,.35)' : 'rgba(255,214,130,.38)'; ctx.fillRect(x1, gy - tz, x2 - x1, 2 * tz);
+    ctx.fillStyle = 'rgba(255,240,200,.9)'; ctx.fillRect(x1, gy - .75, x2 - x1, 1.5);
     // кирпичики
     ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.lineWidth = 1;
     for (let yy = B.ceil; yy < floor; yy += 14) { if (yy > gy - gh - 6 && yy < gy + gh + 4) continue; ctx.beginPath(); ctx.moveTo(x1, yy); ctx.lineTo(x2, yy); ctx.stroke(); }
@@ -1712,7 +1744,7 @@ function ballDraw(now) {
 function ballStep(now, dt, voiceRel) {
   // привязка октавы к ближайшей стене
   const next = B.walls.find(w => now < w.t1 + .1) || B.walls[B.walls.length - 1];
-  B.voice = voiceRel == null ? null : fold(voiceRel, next.rel);
+  B.voice = voiceRel == null ? null : octLock(B, voiceRel, next.rel);
   if (B.voice != null) {
     const ty = Math.max(B.ceil, Math.min(B.floor - B.r, bY(B.voice)));
     B.y += (ty - B.y) * Math.min(1, dt * 14); B.vy = 0;
@@ -1743,7 +1775,7 @@ function ballStep(now, dt, voiceRel) {
   }
 }
 function buzz() { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.type = 'sawtooth'; o.frequency.value = 90; g.gain.setValueAtTime(.12, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .25); o.connect(g).connect(master); o.start(); o.stop(c.currentTime + .3); }
-function ballReset(keepResult) { cancelAnimationFrame(B.raf); stopAll(); B.walls.forEach(w => Object.assign(w, { crashed: false, passed: false, inT: 0, outT: 0 })); B.lives = 3; B.trail = []; B.parts = []; B.voice = null; B.y = B.floor - B.r; B.vy = 0; B.banner = null; B.devs = null; $('#bnote').innerHTML = ''; if (!keepResult) $('#bres').innerHTML = ''; }
+function ballReset(keepResult) { cancelAnimationFrame(B.raf); stopAll(); B.walls.forEach(w => Object.assign(w, { crashed: false, passed: false, inT: 0, outT: 0 })); B.lives = 3; B.trail = []; B.parts = []; B.voice = null; B.oct = null; B.octBuf = []; B.y = B.floor - B.r; B.vy = 0; B.banner = null; B.devs = null; $('#bnote').innerHTML = ''; if (!keepResult) $('#bres').innerHTML = ''; }
 function ballSchedule(t0, withMelody) {
   const b = 60 / B.lv.bpm;
   B.walls.forEach((w, i) => {
@@ -1835,12 +1867,12 @@ async function ballTake(arrayBuf) {
 function ballResult(mode) {
   const lv = B.lv, passed = B.walls.filter(w => w.passed).length, total = B.walls.length;
   const pct = Math.round(100 * passed / total), st = ballStarsFor(pct, B.lives);
-  const g = ballState(), prev = g.best[lv.n], wasOpen = ballUnlocked(lv.n + 1);
-  g.plays.push({ lvl: lv.n, pct, stars: st, lives: B.lives, mode, date: nowLocal() }); if (g.plays.length > 300) g.plays.splice(0, g.plays.length - 300);
-  const record = !prev || pct > prev.pct || (pct === prev.pct && st > prev.stars);
-  if (record) g.best[lv.n] = { pct, stars: Math.max(st, prev ? prev.stars : 0), date: nowLocal() };
+  const g = ballState(), bm = g.best, prev = bm[lv.n], wasOpen = ballUnlocked(lv.n + 1), tol = ballTol();
+  g.plays.push({ lvl: lv.n, pct, stars: st, lives: B.lives, mode, tol, date: nowLocal() }); if (g.plays.length > 300) g.plays.splice(0, g.plays.length - 300);
+  const record = !prev || rank(st, pct, tol) > rank(prev.stars, prev.pct, bestTol(prev, lv.n));
+  if (record) bm[lv.n] = { pct, stars: st, tol, date: nowLocal() };
   save();
-  $('#bstars').innerHTML = starStr(g.best[lv.n] ? g.best[lv.n].stars : 0); $('#bbest').innerHTML = ballBestHTML(lv);
+  $('#bstars').innerHTML = starStr(bm[lv.n] ? bm[lv.n].stars : 0); $('#bbest').innerHTML = ballBestHTML(lv);
   const opened = !wasOpen && ballUnlocked(lv.n + 1) && lv.n < BALL_LEVELS.length;
   const msg = B.lives <= 0 ? 'Шарик разбился. Посмотри демо и попробуй снова, можно включить подсказку нотой.' : st === 0 ? 'Нужно пролететь 60% стен, чтобы пройти уровень.' : opened ? `Уровень ${lv.n + 1} открыт!` : st === 3 ? 'Все стены чисто! Максимум звёзд.' : `Для следующей звезды нужно ${st === 1 ? '80%' : 'все стены'}.`;
   const notesTxt = B.devs ? B.walls.map((w, i) => { const d = B.devs[i], nm = VA.noteName(base() + w.rel); return d == null ? `${nm} ✗` : w.passed ? `${nm} ✓` : `${nm} ${d > 0 ? '↑' : '↓'}${Math.abs(d)}ц`; }).join(' · ') : B.walls.map(w => `${VA.noteName(base() + w.rel)} ${w.passed ? '✓' : w.crashed ? '✗' : '·'}`).join(' · ');
