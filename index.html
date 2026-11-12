@@ -534,7 +534,7 @@ let AC = null, master = null, wave = null, playing = [];
 let iosUnlocked = false;
 function unlockIOS() {
   if (iosUnlocked || window.Capacitor) return; iosUnlocked = true;
-  try { if (!window.Capacitor && navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }
+  if (!AC) setSession('playback');
   try {
     // для старых iOS: короткий тихий звук через обычный <audio> переключает режим звука
     const a = new Audio('data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
@@ -561,6 +561,9 @@ function ac() {
 }
 // iOS 26: у сайтов на экране «Домой» звук после сворачивания часто «зависает».
 // Закрываем звуковой движок, когда приложение уходит в фон, и создаём новый при следующем нажатии
+function setSession(t) { try { if (!window.Capacitor && navigator.audioSession) navigator.audioSession.type = t; } catch (e) { } }
+// после микрофона: закрываем движок и только потом возвращаем режим «проигрывание» (менять его на ходу в Safari глушит звук)
+function afterMic() { resetAudio(); setSession('playback'); }
 function resetAudio() { try { if (AC) AC.close(); } catch (e) { } AC = null; master = null; wave = null; noiseBuf = null; iosUnlocked = false; }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !busy) resetAudio(); });
 window.addEventListener('pageshow', e => { if (e.persisted) resetAudio(); });
@@ -1029,7 +1032,7 @@ function recorderUI(box, getRef, opts) {
     const chunks = []; const mr = new MediaRecorder(stream); rec = { mr, cancel: false }; busy = true;
     mr.ondataavailable = e => e.data.size && chunks.push(e.data);
     mr.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop()); clearInterval(rec.tick); try { if (!window.Capacitor && navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }
+      stream.getTracks().forEach(t => t.stop()); clearInterval(rec.tick); afterMic();
       btn.innerHTML = ICON.mic + ' Записать с микрофона';
       if (rec.cancel) return;
       const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
@@ -1094,8 +1097,9 @@ function tapUI(box) {
     $('#tapstart').disabled = true; $('#tapres').innerHTML = '';
     $('#tapmsg').textContent = 'Слушай отсчёт: раз, два, три, четыре...';
     const startAt = sch.t0 + 4 * sch.b;
-    setTimeout(() => { if (live) $('#tapmsg').textContent = 'Стучи!'; }, (startAt - c.currentTime) * 1000);
+    setTimeout(() => { if (live && $('#tapmsg')) $('#tapmsg').textContent = 'Стучи!'; }, (startAt - c.currentTime) * 1000);
     setTimeout(() => {
+      if (!document.body.contains(box)) { live = false; busy = false; return; } // ушли со страницы
       live = false; btn.disabled = true; busy = false; $('#tapstart').disabled = false; $('#tapstart').innerHTML = ICON.play + ' Ещё раз';
       $('#tapmsg').textContent = '';
       const lat = (c.outputLatency || c.baseLatency || 0) + (state.settings.latency || 0) / 1000;
@@ -1479,7 +1483,7 @@ async function gameLive() {
 }
 function gameFinish(aborted) {
   if (!G) return;
-  cancelAnimationFrame(G.raf); if (G.stream) G.stream.getTracks().forEach(t => t.stop()); G.stream = null; try { if (!window.Capacitor && navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }
+  cancelAnimationFrame(G.raf); if (G.stream) G.stream.getTracks().forEach(t => t.stop()); G.stream = null; afterMic();
   const wasLive = G.mode === 'live'; G.mode = 'idle'; busy = false;
   const b = $('#glive'); if (b) { b.innerHTML = ICON.play + ' Играть ещё раз'; b.onclick = () => gameLive(); }
   if (aborted) { gameReset(); gameDraw(-1.5); return; }
@@ -1830,7 +1834,7 @@ async function ballLive() {
 }
 function ballFinish(aborted) {
   if (!B) return;
-  cancelAnimationFrame(B.raf); if (B.stream) B.stream.getTracks().forEach(t => t.stop()); B.stream = null; try { if (!window.Capacitor && navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { }
+  cancelAnimationFrame(B.raf); if (B.stream) B.stream.getTracks().forEach(t => t.stop()); B.stream = null; afterMic();
   const mode = B.mode; B.mode = 'idle'; busy = false;
   const btn = $('#blive'); if (btn) btn.innerHTML = ICON.play + ' Играть ещё раз';
   if (aborted) { ballReset(); ballDraw(-2); return; }
