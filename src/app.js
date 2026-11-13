@@ -285,7 +285,7 @@ let route = 'today', exFilter = 'all';
 function readHash() {
   const h = location.hash.replace('#', '');
   if (h.startsWith('ex-') && exById(h.slice(3))) return h;
-  if (/^(game|ball)-\d+$/.test(h) || h === 'game' || h === 'range') return h;
+  if (/^(game|ball)-\d+$/.test(h) || h === 'game' || h === 'range' || h === 'warmup') return h;
   return TABS.some(t => t[0] === h) ? h : 'today';
 }
 function go(r) { if (busy) stopRecordingIfAny(); location.hash = r; }
@@ -296,6 +296,7 @@ function render() {
   if (typeof gameStop === 'function') gameStop();
   if (typeof ballStop === 'function') ballStop();
   if (typeof rangeStop === 'function') rangeStop();
+  if (typeof warmupStop === 'function') warmupStop();
   stopAll();
   const tabRoute = route.startsWith('ex-') ? 'exercises' : /^(game|ball)/.test(route) ? 'ball' : route;
   $('#tabs').innerHTML = '<div class="tabs-in">' + TABS.map(([k, n, ic]) => `<button class="tab ${tabRoute === k ? 'on' : ''}" onclick="go('${k}')">${ic}<span>${n}</span></button>`).join('') + '</div>';
@@ -303,7 +304,7 @@ function render() {
   if (route.startsWith('ex-')) v.innerHTML = viewExercise(exById(route.slice(3)));
   else if (route.startsWith('game-')) v.innerHTML = viewGameLevel(+route.slice(5));
   else if (route.startsWith('ball-')) v.innerHTML = viewBallLevel(+route.slice(5));
-  else v.innerHTML = ({ ball: viewBall, game: viewGame, today: viewToday, exercises: viewExercises, check: viewCheck, history: viewHistory, notes: viewNotes, range: viewRange })[route]();
+  else v.innerHTML = ({ ball: viewBall, game: viewGame, today: viewToday, exercises: viewExercises, check: viewCheck, history: viewHistory, notes: viewNotes, range: viewRange, warmup: viewWarmup })[route]();
   afterRender();
 }
 let afterHooks = [];
@@ -341,8 +342,9 @@ function viewToday() {
   } else {
     h += `<div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">За 7 дней: ${n7} ${plural(n7, 'занятие', 'занятия', 'занятий')}</span><span class="pill">Дней подряд: ${st}</span></div>`;
   }
+  h += `<button class="item sec" style="margin-top:18px" onclick="go('warmup')"><div class="dot rhythm">${doneToday() ? '✓' : '♪'}</div><div class="t"><b>Распевка дня${doneToday() ? ': сделана' : ''}</b><span class="small muted">${doneToday() ? 'Можно повторить или сразу петь' : `Около ${warmupMin()} мин: дыхание, трель, мычание, гаммы, спуск вниз`}</span></div><span class="muted">›</span></button>`;
   { const g = state.ball || { best: {} }; const nx = BALL_LEVELS.find(l => ballUnlocked(l.n) && !(g.best[l.n]?.stars >= 1)) || BALL_LEVELS[BALL_LEVELS.length - 1];
-    h += `<button class="item sec" style="margin-top:18px" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в окно</span></div><span class="muted">›</span></button>`; }
+    h += `<button class="item" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в окно</span></div><span class="muted">›</span></button>`; }
   { const r = lastRange();
     h += `<button class="item" onclick="go('range')"><div class="dot ear">↕</div><div class="t"><b>${r ? 'Мой диапазон: ' + noteShort(r.lo) + ' - ' + noteShort(r.hi) : 'Замерить мой диапазон'}</b><span class="small muted">${r ? 'Последний замер ' + fmtDay(r.date.slice(0, 10)).toLowerCase() + ' · работаем от ' + noteShort(base()) + (strictOct() ? ', строго в октаве' : '') : 'Минута: узнаешь свой низ и верх и выберешь, где работать'}</span></div><span class="muted">›</span></button>`; }
   h += `<div class="sec"><h2>Повторить сегодня</h2>`;
