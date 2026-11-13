@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Все тесты подряд. Падает на первой ошибке. Запуск: bash tests/run_all.sh
+set -e
+cd "$(dirname "$0")/.."
+python3 build.py
+python3 tests/check_code.py
+node tests/test_analysis.js
+node tests/synth.js
+for t in smoke_ui sim_ball sim_game sim_range sim_warmup sim_voice sim_cam sim_diary sim_profiles; do
+  echo "== $t"; python3 tests/$t.py
+done
+echo "Все тесты прошли"

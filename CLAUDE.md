@@ -39,7 +39,9 @@ iPhone: на Маке открыть `ios/App/App.xcodeproj`, Signing -> Team (A
 Бесплатный Apple ID - приложение живёт 7 дней. Аккаунт разработчика ($99/год) - TestFlight.
 
 ## Тесты (гонять перед каждым пушем)
+Всё сразу: `bash tests/run_all.sh` (то же делает GitHub Actions `.github/workflows/tests.yml` на каждый пуш и PR). Архитектура, правила и план перестройки - `ARCHITECTURE.md`.
 ```
+python3 tests/check_code.py      # синтаксис, нет eval/внешних скриптов/ключей/длинных тире
 node tests/test_analysis.js      # распознавание нот
 node tests/synth.js              # создаёт tests/out/sing.wav для теста интерфейса
 python3 tests/smoke_ui.py        # упражнения, запись с фейкового микрофона, история
