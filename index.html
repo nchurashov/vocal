@@ -945,8 +945,8 @@ function viewToday() {
   h += diaryTodayItem();
   { const nx = voiceNext(), dn = voiceDoneToday();
     h += `<button class="item" onclick="go('voice-${nx.id}')"><div class="dot ear">${dn ? '✓' : nx.icon}</div><div class="t"><b>Голос и речь${dn ? ': сделано' : ''}: ${nx.title}</b><span class="small muted">${dn ? 'Можно ещё один комплекс' : setMin(nx) + ' мин · дыхание, дикция, плавная речь, сильный голос'}</span></div><span class="muted">›</span></button>`; }
-  { const g = state.ball || { best: {} }; const nx = BALL_LEVELS.find(l => ballUnlocked(l.n) && !(g.best[l.n]?.stars >= 1)) || BALL_LEVELS[BALL_LEVELS.length - 1];
-    h += `<button class="item" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в окно</span></div><span class="muted">›</span></button>`; }
+  { const nx = BALL_LEVELS[ballNextN() - 1], done = BALL_LEVELS.filter(l => ballDone(l.n)).length;
+    h += `<button class="item" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: глава ${nx.ch + 1}, ${nx.exam ? 'экзамен' : 'задание ' + nx.task}</b><span class="small muted">${esc(BALL_CHAPTERS[nx.ch].title)} · пройдено ${done} из ${BALL_LEVELS.length}</span></div><span class="muted">›</span></button>`; }
   { const r = lastRange();
     h += `<button class="item" onclick="go('range')"><div class="dot ear">↕</div><div class="t"><b>${r ? 'Мой диапазон: ' + noteShort(r.lo) + ' - ' + noteShort(r.hi) : 'Замерить мой диапазон'}</b><span class="small muted">${r ? 'Последний замер ' + fmtDay(r.date.slice(0, 10)).toLowerCase() + ' · работаем от ' + noteShort(base()) + (strictOct() ? ', строго в октаве' : '') : 'Минута: узнаешь свой низ и верх и выберешь, где работать'}</span></div><span class="muted">›</span></button>`; }
   h += `<button class="item" onclick="go('learn')"><div class="dot pitch">🎹</div><div class="t"><b>Как устроены ноты</b><span class="small muted">До-ре-ми и C-D-E, октавы, что значат C4 и E2, клавиатура со звуком</span></div><span class="muted">›</span></button>`;
@@ -1706,33 +1706,48 @@ window.addEventListener('resize', () => { if (G && G.mode === 'idle') { gameResi
 
 // ===== Игра «Шарик»: пой ноту, чтобы пролететь в окно =====
 // walls: [полутон, длина тоннеля в долях, пауза после в долях]
-const BALL_LEVELS = [
-  { n: 1, title: 'Первое окно', hint: 'Все окна на одной высоте: тяни одну ноту', tol: 100, bpm: 60, guide: true,
-    walls: [[0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2]] },
-  { n: 2, title: 'Две высоты', hint: 'Окна на двух высотах: до и ре', tol: 90, bpm: 60, guide: true,
-    walls: [[0, 1, 2], [2, 1, 2], [0, 1, 2], [2, 1, 2], [2, 1, 2], [0, 1, 2]] },
-  { n: 3, title: 'Три ступени', hint: 'До, ре, ми вразнобой', tol: 80, bpm: 64, guide: true,
-    walls: [[0, 1, 2], [2, 1, 2], [4, 1, 2], [2, 1, 2], [4, 1, 2], [0, 1, 2], [4, 1, 2]] },
-  { n: 4, title: 'Лесенка', hint: 'Пять ступеней вверх и вниз', tol: 70, bpm: 66, guide: true,
-    walls: [[0, 1, 1.5], [2, 1, 1.5], [4, 1, 1.5], [5, 1, 1.5], [7, 1, 1.5], [5, 1, 1.5], [4, 1, 1.5], [2, 1, 1.5], [0, 1, 1.5]] },
-  { n: 5, title: 'Прыжки', hint: 'Ноты аккорда: до, ми, соль', tol: 70, bpm: 66, guide: true,
-    walls: [[0, 1, 2], [4, 1, 2], [7, 1, 2], [4, 1, 2], [0, 1, 2], [7, 1, 2], [0, 1, 2]] },
-  { n: 6, title: 'Длинные тоннели', hint: 'Держи ноту ровно весь тоннель', tol: 60, bpm: 66, guide: true,
-    walls: [[0, 3, 1.5], [4, 3, 1.5], [7, 3, 1.5], [2, 3, 1.5], [0, 3, 1.5]] },
-  { n: 7, title: 'Мелодия: ступени', hint: 'Тоннели идут подряд: это уже мелодия', tol: 60, bpm: 66, guide: false,
-    walls: [[0, 2, 0], [2, 2, 0], [4, 3, 0], [2, 1, 0], [0, 4, 1]] },
-  { n: 8, title: 'Мелодия: терции', hint: 'Ходы через ступень', tol: 55, bpm: 70, guide: false,
-    walls: [[0, 1, 0], [4, 1, 0], [2, 1, 0], [5, 1, 0], [4, 1, 0], [7, 2, 0], [5, 1, 0], [4, 1, 0], [2, 1, 0], [0, 2, 1]] },
-  { n: 9, title: 'Мелодия: минор', hint: 'Вторая нота ниже, чем в мажоре', tol: 50, bpm: 70, guide: false,
-    walls: [[0, 1, 0], [3, 1, 0], [7, 2, 0], [5, 1, 0], [3, 1, 0], [2, 1, 0], [0, 3, 1]] },
-  { n: 10, title: 'Мелодия: скачки', hint: 'Квинта и секста', tol: 50, bpm: 72, guide: false,
-    walls: [[0, 1, 0], [7, 2, 0], [5, 1, 0], [9, 2, 0], [7, 1, 0], [4, 1, 0], [2, 1, 0], [0, 2, 1]] },
-  { n: 11, title: 'Мелодия: октава', hint: 'Самый высокий взлёт', tol: 45, bpm: 70, guide: false,
-    walls: [[0, 2, 0], [12, 2, 0], [7, 1, 0], [4, 1, 0], [5, 1, 0], [2, 1, 0], [0, 2, 1]] },
-  { n: 12, title: 'Финал', hint: 'Быстрая мелодия на всё сразу', tol: 40, bpm: 84, guide: false,
-    walls: [[0, 1, 0], [4, 1, 0], [7, 1, 0], [9, 2, 0], [7, 1, 0], [5, 1, 0], [4, 1, 0], [2, 1, 0], [4, 1, 0], [7, 2, 0], [12, 2, 0], [7, 1, 0], [4, 1, 0], [0, 3, 1]] },
+// 10 глав по 10 заданий = 100 заданий. У главы своя цель (набор нот и тип препятствий), задания внутри растут:
+// больше стен, быстрее, дольше тоннели, к концу главы без подсказки. 10-е задание главы - экзамен.
+// Задания детерминированы (сид = номер), одинаковые при каждом заходе.
+// walls: [полутон, длина тоннеля в долях, пауза после в долях]
+const BALL_CHAPTERS = [
+  { title: 'Одна нота', goal: 'Держи одну ноту ровно: шарик летит на одной высоте', pool: [0], bpm: [58, 70] },
+  { title: 'Два соседа', goal: 'До и ре: шаг на тон вверх и вниз', pool: [0, 2], bpm: [60, 72] },
+  { title: 'Три ступени', goal: 'До, ре, ми вразнобой', pool: [0, 2, 4], bpm: [60, 74] },
+  { title: 'Трезвучие', goal: 'До, ми, соль: прыжки по нотам аккорда', pool: [0, 4, 7], bpm: [60, 72] },
+  { title: 'Пять ступеней', goal: 'До-ре-ми-фа-соль: узкий полутон между ми и фа', pool: [0, 2, 4, 5, 7], step: true, bpm: [62, 76] },
+  { title: 'Долгие ноты', goal: 'Длинные тоннели: держи ноту, не уплывая', pool: [0, 2, 4, 5, 7], long: true, bpm: [62, 72] },
+  { title: 'Мелодии', goal: 'Ноты идут подряд без пауз: это уже мелодия', pool: [0, 2, 4, 5, 7, 9], step: true, legato: true, bpm: [64, 80] },
+  { title: 'Скачки', goal: 'Кварта, квинта, секста: услышь ноту до прыжка', pool: [0, 4, 5, 7, 9, 12], leap: true, bpm: [62, 76] },
+  { title: 'Минор', goal: 'Грустный лад: третья ступень на полутон ниже', pool: [0, 2, 3, 5, 7, 8], step: true, legato: true, bpm: [64, 80] },
+  { title: 'Октава', goal: 'Весь диапазон октавы: мелодии со скачками', pool: [0, 2, 4, 5, 7, 9, 11, 12], step: true, legato: true, leap: true, bpm: [66, 80] },
 ];
-const ballState = () => { state.ball ||= { best: {}, plays: [] }; return state.ball; };
+function ballRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function ballGen(ci, ti) {
+  const C = BALL_CHAPTERS[ci], exam = ti === 9, d = ti / 9, R = ballRng((ci + 1) * 1000 + ti + 7);
+  const n = exam ? 10 : 5 + Math.round(4 * d), pool = C.pool;
+  const legato = C.legato ? ti >= 2 : false;
+  const bpm = Math.round(C.bpm[0] + (C.bpm[1] - C.bpm[0]) * d);
+  const guide = exam ? false : ci < 6 ? ti < 7 : ti < 3;
+  const walls = []; let cur = 0, same = 0;
+  for (let k = 0; k < n; k++) {
+    let s;
+    if (k === 0) s = 0;
+    else if (C.step && !C.leap) { const i = pool.indexOf(cur), cand = [pool[i - 1], pool[i + 1], pool[i - 2], pool[i + 2]].filter(x => x != null); s = cand[Math.floor(R() * (R() < .75 ? Math.min(2, cand.length) : cand.length))]; }
+    else { const cand = pool.length > 1 ? pool.filter(x => x !== cur || same < 1) : pool; s = cand[Math.floor(R() * cand.length)]; }
+    const jump = Math.abs(s - cur);
+    same = s === cur ? same + 1 : 0; cur = s;
+    // после большого скачка в мелодии нота длиннее: нужно время, чтобы долететь
+    const len = C.long ? 2 + Math.round(2 * d) + (R() < .4 ? 1 : 0) : legato ? (jump >= 7 || R() < .3 ? 2 : 1) : 1 + (R() < .25 + .25 * d ? 1 : 0);
+    const gap = legato ? 0 : Math.max(1, 2 - Math.round(d * 2) * .5);
+    walls.push([s, len, gap]);
+  }
+  walls[walls.length - 1][1] = Math.max(2, walls[walls.length - 1][1]); walls[walls.length - 1][2] = 1;
+  return { n: ci * 10 + ti + 1, ch: ci, task: ti + 1, exam, title: exam ? `Экзамен: ${C.title.toLowerCase()}` : `${C.title} · ${ti + 1}`, hint: C.goal, bpm, guide, walls };
+}
+const BALL_LEVELS = BALL_CHAPTERS.flatMap((_, ci) => Array.from({ length: 10 }, (_, ti) => ballGen(ci, ti)));
+// v2: 100 заданий вместо 12 уровней. Старые рекорды уходят в архив (номера уровней теперь значат другое)
+const ballState = () => { state.ball ||= { best: {}, plays: [] }; if (state.ball.v !== 2) { state.ballOld = state.ball; state.ball = { v: 2, best: {}, plays: [] }; } return state.ball; };
 const PRESETS = [['Простой', 40], ['Средний', 20], ['Сложный', 10]];
 const ballTol = () => Math.max(1, Math.min(50, Math.round(state.settings.tol || 40)));
 const tolZone = t => t >= 30 ? 'простой' : t >= 15 ? 'средний' : t >= 6 ? 'сложный' : 'экстрим';
@@ -1749,7 +1764,13 @@ function diffSeg() {
     <div class="row" style="justify-content:space-between"><span class="tiny muted">±1 строже</span><span class="tiny muted">±50 мягче</span></div>
     <div class="row wrap" style="gap:6px">${PRESETS.map(([n, v]) => `<button class="btn ${t === v ? 'soft' : 'ghost'}" style="min-height:36px;padding:6px 12px;flex:1" onclick="setTol(${v},true)">${n} ±${v}</button>`).join('')}</div></div>`;
 }
-const ballUnlocked = n => n === 1 || (ballState().best[n - 1]?.stars || 0) >= 1;
+// закрепление, а не везение: следующее задание - с 2 звёзд (80% стен), новая глава - только после экзамена на 3 звезды (без ударов)
+const BALL_NEED = n => (n % 10 === 0 ? 3 : 2);
+const ballDone = n => (ballState().best[n]?.stars || 0) >= BALL_NEED(n);
+const ballUnlocked = n => n === 1 || ballDone(n - 1);
+const ballNextLbl = n => { const l = BALL_LEVELS[n - 1]; return !l ? '' : l.task === 1 ? `Глава ${l.ch + 1}` : l.exam ? 'Экзамен' : `Задание ${l.task}`; };
+const ballNextN = () => (BALL_LEVELS.find(l => ballUnlocked(l.n) && !ballDone(l.n)) || BALL_LEVELS[BALL_LEVELS.length - 1]).n;
+let ballOpenCh = null;
 const ballStarsFor = (pct, lives) => lives <= 0 ? 0 : pct >= 100 ? 3 : pct >= 80 ? 2 : pct >= 60 ? 1 : 0;
 
 function viewBall() {
@@ -1757,15 +1778,27 @@ function viewBall() {
   let h = `<h1>Шарик</h1><p class="muted" style="margin:6px 0 0">Шарик катится по дорожке, впереди стены с окнами. Пой ноту, и шарик поднимется на её высоту: чем выше окно, тем выше нота. Сначала отдельные ноты, потом тоннели и мелодии.</p>
     <button class="item sec" style="margin-top:14px" onclick="go('warmup')"><div class="dot rhythm">${doneToday() ? '✓' : '♪'}</div><div class="t"><b>${doneToday() ? 'Распевка сегодня сделана' : 'Сначала распевка'}</b><span class="small muted">${doneToday() ? 'Голос разогрет, можно играть' : `Около ${warmupMin()} мин, чтобы голос не устал и ноты брались легче`}</span></div><span class="muted">›</span></button>
     ${diffSeg()}
-    <div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">★ ${total} из ${BALL_LEVELS.length * 3}</span><span class="pill">Пройдено: ${Object.values(g.best).filter(x => x.stars >= 1).length} из ${BALL_LEVELS.length}</span></div>
-    <div class="ggrid sec">`;
-  for (const lv of BALL_LEVELS) {
-    const best = g.best[lv.n], open = ballUnlocked(lv.n);
-    h += `<button class="gtile ${open ? '' : 'locked'}" ${open ? `onclick="go('ball-${lv.n}')"` : ''}>
-      <span class="gnum">${open ? lv.n : '🔒'}</span><b>${esc(lv.title)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
-      <span class="tiny muted">${best ? 'лучший ' + best.pct + '% при ±' + bestTol(best, lv.n) : open ? (lv.n >= 7 ? 'мелодия' : 'ноты') : 'пройди уровень ' + (lv.n - 1)}</span></button>`;
-  }
-  h += `</div><p class="tiny muted">3 жизни. Звёзды: 1 за 60% стен, 2 за 80%, 3 за все стены. Уровень пройден с одной звезды, тогда открывается следующий. В рекорде запоминается точность: чем она строже, тем ценнее рекорд.</p>
+    <div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">★ ${total} из ${BALL_LEVELS.length * 3}</span><span class="pill">Пройдено: ${BALL_LEVELS.filter(l => ballDone(l.n)).length} из ${BALL_LEVELS.length}</span></div>`;
+  const curCh = Math.floor((ballNextN() - 1) / 10);
+  BALL_CHAPTERS.forEach((C, ci) => {
+    const lvls = BALL_LEVELS.filter(l => l.ch === ci), done = lvls.filter(l => ballDone(l.n)).length, open = ballUnlocked(ci * 10 + 1), show = ballOpenCh === ci || (ballOpenCh == null && ci === curCh);
+    h += `<div class="card sec" style="padding:0;overflow:hidden;${open ? '' : 'opacity:.6'}">
+      <button class="row between" style="width:100%;border:0;background:none;padding:14px 16px;text-align:left;color:inherit" onclick="ballOpenCh=${show ? -1 : ci};render()">
+        <div><div class="tiny muted">Глава ${ci + 1}${done === 10 ? ' · пройдена ✓' : ''}</div><b>${open ? '' : '🔒 '}${esc(C.title)}</b><div class="small muted">${esc(C.goal)}</div></div>
+        <div style="text-align:right;flex:none;margin-left:10px"><b>${done}/10</b><div style="width:64px;height:5px;background:var(--line);border-radius:3px;margin-top:4px"><i style="display:block;height:100%;width:${done * 10}%;background:var(--ok);border-radius:3px"></i></div></div></button>`;
+    if (show) {
+      h += `<div class="ggrid" style="padding:0 12px 12px">`;
+      for (const lv of lvls) {
+        const best = g.best[lv.n], o = ballUnlocked(lv.n), ok = ballDone(lv.n);
+        h += `<button class="gtile ${o ? '' : 'locked'}" ${o ? `onclick="go('ball-${lv.n}')"` : ''}>
+          <span class="gnum">${o ? (lv.exam ? '🎓' : lv.task) : '🔒'}</span><b>${lv.exam ? 'Экзамен' : 'Задание ' + lv.task}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
+          <span class="tiny muted">${ok ? 'пройдено' : best ? 'нужно ' + BALL_NEED(lv.n) + '★, есть ' + best.stars : o ? (lv.exam ? 'без ударов, 3★' : lv.guide ? 'с подсказкой' : 'без подсказки') : 'закрыто'}</span></button>`;
+      }
+      h += `</div>`;
+    }
+    h += `</div>`;
+  });
+  h += `<p class="tiny muted">10 глав по 10 заданий. 3 жизни. Звёзды: 1 за 60% стен, 2 за 80%, 3 за все стены. Задание засчитано с 2 звёзд, тогда открывается следующее. Последнее задание главы - экзамен: нужно пройти без единого удара, тогда откроется следующая глава. В рекорде запоминается точность: чем она строже, тем ценнее рекорд.</p>
     <button class="item sec" onclick="go('game')"><div class="dot pitch">🎯</div><div class="t"><b>Ещё игра: «Попади в ноту»</b><span class="small muted">Ноты-полосы, 12 уровней</span></div><span class="muted">›</span></button>`;
   return h;
 }
@@ -1780,12 +1813,12 @@ function ballStop() {
 function viewBallLevel(n) {
   const lv = BALL_LEVELS.find(l => l.n === n);
   if (!lv) return '<div class="empty">Уровень не найден</div>';
-  if (!ballUnlocked(n)) return `<button class="back" onclick="go('ball')">${ICON.back} Уровни</button><div class="note">🔒 Сначала пройди уровень ${n - 1} хотя бы на одну звезду.</div>`;
+  if (!ballUnlocked(n)) return `<button class="back" onclick="go('ball')">${ICON.back} Уровни</button><div class="note">🔒 Сначала пройди ${n % 10 === 1 ? 'экзамен прошлой главы без единого удара (3 звезды)' : 'предыдущее задание на 2 звезды'}.</div>`;
   const best = ballState().best[n];
   afterHooks.push(() => ballSetup(lv)); afterHooks.push(() => { if (camOn()) camStart(); });
   return `<button class="back" onclick="go('ball')">${ICON.back} Все уровни</button>
-    <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${BALL_LEVELS.length} · точность ±${ballTol()} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}.</p>${octaveHint()}${camToggleHTML()}
+    <div class="row between"><div><div class="tiny muted">Глава ${lv.ch + 1} «${esc(BALL_CHAPTERS[lv.ch].title)}» · ${lv.exam ? 'экзамен' : 'задание ' + lv.task + ' из 10'} · точность ±${ballTol()} ц</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. ${lv.exam ? 'Экзамен: нужно пролететь все стены без удара, тогда откроется следующая глава.' : `Чтобы засчитать, нужно 2 звезды (80% стен).${lv.guide ? '' : ' Без подсказки пианино перед стеной.'}`}</p>${octaveHint()}${camToggleHTML()}
     ${diffSeg()}
     <div id="bbest">${ballBestHTML(lv)}</div>
     <div class="gstage sec"><canvas id="bcv"></canvas></div>
@@ -1796,7 +1829,7 @@ function ballBestHTML(lv) {
   const best = ballState().best[lv.n]; if (!best) return '';
   const next = lv.n < BALL_LEVELS.length && ballUnlocked(lv.n + 1);
   return `<div class="card row between wrap" style="margin-top:12px;gap:8px;padding:12px 14px"><div><div class="tiny muted">Твой рекорд сохранён</div><b>${starStr(best.stars)} ${best.pct}% стен при ±${bestTol(best, lv.n)}</b></div>
-    ${next ? `<button class="btn soft" style="min-height:40px" onclick="go('ball-${lv.n + 1}')">Уровень ${lv.n + 1} →</button>` : ''}</div>`;
+    ${next ? `<button class="btn soft" style="min-height:40px" onclick="go('ball-${lv.n + 1}')">${ballNextLbl(lv.n + 1)} →</button>` : ''}</div>`;
 }
 function ballBuild(lv) {
   const b = 60 / lv.bpm; let t = 0; const walls = [];
@@ -2040,7 +2073,9 @@ function ballResult(mode) {
   save();
   $('#bstars').innerHTML = starStr(bm[lv.n] ? bm[lv.n].stars : 0); $('#bbest').innerHTML = ballBestHTML(lv);
   const opened = !wasOpen && ballUnlocked(lv.n + 1) && lv.n < BALL_LEVELS.length;
-  const msg = B.lives <= 0 ? 'Шарик разбился. Посмотри демо и попробуй снова, можно включить подсказку нотой.' : st === 0 ? 'Нужно пролететь 60% стен, чтобы пройти уровень.' : opened ? `Уровень ${lv.n + 1} открыт!` : st === 3 ? 'Все стены чисто! Максимум звёзд.' : `Для следующей звезды нужно ${st === 1 ? '80%' : 'все стены'}.`;
+  const need = BALL_NEED(lv.n), last = lv.n === BALL_LEVELS.length;
+  const msg = B.lives <= 0 ? 'Шарик разбился. Посмотри демо и попробуй снова.' : st < need ? (lv.exam ? `Экзамен засчитывается только без единого удара (3 звезды). Сейчас ${st}★ - ещё раз, ты близко!` : `Чтобы засчитать задание, нужно 2 звезды (80% стен). Сейчас ${st}★ - закрепи ещё раз.`)
+    : opened ? (lv.exam ? `Экзамен сдан! Открыта глава ${lv.ch + 2} «${BALL_CHAPTERS[lv.ch + 1].title}».` : `Засчитано! ${ballNextLbl(lv.n + 1)} открыто.`) : last && st === 3 ? 'Все 100 заданий пройдены. Ты прошёл весь «Шарик»!' : st === 3 ? 'Все стены чисто! Максимум звёзд.' : 'Засчитано. Можно улучшить рекорд или идти дальше.';
   const notesTxt = B.devs ? B.walls.map((w, i) => { const d = B.devs[i], nm = VA.noteName(base() + w.rel); return d == null ? `${nm} ✗` : w.passed ? `${nm} ✓` : `${nm} ${d > 0 ? '↑' : '↓'}${Math.abs(d)}ц`; }).join(' · ') : B.walls.map(w => `${VA.noteName(base() + w.rel)} ${w.passed ? '✓' : w.crashed ? '✗' : '·'}`).join(' · ');
   $('#bres').innerHTML = `<div class="card sec stack" style="text-align:center">
     <div>${starStr(st, true)}</div>
@@ -2049,8 +2084,8 @@ function ballResult(mode) {
     <div class="small">${notesTxt}</div>
     <div class="${st ? 'info' : 'note'}">${msg}</div>
     <div class="row wrap" style="justify-content:center">${mode === 'take' && lastAudio ? `<button class="btn ghost" onclick="playAudioLast()">${ICON.play} Моя попытка</button>` : ''}
-    ${ballUnlocked(lv.n + 1) && lv.n < BALL_LEVELS.length ? `<button class="btn" onclick="go('ball-${lv.n + 1}')">Уровень ${lv.n + 1} →</button>` : ''}</div></div>`;
-  if (opened) toast(`Уровень ${lv.n + 1} открыт!`);
+    ${ballUnlocked(lv.n + 1) && lv.n < BALL_LEVELS.length ? `<button class="btn" onclick="go('ball-${lv.n + 1}')">${ballNextLbl(lv.n + 1)} →</button>` : ''}</div></div>`;
+  if (opened) toast(`${ballNextLbl(lv.n + 1)} открыто!`);
 }
 window.addEventListener('resize', () => { if (B && B.mode === 'idle') { ballResize(); ballDraw(-2); } });
 

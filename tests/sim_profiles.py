@@ -15,19 +15,19 @@ with sync_playwright() as p:
     # старые данные без профилей
     pg.evaluate("localStorage.setItem('vocal-practice', JSON.stringify({ v: 1, settings: { base: 43, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: { 1: { pct: 100, stars: 3, tol: 40 } }, plays: [] } }))")
     pg.reload(); pg.wait_for_timeout(300)
-    if pg.evaluate("[base(), state.ball.best[1] && state.ball.best[1].stars]") != [43, 3]: fails.append('старые данные не открылись в первом профиле')
+    if pg.evaluate("[base(), (state.ballOld || state.ball).best[1] && (state.ballOld || state.ball).best[1].stars]") != [43, 3]: fails.append('старые данные не открылись в первом профиле')
     if 'Как тебя зовут?' not in pg.inner_text('body'): fails.append('нет вопроса про имя')
     pg.fill('#tdname', 'Кит'); pg.click('text=Готово'); pg.wait_for_timeout(200)
     if pg.inner_text('#who').strip() != '🎤 Кит': fails.append(f'в шапке не имя: {pg.inner_text("#who")}')
     # новый профиль
     pg.click('#who'); pg.fill('#pfnew', 'Аня'); pg.click('#sheet >> text=Добавить'); pg.wait_for_timeout(300)
-    if pg.evaluate("[profName(), base(), !!state.ball.best[1]]") != ['Аня', 48, False]: fails.append(f'новый профиль не чистый: {pg.evaluate("[profName(), base(), !!state.ball.best[1]]")}')
+    if pg.evaluate("[profName(), base(), !!(state.ballOld || state.ball).best[1]]") != ['Аня', 48, False]: fails.append(f'новый профиль не чистый')
     pg.evaluate("state.settings.base = 60; save()")
     pg.reload(); pg.wait_for_timeout(300)
     if pg.evaluate("[profName(), base()]") != ['Аня', 60]: fails.append('после перезагрузки потерялся профиль Ани')
     # обратно к Киту
     pg.click('#who'); pg.click('#sheet >> text=Кит'); pg.wait_for_timeout(300)
-    if pg.evaluate("[profName(), base(), state.ball.best[1].stars]") != ['Кит', 43, 3]: fails.append('данные Кита смешались с Аней')
+    if pg.evaluate("[profName(), base(), (state.ballOld || state.ball).best[1].stars]") != ['Кит', 43, 3]: fails.append('данные Кита смешались с Аней')
     if pg.evaluate("localStorage.getItem('vocal-practice') && JSON.parse(localStorage.getItem('vocal-practice')).settings.base") != 43: fails.append('первый профиль не на старом ключе')
     # удаление Ани
     pg.on('dialog', lambda d: d.accept())

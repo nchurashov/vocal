@@ -27,8 +27,8 @@ with sync_playwright() as p:
     br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(viewport={'width': 390, 'height': 844})
     pg.goto(URL + '#ball'); pg.wait_for_timeout(300)
     for tol in [40, 20]:
-        pg.evaluate(f"state.settings.tol={tol};state.ball.best={{}};for(let i=1;i<=12;i++)state.ball.best[i]={{pct:100,stars:3}};save()")
-        for n in range(1, 13):
+        pg.evaluate(f"state.settings.tol={tol};state.ball.best={{}};for(let i=1;i<=100;i++)state.ball.best[i]={{pct:100,stars:3}};state.ball.v=2;save()")
+        for n in range(1, 101):
             pg.goto(f'{URL}#ball-{n}'); pg.wait_for_timeout(100)
             for name, a in FAIR.items():
                 r = pg.evaluate(SIM, a)
@@ -36,7 +36,7 @@ with sync_playwright() as p:
             r = pg.evaluate(SIM, [.12, .08, .1, .7, -99, 0])
             if r.count('X') < len(r) * .7: fails.append(f'±{tol} ур.{n} фальшь 0.7 полутона прошла: {r}')
     pg.evaluate("state.settings.tol=40;save()")
-    for n in (11, 12):
+    for n in pg.evaluate("BALL_LEVELS.filter(l => l.walls.some(w => w[0] === 12) && l.walls.some(w => w[0] === 0)).map(l => l.n)"):
         pg.goto(f'{URL}#ball-{n}'); pg.wait_for_timeout(100)
         r = pg.evaluate(SIM, [.12, .08, .15, 0, 12, 0])
         if 'X' not in r: fails.append(f'ур.{n}: нижнее До вместо верхнего прошло: {r}')
@@ -49,6 +49,15 @@ with sync_playwright() as p:
         r = pg.evaluate(SIM, [.12, .08, .15, 12, -99, 0])
         if r.count('X') < len(r) * .7: fails.append(f'строго ур.{n}: октавой выше прошло: {r}')
     pg.evaluate("state.settings.base=48;state.settings.strict=false;save()")
+    # правила: задание засчитывается с 2★, экзамен (каждое 10-е) - только с 3★; старые 12 уровней уходят в архив
+    rules = pg.evaluate("""(() => { const out = [];
+      state.ball = { best: { 1: { stars: 3, pct: 100 } }, plays: [] }; ballState(); out.push(!!state.ballOld, Object.keys(state.ball.best).length);
+      state.ball.best = { 1: { stars: 1 } }; out.push(ballUnlocked(2));
+      state.ball.best = { 1: { stars: 2 } }; out.push(ballUnlocked(2));
+      state.ball.best = {}; for (let i = 1; i <= 9; i++) state.ball.best[i] = { stars: 2 }; state.ball.best[10] = { stars: 2 }; out.push(ballUnlocked(10), ballUnlocked(11));
+      state.ball.best[10] = { stars: 3 }; out.push(ballUnlocked(11), BALL_LEVELS.length, BALL_LEVELS.filter(l => l.exam).length);
+      return out; })()""")
+    if rules != [True, 0, False, True, True, False, True, 100, 10]: fails.append(f'правила открытия: {rules}')
     br.close()
-print('\n'.join(fails) if fails else 'OK: все уровни честные (±40 и ±20)')
+print('\n'.join(fails) if fails else 'OK: все 100 заданий честные (±40 и ±20)')
 sys.exit(1 if fails else 0)

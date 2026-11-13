@@ -416,8 +416,8 @@ function viewToday() {
   h += diaryTodayItem();
   { const nx = voiceNext(), dn = voiceDoneToday();
     h += `<button class="item" onclick="go('voice-${nx.id}')"><div class="dot ear">${dn ? '✓' : nx.icon}</div><div class="t"><b>Голос и речь${dn ? ': сделано' : ''}: ${nx.title}</b><span class="small muted">${dn ? 'Можно ещё один комплекс' : setMin(nx) + ' мин · дыхание, дикция, плавная речь, сильный голос'}</span></div><span class="muted">›</span></button>`; }
-  { const g = state.ball || { best: {} }; const nx = BALL_LEVELS.find(l => ballUnlocked(l.n) && !(g.best[l.n]?.stars >= 1)) || BALL_LEVELS[BALL_LEVELS.length - 1];
-    h += `<button class="item" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в окно</span></div><span class="muted">›</span></button>`; }
+  { const nx = BALL_LEVELS[ballNextN() - 1], done = BALL_LEVELS.filter(l => ballDone(l.n)).length;
+    h += `<button class="item" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: глава ${nx.ch + 1}, ${nx.exam ? 'экзамен' : 'задание ' + nx.task}</b><span class="small muted">${esc(BALL_CHAPTERS[nx.ch].title)} · пройдено ${done} из ${BALL_LEVELS.length}</span></div><span class="muted">›</span></button>`; }
   { const r = lastRange();
     h += `<button class="item" onclick="go('range')"><div class="dot ear">↕</div><div class="t"><b>${r ? 'Мой диапазон: ' + noteShort(r.lo) + ' - ' + noteShort(r.hi) : 'Замерить мой диапазон'}</b><span class="small muted">${r ? 'Последний замер ' + fmtDay(r.date.slice(0, 10)).toLowerCase() + ' · работаем от ' + noteShort(base()) + (strictOct() ? ', строго в октаве' : '') : 'Минута: узнаешь свой низ и верх и выберешь, где работать'}</span></div><span class="muted">›</span></button>`; }
   h += `<button class="item" onclick="go('learn')"><div class="dot pitch">🎹</div><div class="t"><b>Как устроены ноты</b><span class="small muted">До-ре-ми и C-D-E, октавы, что значат C4 и E2, клавиатура со звуком</span></div><span class="muted">›</span></button>`;
