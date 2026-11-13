@@ -27,7 +27,7 @@ with sync_playwright() as p:
     br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(viewport={'width': 390, 'height': 844})
     pg.goto(URL + '#ball'); pg.wait_for_timeout(300)
     for tol in [40, 20]:
-        pg.evaluate(f"state.settings.tol={tol};state.ball.best={{}};for(let i=1;i<=100;i++)state.ball.best[i]={{pct:100,stars:3}};state.ball.v=2;save()")
+        pg.evaluate(f"state.settings.tol={tol};state.ball.best={{}};for(let i=1;i<=100;i++)state.ball.best[i]={{pct:100,stars:3}};state.ball.v=3;save()")
         for n in range(1, 101):
             pg.goto(f'{URL}#ball-{n}'); pg.wait_for_timeout(100)
             for name, a in FAIR.items():
@@ -49,6 +49,16 @@ with sync_playwright() as p:
         r = pg.evaluate(SIM, [.12, .08, .15, 12, -99, 0])
         if r.count('X') < len(r) * .7: fails.append(f'строго ур.{n}: октавой выше прошло: {r}')
     pg.evaluate("state.settings.base=48;state.settings.strict=false;save()")
+    # окно голоса: все ноты заданий внутри; при широком грудном диапазоне октава идёт от всех 7 нот (до...си)
+    w = pg.evaluate("(() => { state.range = []; ballRebuild(); const W = ballWindow(); return [W, BALL_LEVELS.flatMap(l => l.walls.map(x => x[0])).filter(r => r < W[0] || r > W[1]).length]; })()")
+    if w[1]: fails.append(f'ноты вне окна голоса {w[0]}: {w[1]}')
+    oc = pg.evaluate("(() => { state.settings.base = 48; state.range = [{ date: '2026-11-13T10:00:00', lo: 40, hi: 79, chestHi: 64 }]; save(); ballRebuild(); return [ballWindow(), BALL_LEVELS.filter(l => l.ch === 9 && l.task <= 7).map(l => l.from)]; })()")
+    if oc[1] != ['от до', 'от ре', 'от ми', 'от фа', 'от соль', 'от ля', 'от си']: fails.append(f'октава при окне {oc[0]}: {oc[1]}')
+    for n in range(91, 101):
+        pg.goto(f'{URL}#ball-{n}'); pg.wait_for_timeout(100)
+        r = pg.evaluate(SIM, [.12, .08, .15, 0, -99, 0])
+        if 'X' in r: fails.append(f'широкое окно, ур.{n}: честный певец разбился: {r}')
+    pg.evaluate("state.range = []; save(); ballRebuild()")
     # правила: задание засчитывается с 2★, экзамен (каждое 10-е) - только с 3★; старые 12 уровней уходят в архив
     rules = pg.evaluate("""(() => { const out = [];
       state.ball = { best: { 1: { stars: 3, pct: 100 } }, plays: [] }; ballState(); out.push(!!state.ballOld, Object.keys(state.ball.best).length);

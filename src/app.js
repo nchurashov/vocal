@@ -357,6 +357,7 @@ function start() { state.game ||= { best: {}, plays: [] }; state.ball ||= { best
 
 function render() {
   if (typeof gameStop === 'function') gameStop();
+  if (typeof ballRebuild === 'function') ballRebuild(); // задания «Шарика» зависят от окна голоса (база, замер)
   if (typeof ballStop === 'function') ballStop();
   if (typeof rangeStop === 'function') rangeStop();
   if (typeof warmupStop === 'function') warmupStop();

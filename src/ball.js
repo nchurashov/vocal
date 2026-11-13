@@ -1,47 +1,75 @@
 // ===== Игра «Шарик»: пой ноту, чтобы пролететь в окно =====
 // walls: [полутон, длина тоннеля в долях, пауза после в долях]
-// 10 глав по 10 заданий = 100 заданий. У главы своя цель (набор нот и тип препятствий), задания внутри растут:
-// больше стен, быстрее, дольше тоннели, к концу главы без подсказки. 10-е задание главы - экзамен.
-// Задания детерминированы (сид = номер), одинаковые при каждом заходе.
-// walls: [полутон, длина тоннеля в долях, пауза после в долях]
+// 10 глав по 10 заданий = 100 заданий. Глава = одна тема (интервал или приём), задания = та же тема от разных нот:
+// 1-7 - от До, Ре, Ми, Фа, Соль, Ля, Си (ступени До мажора), 8-9 - вразнобой от разных нот, 10 - экзамен (всё вперемешку, без подсказки).
+// Каждое задание ставится в ту октаву, где помещается в окно голоса: замеренный грудной диапазон или [-7, +12] от базовой ноты.
+// Если нота ни в какую октаву не помещается, её место занимает задание вразнобой. Задания детерминированы (сид = номер).
+// walls: [полутон от базовой ноты, длина тоннеля в долях, пауза после в долях]
 const BALL_CHAPTERS = [
-  { title: 'Одна нота', goal: 'Держи одну ноту ровно: шарик летит на одной высоте', pool: [0], bpm: [58, 70] },
-  { title: 'Два соседа', goal: 'До и ре: шаг на тон вверх и вниз', pool: [0, 2], bpm: [60, 72] },
-  { title: 'Три ступени', goal: 'До, ре, ми вразнобой', pool: [0, 2, 4], bpm: [60, 74] },
-  { title: 'Трезвучие', goal: 'До, ми, соль: прыжки по нотам аккорда', pool: [0, 4, 7], bpm: [60, 72] },
-  { title: 'Пять ступеней', goal: 'До-ре-ми-фа-соль: узкий полутон между ми и фа', pool: [0, 2, 4, 5, 7], step: true, bpm: [62, 76] },
-  { title: 'Долгие ноты', goal: 'Длинные тоннели: держи ноту, не уплывая', pool: [0, 2, 4, 5, 7], long: true, bpm: [62, 72] },
-  { title: 'Мелодии', goal: 'Ноты идут подряд без пауз: это уже мелодия', pool: [0, 2, 4, 5, 7, 9], step: true, legato: true, bpm: [64, 80] },
-  { title: 'Скачки', goal: 'Кварта, квинта, секста: услышь ноту до прыжка', pool: [0, 4, 5, 7, 9, 12], leap: true, bpm: [62, 76] },
-  { title: 'Минор', goal: 'Грустный лад: третья ступень на полутон ниже', pool: [0, 2, 3, 5, 7, 8], step: true, legato: true, bpm: [64, 80] },
-  { title: 'Октава', goal: 'Весь диапазон октавы: мелодии со скачками', pool: [0, 2, 4, 5, 7, 9, 11, 12], step: true, legato: true, leap: true, bpm: [66, 80] },
+  { title: 'Одна нота', goal: 'Держи ровно одну ноту. В каждом задании своя высота: до, ре, ми...', kind: 'hold', bpm: [58, 70] },
+  { title: 'Секунда', goal: 'Соседние ступени: шаг вверх и обратно от разных нот', kind: 'int', deg: 1, bpm: [60, 72] },
+  { title: 'Терция', goal: 'Через ступень: до-ми, ре-фа, ми-соль...', kind: 'int', deg: 2, bpm: [60, 72] },
+  { title: 'Кварта', goal: 'Через две ступени: до-фа, ре-соль...', kind: 'int', deg: 3, bpm: [60, 72] },
+  { title: 'Квинта', goal: 'Через три ступени: до-соль, ре-ля...', kind: 'int', deg: 4, bpm: [60, 72] },
+  { title: 'Гамма', goal: 'Пять ступеней подряд вверх и вниз от разных нот', kind: 'scale', deg: 4, bpm: [62, 78] },
+  { title: 'Трезвучие', goal: 'Аккорд по нотам: до-ми-соль, ре-фа-ля...', kind: 'triad', deg: 4, bpm: [60, 74] },
+  { title: 'Секста', goal: 'Большой прыжок: до-ля, ре-си...', kind: 'int', deg: 5, bpm: [58, 70] },
+  { title: 'Мелодии', goal: 'Ноты подряд без пауз: короткие мелодии от разных нот', kind: 'melody', deg: 4, bpm: [62, 78] },
+  { title: 'Октава', goal: 'Та же нота, только выше: до-до, ре-ре, ми-ми...', kind: 'int', deg: 7, bpm: [56, 70] },
 ];
+const DEG_SEMI = d => 12 * Math.floor(d / 7) + [0, 2, 4, 5, 7, 9, 11][((d % 7) + 7) % 7];
+const DEG_NAME = ['до', 'ре', 'ми', 'фа', 'соль', 'ля', 'си'];
 function ballRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-function ballGen(ci, ti) {
-  const C = BALL_CHAPTERS[ci], exam = ti === 9, d = ti / 9, R = ballRng((ci + 1) * 1000 + ti + 7);
-  const n = exam ? 10 : 5 + Math.round(4 * d), pool = C.pool;
-  const legato = C.legato ? ti >= 2 : false;
-  const bpm = Math.round(C.bpm[0] + (C.bpm[1] - C.bpm[0]) * d);
-  const guide = exam ? false : ci < 6 ? ti < 7 : ti < 3;
-  const walls = []; let cur = 0, same = 0;
-  for (let k = 0; k < n; k++) {
-    let s;
-    if (k === 0) s = 0;
-    else if (C.step && !C.leap) { const i = pool.indexOf(cur), cand = [pool[i - 1], pool[i + 1], pool[i - 2], pool[i + 2]].filter(x => x != null); s = cand[Math.floor(R() * (R() < .75 ? Math.min(2, cand.length) : cand.length))]; }
-    else { const cand = pool.length > 1 ? pool.filter(x => x !== cur || same < 1) : pool; s = cand[Math.floor(R() * cand.length)]; }
-    const jump = Math.abs(s - cur);
-    same = s === cur ? same + 1 : 0; cur = s;
-    // после большого скачка в мелодии нота длиннее: нужно время, чтобы долететь
-    const len = C.long ? 2 + Math.round(2 * d) + (R() < .4 ? 1 : 0) : legato ? (jump >= 7 || R() < .3 ? 2 : 1) : 1 + (R() < .25 + .25 * d ? 1 : 0);
-    const gap = legato ? 0 : Math.max(1, 2 - Math.round(d * 2) * .5);
-    walls.push([s, len, gap]);
-  }
-  walls[walls.length - 1][1] = Math.max(2, walls[walls.length - 1][1]); walls[walls.length - 1][2] = 1;
-  return { n: ci * 10 + ti + 1, ch: ci, task: ti + 1, exam, title: exam ? `Экзамен: ${C.title.toLowerCase()}` : `${C.title} · ${ti + 1}`, hint: C.goal, bpm, guide, walls };
+// окно голоса в полутонах от базовой ноты
+function ballWindow() {
+  const r = typeof lastRange === 'function' ? lastRange() : null, b = typeof base === 'function' ? base() : 48;
+  if (r) { const lo = r.lo - b, hi = (r.chestHi ?? r.hi) - b; if (hi - lo >= 7) return [Math.max(-12, lo), Math.min(19, hi)]; }
+  return [-7, 12];
 }
-const BALL_LEVELS = BALL_CHAPTERS.flatMap((_, ci) => Array.from({ length: 10 }, (_, ti) => ballGen(ci, ti)));
-// v2: 100 заданий вместо 12 уровней. Старые рекорды уходят в архив (номера уровней теперь значат другое)
-const ballState = () => { state.ball ||= { best: {}, plays: [] }; if (state.ball.v !== 2) { state.ballOld = state.ball; state.ball = { v: 2, best: {}, plays: [] }; } return state.ball; };
+// корень задания: ступень dg (0 = до) в октаве, где вся фраза (от 0 до top ступеней вверх) помещается в окно; null - не помещается
+function ballRoot(dg, top, W) {
+  for (const oct of [0, -1, 1]) { const r = DEG_SEMI(dg) + 12 * oct, hi = DEG_SEMI(dg + top) + 12 * oct; if (r >= W[0] && hi <= W[1]) return { dg: dg + 7 * oct, r }; }
+  return null;
+}
+// фраза темы от корня (в ступенях от корня)
+function ballPhrase(C, R, n) {
+  const out = [];
+  if (C.kind === 'hold') { for (let k = 0; k < n; k++) out.push(0); return out; }
+  if (C.kind === 'int') { for (let k = 0; k < n; k++) out.push(k === 0 ? 0 : out[k - 1] === 0 ? C.deg : (R() < .6 ? 0 : C.deg)); return out; }
+  if (C.kind === 'scale') { const up = [0, 1, 2, 3, 4, 3, 2, 1, 0, 2, 4, 2, 0]; return up.slice(0, n); }
+  if (C.kind === 'triad') { const seq = [0, 2, 4, 2, 0, 4, 2, 4, 0, 2]; for (let k = 0; k < n; k++) out.push(k < 5 ? seq[k] : [0, 2, 4][Math.floor(R() * 3)]); return out; }
+  // melody: случайное блуждание по ступеням 0..4, шаг 1-2, начало и конец на корне
+  let cur = 0; out.push(0);
+  for (let k = 1; k < n; k++) { const cand = [cur - 2, cur - 1, cur + 1, cur + 2].filter(x => x >= 0 && x <= C.deg); cur = k === n - 1 ? 0 : cand[Math.floor(R() * cand.length)]; out.push(cur); }
+  return out;
+}
+function ballGen(ci, ti, W) {
+  const C = BALL_CHAPTERS[ci], exam = ti === 9, d = ti / 9, R = ballRng((ci + 1) * 1000 + ti + 7);
+  const top = C.kind === 'hold' ? 0 : C.deg, roots = [0, 1, 2, 3, 4, 5, 6].map(g => ballRoot(g, top, W)).filter(Boolean);
+  const fixed = ti < 7 ? ballRoot(ti, top, W) : null; // задания 1-7: от до, ре, ми, фа, соль, ля, си
+  const n = exam ? 10 : 5 + Math.round(3 * d), legato = C.kind === 'melody' || (C.kind === 'scale' && ti >= 4) || (exam && C.kind !== 'hold');
+  const bpm = Math.round(C.bpm[0] + (C.bpm[1] - C.bpm[0]) * d), guide = exam ? false : ti < 6;
+  const walls = [];
+  if (fixed) {
+    ballPhrase(C, R, n).forEach(g => walls.push(DEG_SEMI(fixed.dg + g) + (fixed.r - DEG_SEMI(fixed.dg))));
+  } else {
+    // вразнобой: короткие фразы от разных корней
+    let k = 0; while (walls.length < n) { const rt = roots[Math.floor(R() * roots.length)] || { dg: 0, r: 0 }; ballPhrase(C, R, C.kind === 'hold' ? 2 : C.kind === 'int' ? 2 : 3).forEach(g => { if (walls.length < n) walls.push(DEG_SEMI(rt.dg + g)); }); k++; }
+  }
+  const out = walls.map((s, k) => {
+    const jump = k ? Math.abs(s - walls[k - 1]) : 0;
+    const len = legato ? (jump >= 7 || R() < .3 ? 2 : 1) : C.kind === 'hold' ? 1 + Math.round(2 * d) : 1 + (R() < .25 + .25 * d ? 1 : 0) + (jump >= 9 ? 1 : 0);
+    return [s, len, legato ? 0 : Math.max(1, 2 - Math.round(d * 2) * .5)];
+  });
+  out[out.length - 1][1] = Math.max(2, out[out.length - 1][1]); out[out.length - 1][2] = 1;
+  const from = fixed ? `от ${DEG_NAME[ti]}` : 'вразнобой';
+  return { n: ci * 10 + ti + 1, ch: ci, task: ti + 1, exam, from, title: exam ? `Экзамен: ${C.title.toLowerCase()}` : `${C.title} ${from}`, hint: C.goal, bpm, guide, walls: out };
+}
+let BALL_LEVELS = [];
+function ballRebuild() { const W = ballWindow(); BALL_LEVELS = BALL_CHAPTERS.flatMap((_, ci) => Array.from({ length: 10 }, (_, ti) => ballGen(ci, ti, W))); return BALL_LEVELS; }
+ballRebuild();
+// v3: 100 заданий (главы по интервалам, задания от разных нот). Старые рекорды уходят в архив (номера уровней теперь значат другое)
+const ballState = () => { state.ball ||= { best: {}, plays: [] }; if (state.ball.v !== 3) { state.ballOld = state.ball; state.ball = { v: 3, best: {}, plays: [] }; } return state.ball; };
 const PRESETS = [['Простой', 40], ['Средний', 20], ['Сложный', 10]];
 const ballTol = () => Math.max(1, Math.min(50, Math.round(state.settings.tol || 40)));
 const tolZone = t => t >= 30 ? 'простой' : t >= 15 ? 'средний' : t >= 6 ? 'сложный' : 'экстрим';
@@ -85,7 +113,7 @@ function viewBall() {
       for (const lv of lvls) {
         const best = g.best[lv.n], o = ballUnlocked(lv.n), ok = ballDone(lv.n);
         h += `<button class="gtile ${o ? '' : 'locked'}" ${o ? `onclick="go('ball-${lv.n}')"` : ''}>
-          <span class="gnum">${o ? (lv.exam ? '🎓' : lv.task) : '🔒'}</span><b>${lv.exam ? 'Экзамен' : 'Задание ' + lv.task}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
+          <span class="gnum">${o ? (lv.exam ? '🎓' : lv.task) : '🔒'}</span><b>${lv.exam ? 'Экзамен' : lv.from[0].toUpperCase() + lv.from.slice(1)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
           <span class="tiny muted">${ok ? 'пройдено' : best ? 'нужно ' + BALL_NEED(lv.n) + '★, есть ' + best.stars : o ? (lv.exam ? 'без ударов, 3★' : lv.guide ? 'с подсказкой' : 'без подсказки') : 'закрыто'}</span></button>`;
       }
       h += `</div>`;
@@ -140,6 +168,7 @@ function ballBuild(lv) {
 function ballSetup(lv) {
   const { walls, D } = ballBuild(lv), cv = $('#bcv');
   B = { lv, walls, D, cv, ctx: cv.getContext('2d'), mode: 'idle', y: null, vy: 0, lives: 3, trail: [], parts: [], voice: null, guide: lv.guide };
+  { const t = [...new Set(walls.map(w => w.rel))]; B.dupName = new Set(t.map(r => VA.noteName(base() + r))).size < t.length; }
   ballResize(); ballDraw(-2);
   const takeBtns = `<div class="row wrap"><label class="btn ${MIC_DIRECT ? 'ghost' : ''}" style="flex:1">${ICON.mic} Записать попытку<input type="file" accept="video/*,audio/*" capture="user" class="hidden bfile"></label>
       <label class="btn ghost">${ICON.file} Загрузить запись<input type="file" accept="audio/*,video/*" class="hidden bfile"></label></div>`;
@@ -205,13 +234,14 @@ function ballDraw(now) {
     for (let yy = B.ceil; yy < floor; yy += 14) { if (yy > gy - gh - 6 && yy < gy + gh + 4) continue; ctx.beginPath(); ctx.moveTo(x1, yy); ctx.lineTo(x2, yy); ctx.stroke(); }
     // подпись ноты
     ctx.fillStyle = '#fff'; ctx.font = '800 13px Manrope, system-ui'; ctx.textAlign = 'center';
-    if (x1 > -10) ctx.fillText(VA.noteName(base() + w.rel), x1 + Math.min(24, (x2 - x1) / 2), gy - gh - 10);
+    if (x1 > -10) ctx.fillText(B.dupName ? noteShort(base() + w.rel) : VA.noteName(base() + w.rel), x1 + Math.min(24, (x2 - x1) / 2), gy - gh - 10);
   }
   ctx.textAlign = 'left';
   // линейка высоты слева
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, B.ceil - 6, 30, floor - B.ceil + 6);
   ctx.font = '700 10px Manrope, system-ui'; ctx.fillStyle = 'rgba(255,255,255,.8)';
-  for (const r of targets) ctx.fillText(VA.noteName(base() + r).slice(0, 4), 3, bY(r) + 3);
+  const dupName = B.dupName; // октава: одинаковые названия - подписываем с номером октавы
+  for (const r of targets) ctx.fillText(dupName ? noteShort(base() + r) : VA.noteName(base() + r).slice(0, 4), 3, bY(r) + 3);
   if (B.voice != null) { ctx.fillStyle = '#FFD27A'; ctx.beginPath(); ctx.moveTo(30, bY(B.voice)); ctx.lineTo(38, bY(B.voice) - 5); ctx.lineTo(38, bY(B.voice) + 5); ctx.fill(); }
   // след шарика
   for (let i = 0; i < B.trail.length; i++) { const p = B.trail[i]; const x = B.bx - (now - p.t) * B.pps; if (x < 0) continue; ctx.fillStyle = `rgba(255,230,190,${.05 + .35 * i / B.trail.length})`; ctx.beginPath(); ctx.arc(x, p.y, B.r * (.4 + .5 * i / B.trail.length), 0, 7); ctx.fill(); }
