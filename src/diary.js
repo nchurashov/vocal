@@ -110,7 +110,7 @@ async function diaryRec() {
     const n = camWrap(g, q, W / 2, 0, W - 80, 44, false), bh = n * 44 + 36, by = H - 96 - bh - 24;
     g.fillStyle = 'rgba(0,0,0,.6)'; camRound(g, 24, by, W - 48, bh, 18); g.fill();
     g.fillStyle = '#fff'; camWrap(g, q, W / 2, by + 50, W - 80, 44); g.textAlign = 'left';
-  }, mic.getAudioTracks().map(t => t.clone()));
+  }, mic);
   diaryDraw();
   const loop = () => {
     if (!DY || DY.mode !== 'rec') return;

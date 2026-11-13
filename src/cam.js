@@ -5,6 +5,17 @@
 const CAM = { stream: null, video: null, rec: null, clips: [] };
 const CAM_OK = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder && HTMLCanvasElement.prototype.captureStream) && MIC_DIRECT;
 const camOn = () => CAM_OK && !!state.settings.cam;
+// звук для видео: свой отдельный движок, его дорожка начинается с нуля вместе с видео.
+// Копия дорожки микрофона на iOS несёт отметки времени от включения телефона - видео получалось длиной в сотни часов.
+function camAudio(micStream) {
+  if (!micStream || !micStream.getAudioTracks().length) return { tracks: [], close() { } };
+  try {
+    const x = new (window.AudioContext || window.webkitAudioContext)(), dest = x.createMediaStreamDestination();
+    x.createMediaStreamSource(micStream).connect(dest);
+    if (x.state !== 'running') { const r = x.resume(); if (r && r.catch) r.catch(() => { }); }
+    return { tracks: dest.stream.getAudioTracks(), close() { try { x.close(); } catch (e) { } } };
+  } catch (e) { return { tracks: [], close() { } }; }
+}
 function camMime() {
   for (const m of ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'])
     if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
@@ -44,13 +55,13 @@ function camRecStart(canvasSel, title, micStream) {
   const W = 720, H = 1280, out = document.createElement('canvas'); out.width = W; out.height = H;
   const g = out.getContext('2d'), vs = out.captureStream(30);
   const tracks = [...vs.getVideoTracks()];
-  if (micStream) micStream.getAudioTracks().forEach(t => { try { tracks.push(t.clone()); } catch (e) { } });
+  const au = camAudio(micStream); tracks.push(...au.tracks);
   const ms = new MediaStream(tracks), mime = camMime(), chunks = [];
   let mr; try { mr = new MediaRecorder(ms, mime ? { mimeType: mime, videoBitsPerSecond: 1600000 } : undefined); } catch (e) { return; }
   const R = CAM.rec = { state: 'rec', mr, out, g, tracks, title, canvasSel, outro: null, t0: performance.now(), mime: mr.mimeType || mime || 'video/webm' };
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.onstop = () => {
-    R.state = 'finished'; cancelAnimationFrame(R.raf); tracks.forEach(t => t.stop());
+    R.state = 'finished'; cancelAnimationFrame(R.raf); tracks.forEach(t => t.stop()); au.close();
     if (!chunks.length || R.discard) return;
     const blob = new Blob(chunks, { type: R.mime.split(';')[0] });
     const clip = { blob, url: URL.createObjectURL(blob), title: R.title, outro: R.outro, date: nowLocal(), ext: R.mime.includes('mp4') ? 'mp4' : 'webm' };
@@ -71,7 +82,7 @@ function camRecStart(canvasSel, title, micStream) {
     g.textAlign = 'left';
   };
   draw();
-  mr.start(500);
+  mr.start(); // одним куском: так Safari правильно пишет длительность mp4
 }
 // стоп: outro - крупный итог на 2.5 с перед концом видео
 function camRecStop(outro, now) {
@@ -150,7 +161,9 @@ async function camShare(i) {
 }
 
 // общий рекордер холста: draw(g, W, H) на каждом кадре, audioTracks - дорожки звука. stop() -> Promise<{blob, ext}>
-function recCanvas(draw, audioTracks = [], W = 720, H = 1280) {
+// audio: массив дорожек или поток микрофона (MediaStream) - тогда звук идёт через camAudio
+function recCanvas(draw, audio = [], W = 720, H = 1280) {
+  const au = audio instanceof MediaStream ? camAudio(audio) : { tracks: audio, close() { } }, audioTracks = au.tracks;
   const out = document.createElement('canvas'); out.width = W; out.height = H;
   const g = out.getContext('2d'), vs = out.captureStream(30), tracks = [...vs.getVideoTracks(), ...audioTracks];
   const mime = camMime(), chunks = [];
@@ -159,7 +172,7 @@ function recCanvas(draw, audioTracks = [], W = 720, H = 1280) {
   let raf = 0, alive = true;
   const loop = () => { if (!alive) return; raf = requestAnimationFrame(loop); draw(g, W, H); };
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-  const done = new Promise(res => { mr.onstop = () => { alive = false; cancelAnimationFrame(raf); tracks.forEach(t => t.stop()); res({ blob: new Blob(chunks, { type: real.split(';')[0] }), ext: real.includes('mp4') ? 'mp4' : 'webm' }); }; });
-  loop(); mr.start(500);
+  const done = new Promise(res => { mr.onstop = () => { alive = false; cancelAnimationFrame(raf); tracks.forEach(t => t.stop()); au.close(); res({ blob: new Blob(chunks, { type: real.split(';')[0] }), ext: real.includes('mp4') ? 'mp4' : 'webm' }); }; });
+  loop(); mr.start();
   return { stop: () => { try { mr.stop(); } catch (e) { } return done; }, done };
 }

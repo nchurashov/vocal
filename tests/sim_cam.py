@@ -11,7 +11,7 @@ CHECK = """async () => { const c = CAM.clips[CAM.clips.length - 1]; if (!c) retu
   const v = document.createElement('video'); v.src = c.url; v.muted = true;
   await new Promise(r => { v.onloadedmetadata = r; setTimeout(r, 3000); });
   let peak = 0; try { const b = await new AudioContext().decodeAudioData(await c.blob.arrayBuffer()); const d = b.getChannelData(0); for (let i = 0; i < d.length; i += 50) peak = Math.max(peak, Math.abs(d[i])); } catch (e) { peak = -1; }
-  return { w: v.videoWidth, h: v.videoHeight, dur: v.duration, peak, sheet: !!document.querySelector('#sheet video') }; }"""
+  return { w: v.videoWidth, h: v.videoHeight, dur: v.duration, size: c.blob.size, peak, sheet: !!document.querySelector('#sheet video') }; }"""
 fails = []
 with sync_playwright() as p:
     br = p.chromium.launch(executable_path=CHROME, args=['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', f'--use-file-for-fake-audio-capture={WAV}', '--autoplay-policy=no-user-gesture-required'])
@@ -29,7 +29,8 @@ with sync_playwright() as p:
         r = pg.evaluate(CHECK)
         if not r: fails.append(f'{route}: видео не записалось'); continue
         if (r['w'], r['h']) != (720, 1280): fails.append(f'{route}: размер {r["w"]}x{r["h"]}, ждали 720x1280')
-        if not (r['dur'] > 5): fails.append(f'{route}: длина {r["dur"]} с (ждали игру + 2.5 с итога)')
+        if not (5 < r['dur'] < 60): fails.append(f'{route}: длина {r["dur"]} с (ждали игру + 2.5 с итога, не больше минуты)')
+        if r.get('size', 0) > 15e6: fails.append(f'{route}: файл {r["size"]} байт - слишком большой')
         if not (r['peak'] > .01): fails.append(f'{route}: в видео нет звука микрофона (пик {r["peak"]})')
         if not r['sheet']: fails.append(f'{route}: не открылся просмотр видео')
         pg.evaluate("closeSheet(); state.settings.cam = false; save()")
