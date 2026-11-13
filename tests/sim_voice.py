@@ -22,6 +22,9 @@ with sync_playwright() as p:
         if abs(r[0] - sec) > .1 or r[1] != done: fails.append(f'секундомер «{name}»: {r}, ждали {sec} с, done={done}')
     bad = pg.evaluate("VOICE_SETS.flatMap(s => s.steps.filter(x => !x.t || !x.how || /[—]/.test(x.t + x.how) || !(stepSec(x) > 0)).map(x => s.id + ': ' + x.t))")
     if bad: fails.append(f'пустые шаги или длинные тире: {bad}')
+    cl = pg.evaluate("[clSyl(clRows(CL_HARD, 4)), clSyl(clRows(CL_SOFT, 4)), new Set([...Array(12).keys()].flatMap(d => { const o = (d * 4) % CL_HARD.length; return [0,1,2,3].map(k => CL_HARD[(o + k) % CL_HARD.length]); })).size]")
+    if len(cl[0]) != 40 or len(cl[1]) != 40 or not all(len(x) == 4 for x in cl[0] + cl[1]): fails.append(f'сочетания: {cl[0][:5]}... ({len(cl[0])}, {len(cl[1])})')
+    if cl[2] != 12: fails.append(f'за 12 дней пройдены не все ряды П-Т-К/Б-Д-Г: {cl[2]}')
     # полный проход каждого комплекса на ускорении (замеры пропускаем кнопкой «Дальше»)
     pg.evaluate("window.VS_SPEED = 60; state.voice = { done: [], rec: { mpt: [], exhale: [] } }; save()")
     for sid in pg.evaluate("VOICE_SETS.map(s => s.id)"):
