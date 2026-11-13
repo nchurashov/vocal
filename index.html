@@ -129,6 +129,15 @@ details summary{cursor:pointer}
 .tab span{white-space:nowrap}
 @media(max-width:400px){.tab{font-size:10.5px}}
 
+/* клавиатура пианино */
+.pk{stroke:var(--muted);stroke-width:.35}
+.pk-w{fill:#fff}.pk-b{fill:#2B231E}
+.pk-w.pk-in{fill:color-mix(in srgb,var(--accent) 22%,#fff)}.pk-b.pk-in{fill:color-mix(in srgb,var(--accent) 55%,#2B231E)}
+.pk-cur{fill:var(--accent)!important}
+.pk-lbl{font:700 5px Manrope,system-ui;fill:var(--muted)}
+.pk-oct{font:600 4.2px Manrope,system-ui;fill:var(--muted)}
+.pk-sep{stroke:var(--line);stroke-width:.5}
+
 .app{padding-top:max(16px,env(safe-area-inset-top))}</style></head>
 <body><div class="app"><header class="top"><div class="brand"><div class="logo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg></div><b>Вокал</b></div>
 <button class="iconbtn" aria-label="Настройки" onclick="openSettings()" id="gear"></button></header>
@@ -655,10 +664,11 @@ function registerCard(inSheet) {
     <div class="row"><button class="btn ghost" style="min-width:46px;padding:0" aria-label="Ниже на полутон" onclick="setBase(base()-1)">−</button>
       <div style="flex:1;text-align:center"><div style="font-weight:800">${noteFull(base())}</div><div class="tiny muted">уровни идут от неё вверх до ${noteShort(base() + 12)}</div></div>
       <button class="btn ghost" style="min-width:46px;padding:0" aria-label="Выше на полутон" onclick="setBase(base()+1)">+</button></div>
+    <div style="overflow-x:auto">${pianoSVG(Math.min(36, base()), Math.max(83, base() + 12), { band: [base(), base() + 12], cur: r ? null : null })}</div>
     <div class="row wrap" style="gap:6px"><button class="btn ghost" style="flex:1;min-height:38px;padding:6px 10px" onclick="setBase(base()-12)">Октавой ниже</button><button class="btn ghost" style="flex:1;min-height:38px;padding:6px 10px" onclick="setBase(base()+12)">Октавой выше</button><button class="btn ghost" style="min-height:38px;padding:6px 10px" aria-label="Послушать ноту" onclick="playNotes([[0,2]],80)">${ICON.play}</button></div>
     <label class="check" style="border:0;padding:0"><input type="checkbox" ${strictOct() ? 'checked' : ''} onchange="setStrict(this.checked)"><span class="small"><b>Только в этой октаве.</b> Для работы над регистром: октавой выше или ниже не засчитается.${strictOct() ? '' : ' Сейчас подходит любая октава.'}</span></label>
     ${rangeWarn()}
-    <a href="#range" class="small" ${inSheet ? 'onclick="closeSheet()"' : ''}>${r ? 'Замерить диапазон заново' : 'Замерить мой диапазон'}</a></div>`;
+    <div class="row wrap small" style="gap:14px"><a href="#range" ${inSheet ? 'onclick="closeSheet()"' : ''}>${r ? 'Замерить диапазон заново' : 'Замерить мой диапазон'}</a><a href="#learn" ${inSheet ? 'onclick="closeSheet()"' : ''}>Как читать ноты</a></div></div>`;
 }
 // подсказка на экранах игр: при первом заходе - выбор голоса, потом - карточка высоты
 function octaveHint() {
@@ -796,7 +806,7 @@ let route = 'today', exFilter = 'all';
 function readHash() {
   const h = location.hash.replace('#', '');
   if (h.startsWith('ex-') && exById(h.slice(3))) return h;
-  if (/^(game|ball)-\d+$/.test(h) || h === 'game' || h === 'range' || h === 'warmup') return h;
+  if (/^(game|ball)-\d+$/.test(h) || h === 'game' || h === 'range' || h === 'warmup' || h === 'learn') return h;
   return TABS.some(t => t[0] === h) ? h : 'today';
 }
 function go(r) { if (busy) stopRecordingIfAny(); location.hash = r; }
@@ -815,7 +825,7 @@ function render() {
   if (route.startsWith('ex-')) v.innerHTML = viewExercise(exById(route.slice(3)));
   else if (route.startsWith('game-')) v.innerHTML = viewGameLevel(+route.slice(5));
   else if (route.startsWith('ball-')) v.innerHTML = viewBallLevel(+route.slice(5));
-  else v.innerHTML = ({ ball: viewBall, game: viewGame, today: viewToday, exercises: viewExercises, check: viewCheck, history: viewHistory, notes: viewNotes, range: viewRange, warmup: viewWarmup })[route]();
+  else v.innerHTML = ({ ball: viewBall, game: viewGame, today: viewToday, exercises: viewExercises, check: viewCheck, history: viewHistory, notes: viewNotes, range: viewRange, warmup: viewWarmup, learn: viewLearn })[route]();
   afterRender();
 }
 let afterHooks = [];
@@ -858,6 +868,7 @@ function viewToday() {
     h += `<button class="item" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в окно</span></div><span class="muted">›</span></button>`; }
   { const r = lastRange();
     h += `<button class="item" onclick="go('range')"><div class="dot ear">↕</div><div class="t"><b>${r ? 'Мой диапазон: ' + noteShort(r.lo) + ' - ' + noteShort(r.hi) : 'Замерить мой диапазон'}</b><span class="small muted">${r ? 'Последний замер ' + fmtDay(r.date.slice(0, 10)).toLowerCase() + ' · работаем от ' + noteShort(base()) + (strictOct() ? ', строго в октаве' : '') : 'Минута: узнаешь свой низ и верх и выберешь, где работать'}</span></div><span class="muted">›</span></button>`; }
+  h += `<button class="item" onclick="go('learn')"><div class="dot pitch">🎹</div><div class="t"><b>Как устроены ноты</b><span class="small muted">До-ре-ми и C-D-E, октавы, что значат C4 и E2, клавиатура со звуком</span></div><span class="muted">›</span></button>`;
   h += `<div class="sec"><h2>Повторить сегодня</h2>`;
   if (due.length) h += due.map(e => { const s = state.srs[e.id]; return exItem(e, `В прошлый раз: ${RATINGS[s.lastRating].label.toLowerCase()} · ${fmtDay(s.last).toLowerCase()}`); }).join('');
   else h += `<div class="card small muted">${state.sessions.length ? 'На сегодня повторов нет. Можно взять новое упражнение ниже.' : 'Повторы появятся после первых отметок: что не получилось, вернётся раньше, что получилось уверенно, реже.'}</div>`;
@@ -1955,6 +1966,74 @@ function ballResult(mode) {
 }
 window.addEventListener('resize', () => { if (B && B.mode === 'idle') { ballResize(); ballDraw(-2); } });
 
+// ===== Клавиатура пианино (SVG) и страница «Как устроены ноты» (#learn) =====
+const PC_BLACK = [1, 3, 6, 8, 10];
+const isBlack = m => PC_BLACK.includes(((m % 12) + 12) % 12);
+const OCT_NOM = ['субконтроктава', 'контроктава', 'большая октава', 'малая октава', 'первая октава', 'вторая октава', 'третья октава'];
+// from/to - midi; o.band=[lo,hi] подсветка диапазона, o.cur - текущая нота, o.tap - клавиши играют по нажатию, o.id - id для живого обновления
+function pianoSVG(from, to, o = {}) {
+  from = from - (((from % 12) + 12) % 12); to = to + 11 - (((to % 12) + 12) % 12); // целые октавы C..B
+  const WW = 10, WH = 50, BW = 6.2, BH = 31;
+  const whites = []; for (let m = from; m <= to; m++) if (!isBlack(m)) whites.push(m);
+  const W = whites.length * WW, x = {}; whites.forEach((m, i) => x[m] = i * WW);
+  const inBand = m => o.band && m >= o.band[0] && m <= o.band[1];
+  const cls = m => `pk ${isBlack(m) ? 'pk-b' : 'pk-w'}${inBand(m) ? ' pk-in' : ''}${o.cur != null && Math.round(o.cur) === m ? ' pk-cur' : ''}`;
+  const act = m => o.tap ? ` onclick="pianoTap(${m})" style="cursor:pointer"` : '';
+  let s = `<svg ${o.id ? `id="${o.id}"` : ''} viewBox="-0.5 -0.5 ${W + 1} ${WH + (o.octaves ? 26 : 14)}" style="width:100%;display:block" role="img" aria-label="Клавиатура пианино">`;
+  for (const m of whites) s += `<rect data-m="${m}" class="${cls(m)}" x="${x[m]}" y="0" width="${WW}" height="${WH}" rx="1.2"${act(m)}><title>${noteFull(m)}</title></rect>`;
+  for (let m = from; m <= to; m++) if (isBlack(m)) s += `<rect data-m="${m}" class="${cls(m)}" x="${x[m - 1] + WW - BW / 2}" y="0" width="${BW}" height="${BH}" rx="1"${act(m)}><title>${noteFull(m)}</title></rect>`;
+  for (const m of whites) if (m % 12 === 0) s += `<text x="${x[m] + WW / 2}" y="${WH + 9}" text-anchor="middle" class="pk-lbl">${noteShort(m)}</text>`;
+  if (o.octaves) for (let m = from; m <= to; m += 12) { const oc = Math.floor(m / 12) - 1; s += `<text x="${x[m] + 3.5 * WW}" y="${WH + 21}" text-anchor="middle" class="pk-oct">${OCT_NOM[oc] || ''}</text>`; if (m > from) s += `<line x1="${x[m]}" x2="${x[m]}" y1="${WH + 13}" y2="${WH + 24}" class="pk-sep"/>`; }
+  return s + '</svg>';
+}
+// живое обновление текущей ноты без перерисовки
+function pianoMark(id, m) {
+  const svg = document.getElementById(id); if (!svg) return;
+  const r = m == null ? null : Math.round(m);
+  if (svg.dataset.cur == String(r)) return;
+  svg.querySelectorAll('.pk-cur').forEach(k => k.classList.remove('pk-cur'));
+  if (r != null) svg.querySelector(`[data-m="${r}"]`)?.classList.add('pk-cur');
+  svg.dataset.cur = String(r);
+}
+function pianoBand(id, lo, hi) {
+  const svg = document.getElementById(id); if (!svg) return;
+  svg.querySelectorAll('[data-m]').forEach(k => { const m = +k.dataset.m; k.classList.toggle('pk-in', lo != null && m >= lo && m <= hi); });
+}
+function pianoTap(m) {
+  if (busy) return;
+  const c = ac(); tone(m, c.currentTime + .02, .9);
+  const out = $('#pkname'); if (out) out.innerHTML = `<b>${noteFull(m)}</b><span class="muted"> · ${noteShort(m)}</span>`;
+  document.querySelectorAll('#pklearn .pk-cur').forEach(k => k.classList.remove('pk-cur'));
+  document.querySelector(`#pklearn [data-m="${m}"]`)?.classList.add('pk-cur');
+}
+const VOICES = [['Бас', 40, 64], ['Баритон', 45, 69], ['Тенор', 48, 72], ['Альт', 53, 77], ['Меццо-сопрано', 57, 81], ['Сопрано', 60, 84]];
+function viewLearn() {
+  const r = lastRange();
+  const names = [['До', 'C'], ['Ре', 'D'], ['Ми', 'E'], ['Фа', 'F'], ['Соль', 'G'], ['Ля', 'A'], ['Си', 'B']];
+  const vrow = ([n, lo, hi]) => { const L = 36, H = 84, w = 100 / (H - L + 1); return `<div class="row" style="gap:8px;margin-top:6px"><span class="small" style="width:108px;flex:none">${n}</span><div style="flex:1;position:relative;height:14px;background:var(--line);border-radius:7px"><i style="position:absolute;left:${(lo - L) * w}%;width:${(hi - lo + 1) * w}%;top:0;bottom:0;border-radius:7px;background:${n === 'Твой замер' ? 'var(--accent)' : 'var(--ear)'};opacity:.8"></i></div><span class="tiny muted" style="width:62px;flex:none;text-align:right">${noteShort(lo)}-${noteShort(hi)}</span></div>`; };
+  return `<button class="back" onclick="history.length > 1 ? history.back() : go('today')">${ICON.back} Назад</button><h1>Как устроены ноты</h1>
+    <p class="muted" style="margin:6px 0 0">Коротко: что значат До, C4 и E2 и где это на пианино. Нажимай на клавиши, они звучат.</p>
+    <div class="card sec stack"><div id="pkname" class="small" style="min-height:22px;text-align:center">Нажми на клавишу</div>
+      <div style="overflow-x:auto">${pianoSVG(36, 83, { tap: true, octaves: true, band: r ? [r.lo, r.hi] : null, id: 'pklearn' })}</div>
+      ${r ? `<div class="tiny muted">Цветом отмечен твой замеренный диапазон ${noteShort(r.lo)} - ${noteShort(r.hi)}.</div>` : ''}</div>
+    <div class="card sec stack"><h3>7 нот</h3>
+      <p class="small" style="margin:0">Белые клавиши - это 7 нот, которые повторяются по кругу. У них два названия: русское и латинское (буквы).</p>
+      <div class="row wrap" style="gap:6px">${names.map(([ru, en]) => `<span class="pill" style="padding:6px 10px"><b>${en}</b> = ${ru}</span>`).join('')}</div>
+      <p class="small" style="margin:0">После Си снова идёт До, только выше. Расстояние от До до следующего До называется <b>октава</b>.</p></div>
+    <div class="card sec stack"><h3>Чёрные клавиши и полутоны</h3>
+      <p class="small" style="margin:0">Соседние клавиши (белая и чёрная рядом) отличаются на <b>полутон</b> - это самый маленький шаг в музыке. В октаве 12 полутонов.</p>
+      <p class="small" style="margin:0">Чёрная клавиша называется по соседней белой со значком: <b>#</b> (диез) - на полутон выше. Например, C# = До-диез, между До и Ре.</p>
+      <p class="small" style="margin:0">Полутон делится на 100 <b>центов</b>. Когда в игре написано «точность ±40 центов», это значит: можно промахнуться меньше чем на половину полутона.</p></div>
+    <div class="card sec stack"><h3>Что значит цифра: C4, E2</h3>
+      <p class="small" style="margin:0">Цифра - это номер октавы, то есть насколько высоко. Буква - нота, цифра - этаж.</p>
+      <div class="stack" style="gap:0">${[[2, 'большая октава', 'низкие мужские ноты'], [3, 'малая октава', 'обычная речь мужчин'], [4, 'первая октава', 'середина пианино, обычная речь женщин'], [5, 'вторая октава', 'высокие женские ноты']].map(([n, ru, d]) => `<div class="row small" style="gap:8px;padding:4px 0"><b style="width:28px">${n}</b><span style="flex:1"><b>${ru}</b> <span class="muted">- ${d}</span></span></div>`).join('')}</div>
+      <p class="small" style="margin:0"><b>C4</b> = До первой октавы, «центральное до» в середине клавиатуры. <b>E2</b> = Ми большой октавы, очень низкая нота. <b>G5</b> = Соль второй октавы, очень высокая.</p></div>
+    <div class="card sec stack"><h3>Голоса</h3>
+      <p class="small" style="margin:0">Примерные удобные диапазоны певческих голосов. У каждого по-своему, и диапазон растёт с тренировкой.</p>
+      <div>${VOICES.map(vrow).join('')}${r ? vrow(['Твой замер', r.lo, r.hi]) : ''}</div>
+      ${r ? '' : '<a href="#range" class="small">Замерить свой диапазон</a>'}</div>`;
+}
+
 // ===== Замер диапазона: маршрут #range =====
 // Засчитываются только ноты, удержанные ровно RANGE_HOLD секунд (разброс не больше полутона)
 let RG = null;
@@ -1984,7 +2063,7 @@ function viewRange() {
   const hist = state.range || [];
   let h = `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Мой диапазон</h1>
     <p class="muted" style="margin:6px 0 0">Пой на «а». Сначала самую низкую ноту, которую берёшь без хрипа и давления, и подержи секунду. Потом поднимайся ступеньками до самой высокой, где голос ещё звучит свободно, и тоже подержи.</p>
-    <p class="tiny muted" style="margin:6px 0 0">Засчитываются только ноты, удержанные ровно ${RANGE_HOLD} с. Случайный писк или хрип не попадёт.</p>
+    <p class="tiny muted" style="margin:6px 0 0">Засчитываются только ноты, удержанные ровно ${RANGE_HOLD} с. Случайный писк или хрип не попадёт. <a href="#learn">Что значат E2, C4?</a></p>
     <div class="card sec stack" id="rgbox"></div>`;
   if (hist.length) {
     const f = hist[0], l = hist[hist.length - 1];
@@ -2002,7 +2081,8 @@ function viewRange() {
 function rangeDraw() {
   const box = $('#rgbox'); if (!box || !RG) return;
   if (RG.mode === 'live') {
-    box.innerHTML = `<div style="text-align:center"><div class="tiny muted">Сейчас</div><div id="rgcur" style="font:800 34px Lora,serif;min-height:44px">-</div><div id="rgheld" class="small" style="min-height:20px;color:var(--ok)"></div></div>
+    box.innerHTML = `<div style="text-align:center"><div class="tiny muted">Сейчас</div><div id="rgcur" style="font:800 34px Lora,serif;min-height:44px">-</div><div id="rgcurru" class="small muted" style="min-height:20px"></div><div id="rgheld" class="small" style="min-height:20px;color:var(--ok)"></div></div>
+      <div style="overflow-x:auto">${pianoSVG(36, 83, { id: 'pkrange' })}</div>
       <div class="row" style="justify-content:space-around"><div style="text-align:center"><div class="tiny muted">Низ</div><b id="rglo">-</b></div><div style="text-align:center"><div class="tiny muted">Верх</div><b id="rghi">-</b></div></div>
       <button class="btn block" onclick="rangeDone()">${ICON.stop} Готово</button>`;
     return;
@@ -2010,6 +2090,7 @@ function rangeDraw() {
   if (RG.mode === 'result') {
     const lo = RG.lo, hi = RG.hi, span = hi - lo, mid = lo + Math.max(0, Math.round((span - 12) / 2)), top = Math.max(lo, hi - 12);
     box.innerHTML = `<div><div class="tiny muted">Твой диапазон сегодня</div><div style="font:800 26px Lora,serif">${noteShort(lo)} - ${noteShort(hi)}</div><div class="small muted">${noteFull(lo)} - ${noteFull(hi)}, ${span} ${plural(span, 'полутон', 'полутона', 'полутонов')}</div></div>
+      <div style="overflow-x:auto">${pianoSVG(Math.min(36, lo), Math.max(83, hi), { band: [lo, hi], tap: true })}</div>
       ${span < 12 ? `<div class="note small">Меньше октавы. Уровни игр идут на октаву вверх от базовой ноты, так что верх может не взяться. Это нормально, диапазон растёт с распевками.</div>` : ''}
       <div class="small"><b>Где работать?</b> Уровни и упражнения пойдут от выбранной ноты на октаву вверх.</div>
       ${(span >= 12 ? [[mid, false, 'В середине', 'удобно, подойдёт любая октава'], [lo, true, 'Нижний регистр', 'засчитается только эта октава'], [top, true, 'Верхний регистр', 'засчитается только эта октава']]
@@ -2038,6 +2119,8 @@ async function rangeStart() {
     const v = hist.filter(x => x != null), m = v.length >= 2 ? VA.median(v) : null;
     rangeStep(RG, c.currentTime, m);
     const cur = $('#rgcur'); if (cur) cur.textContent = m == null ? '-' : noteShort(m);
+    const ru = $('#rgcurru'); if (ru) ru.textContent = m == null ? '' : noteFull(m).split(' (')[0];
+    pianoMark('pkrange', m); if (RG.lo != null && RG.bandKey !== RG.lo + ':' + RG.hi) { RG.bandKey = RG.lo + ':' + RG.hi; pianoBand('pkrange', RG.lo, RG.hi); }
     const hd = $('#rgheld'); if (hd) hd.textContent = RG.held != null && c.currentTime - RG.heldT < .4 ? '✓ ' + noteFull(RG.held) : '';
     if ($('#rglo')) $('#rglo').textContent = RG.lo == null ? '-' : noteShort(RG.lo);
     if ($('#rghi')) $('#rghi').textContent = RG.hi == null ? '-' : noteShort(RG.hi);

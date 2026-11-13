@@ -27,7 +27,7 @@ function viewRange() {
   const hist = state.range || [];
   let h = `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Мой диапазон</h1>
     <p class="muted" style="margin:6px 0 0">Пой на «а». Сначала самую низкую ноту, которую берёшь без хрипа и давления, и подержи секунду. Потом поднимайся ступеньками до самой высокой, где голос ещё звучит свободно, и тоже подержи.</p>
-    <p class="tiny muted" style="margin:6px 0 0">Засчитываются только ноты, удержанные ровно ${RANGE_HOLD} с. Случайный писк или хрип не попадёт.</p>
+    <p class="tiny muted" style="margin:6px 0 0">Засчитываются только ноты, удержанные ровно ${RANGE_HOLD} с. Случайный писк или хрип не попадёт. <a href="#learn">Что значат E2, C4?</a></p>
     <div class="card sec stack" id="rgbox"></div>`;
   if (hist.length) {
     const f = hist[0], l = hist[hist.length - 1];
@@ -45,7 +45,8 @@ function viewRange() {
 function rangeDraw() {
   const box = $('#rgbox'); if (!box || !RG) return;
   if (RG.mode === 'live') {
-    box.innerHTML = `<div style="text-align:center"><div class="tiny muted">Сейчас</div><div id="rgcur" style="font:800 34px Lora,serif;min-height:44px">-</div><div id="rgheld" class="small" style="min-height:20px;color:var(--ok)"></div></div>
+    box.innerHTML = `<div style="text-align:center"><div class="tiny muted">Сейчас</div><div id="rgcur" style="font:800 34px Lora,serif;min-height:44px">-</div><div id="rgcurru" class="small muted" style="min-height:20px"></div><div id="rgheld" class="small" style="min-height:20px;color:var(--ok)"></div></div>
+      <div style="overflow-x:auto">${pianoSVG(36, 83, { id: 'pkrange' })}</div>
       <div class="row" style="justify-content:space-around"><div style="text-align:center"><div class="tiny muted">Низ</div><b id="rglo">-</b></div><div style="text-align:center"><div class="tiny muted">Верх</div><b id="rghi">-</b></div></div>
       <button class="btn block" onclick="rangeDone()">${ICON.stop} Готово</button>`;
     return;
@@ -53,6 +54,7 @@ function rangeDraw() {
   if (RG.mode === 'result') {
     const lo = RG.lo, hi = RG.hi, span = hi - lo, mid = lo + Math.max(0, Math.round((span - 12) / 2)), top = Math.max(lo, hi - 12);
     box.innerHTML = `<div><div class="tiny muted">Твой диапазон сегодня</div><div style="font:800 26px Lora,serif">${noteShort(lo)} - ${noteShort(hi)}</div><div class="small muted">${noteFull(lo)} - ${noteFull(hi)}, ${span} ${plural(span, 'полутон', 'полутона', 'полутонов')}</div></div>
+      <div style="overflow-x:auto">${pianoSVG(Math.min(36, lo), Math.max(83, hi), { band: [lo, hi], tap: true })}</div>
       ${span < 12 ? `<div class="note small">Меньше октавы. Уровни игр идут на октаву вверх от базовой ноты, так что верх может не взяться. Это нормально, диапазон растёт с распевками.</div>` : ''}
       <div class="small"><b>Где работать?</b> Уровни и упражнения пойдут от выбранной ноты на октаву вверх.</div>
       ${(span >= 12 ? [[mid, false, 'В середине', 'удобно, подойдёт любая октава'], [lo, true, 'Нижний регистр', 'засчитается только эта октава'], [top, true, 'Верхний регистр', 'засчитается только эта октава']]
@@ -81,6 +83,8 @@ async function rangeStart() {
     const v = hist.filter(x => x != null), m = v.length >= 2 ? VA.median(v) : null;
     rangeStep(RG, c.currentTime, m);
     const cur = $('#rgcur'); if (cur) cur.textContent = m == null ? '-' : noteShort(m);
+    const ru = $('#rgcurru'); if (ru) ru.textContent = m == null ? '' : noteFull(m).split(' (')[0];
+    pianoMark('pkrange', m); if (RG.lo != null && RG.bandKey !== RG.lo + ':' + RG.hi) { RG.bandKey = RG.lo + ':' + RG.hi; pianoBand('pkrange', RG.lo, RG.hi); }
     const hd = $('#rgheld'); if (hd) hd.textContent = RG.held != null && c.currentTime - RG.heldT < .4 ? '✓ ' + noteFull(RG.held) : '';
     if ($('#rglo')) $('#rglo').textContent = RG.lo == null ? '-' : noteShort(RG.lo);
     if ($('#rghi')) $('#rghi').textContent = RG.hi == null ? '-' : noteShort(RG.hi);

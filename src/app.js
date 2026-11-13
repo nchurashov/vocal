@@ -144,10 +144,11 @@ function registerCard(inSheet) {
     <div class="row"><button class="btn ghost" style="min-width:46px;padding:0" aria-label="Ниже на полутон" onclick="setBase(base()-1)">−</button>
       <div style="flex:1;text-align:center"><div style="font-weight:800">${noteFull(base())}</div><div class="tiny muted">уровни идут от неё вверх до ${noteShort(base() + 12)}</div></div>
       <button class="btn ghost" style="min-width:46px;padding:0" aria-label="Выше на полутон" onclick="setBase(base()+1)">+</button></div>
+    <div style="overflow-x:auto">${pianoSVG(Math.min(36, base()), Math.max(83, base() + 12), { band: [base(), base() + 12], cur: r ? null : null })}</div>
     <div class="row wrap" style="gap:6px"><button class="btn ghost" style="flex:1;min-height:38px;padding:6px 10px" onclick="setBase(base()-12)">Октавой ниже</button><button class="btn ghost" style="flex:1;min-height:38px;padding:6px 10px" onclick="setBase(base()+12)">Октавой выше</button><button class="btn ghost" style="min-height:38px;padding:6px 10px" aria-label="Послушать ноту" onclick="playNotes([[0,2]],80)">${ICON.play}</button></div>
     <label class="check" style="border:0;padding:0"><input type="checkbox" ${strictOct() ? 'checked' : ''} onchange="setStrict(this.checked)"><span class="small"><b>Только в этой октаве.</b> Для работы над регистром: октавой выше или ниже не засчитается.${strictOct() ? '' : ' Сейчас подходит любая октава.'}</span></label>
     ${rangeWarn()}
-    <a href="#range" class="small" ${inSheet ? 'onclick="closeSheet()"' : ''}>${r ? 'Замерить диапазон заново' : 'Замерить мой диапазон'}</a></div>`;
+    <div class="row wrap small" style="gap:14px"><a href="#range" ${inSheet ? 'onclick="closeSheet()"' : ''}>${r ? 'Замерить диапазон заново' : 'Замерить мой диапазон'}</a><a href="#learn" ${inSheet ? 'onclick="closeSheet()"' : ''}>Как читать ноты</a></div></div>`;
 }
 // подсказка на экранах игр: при первом заходе - выбор голоса, потом - карточка высоты
 function octaveHint() {
@@ -285,7 +286,7 @@ let route = 'today', exFilter = 'all';
 function readHash() {
   const h = location.hash.replace('#', '');
   if (h.startsWith('ex-') && exById(h.slice(3))) return h;
-  if (/^(game|ball)-\d+$/.test(h) || h === 'game' || h === 'range' || h === 'warmup') return h;
+  if (/^(game|ball)-\d+$/.test(h) || h === 'game' || h === 'range' || h === 'warmup' || h === 'learn') return h;
   return TABS.some(t => t[0] === h) ? h : 'today';
 }
 function go(r) { if (busy) stopRecordingIfAny(); location.hash = r; }
@@ -304,7 +305,7 @@ function render() {
   if (route.startsWith('ex-')) v.innerHTML = viewExercise(exById(route.slice(3)));
   else if (route.startsWith('game-')) v.innerHTML = viewGameLevel(+route.slice(5));
   else if (route.startsWith('ball-')) v.innerHTML = viewBallLevel(+route.slice(5));
-  else v.innerHTML = ({ ball: viewBall, game: viewGame, today: viewToday, exercises: viewExercises, check: viewCheck, history: viewHistory, notes: viewNotes, range: viewRange, warmup: viewWarmup })[route]();
+  else v.innerHTML = ({ ball: viewBall, game: viewGame, today: viewToday, exercises: viewExercises, check: viewCheck, history: viewHistory, notes: viewNotes, range: viewRange, warmup: viewWarmup, learn: viewLearn })[route]();
   afterRender();
 }
 let afterHooks = [];
@@ -347,6 +348,7 @@ function viewToday() {
     h += `<button class="item" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в окно</span></div><span class="muted">›</span></button>`; }
   { const r = lastRange();
     h += `<button class="item" onclick="go('range')"><div class="dot ear">↕</div><div class="t"><b>${r ? 'Мой диапазон: ' + noteShort(r.lo) + ' - ' + noteShort(r.hi) : 'Замерить мой диапазон'}</b><span class="small muted">${r ? 'Последний замер ' + fmtDay(r.date.slice(0, 10)).toLowerCase() + ' · работаем от ' + noteShort(base()) + (strictOct() ? ', строго в октаве' : '') : 'Минута: узнаешь свой низ и верх и выберешь, где работать'}</span></div><span class="muted">›</span></button>`; }
+  h += `<button class="item" onclick="go('learn')"><div class="dot pitch">🎹</div><div class="t"><b>Как устроены ноты</b><span class="small muted">До-ре-ми и C-D-E, октавы, что значат C4 и E2, клавиатура со звуком</span></div><span class="muted">›</span></button>`;
   h += `<div class="sec"><h2>Повторить сегодня</h2>`;
   if (due.length) h += due.map(e => { const s = state.srs[e.id]; return exItem(e, `В прошлый раз: ${RATINGS[s.lastRating].label.toLowerCase()} · ${fmtDay(s.last).toLowerCase()}`); }).join('');
   else h += `<div class="card small muted">${state.sessions.length ? 'На сегодня повторов нет. Можно взять новое упражнение ниже.' : 'Повторы появятся после первых отметок: что не получилось, вернётся раньше, что получилось уверенно, реже.'}</div>`;

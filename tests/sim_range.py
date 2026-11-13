@@ -23,6 +23,13 @@ with sync_playwright() as p:
     for name, parts, lo, hi in CASES:
         r = pg.evaluate(SIM, parts)
         if r['lo'] != lo or r['hi'] != hi: fails.append(f'{name}: {r}, ждали {lo}-{hi}')
+    # клавиатура и страница «Как устроены ноты»
+    keys = pg.evaluate("(() => { const d = document.createElement('div'); d.innerHTML = pianoSVG(36, 83, {band:[40,52]}); return [d.querySelectorAll('[data-m]').length, d.querySelectorAll('.pk-b').length, d.querySelectorAll('.pk-in').length]; })()")
+    if keys != [48, 20, 13]: fails.append(f'клавиатура C2-B5: ждали 48 клавиш, 20 чёрных, 13 в диапазоне, а не {keys}')
+    names = pg.evaluate("[noteFull(40), noteFull(60), noteShort(79)]")
+    if names != ['Ми большой октавы (E2)', 'До первой октавы (C4)', 'G5']: fails.append(f'имена нот: {names}')
+    pg.goto(URL + '#learn'); pg.wait_for_timeout(300)
+    if 'Как устроены ноты' not in pg.inner_text('body'): fails.append('страница #learn не открылась')
     br.close()
 print('\n'.join(fails) if fails else 'OK: замер диапазона честный')
 sys.exit(1 if fails else 0)

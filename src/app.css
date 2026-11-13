@@ -122,3 +122,12 @@ a{color:var(--accent)}
 details summary{cursor:pointer}
 .tab span{white-space:nowrap}
 @media(max-width:400px){.tab{font-size:10.5px}}
+
+/* клавиатура пианино */
+.pk{stroke:var(--muted);stroke-width:.35}
+.pk-w{fill:#fff}.pk-b{fill:#2B231E}
+.pk-w.pk-in{fill:color-mix(in srgb,var(--accent) 22%,#fff)}.pk-b.pk-in{fill:color-mix(in srgb,var(--accent) 55%,#2B231E)}
+.pk-cur{fill:var(--accent)!important}
+.pk-lbl{font:700 5px Manrope,system-ui;fill:var(--muted)}
+.pk-oct{font:600 4.2px Manrope,system-ui;fill:var(--muted)}
+.pk-sep{stroke:var(--line);stroke-width:.5}
