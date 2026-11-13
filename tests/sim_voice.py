@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Голос и речь: секундомер замеров (phonStep) честный, все 7 комплексов проходятся до конца и сохраняются.
+"""Голос и речь: секундомер замеров (phonStep) честный, все комплексы проходятся до конца и сохраняются.
 Запуск: python3 tests/sim_voice.py  (нужен playwright и Chrome; путь к Chrome: env CHROME)"""
 import os, sys
 from playwright.sync_api import sync_playwright
@@ -37,7 +37,8 @@ with sync_playwright() as p:
                 except Exception: fails.append(f'{sid}: шаг {i0} ({st}) не закончился сам'); pg.click('text=Дальше')
         if 'сделан' not in pg.inner_text('#vsbox'): fails.append(f'{sid}: нет экрана «сделан»')
     n = pg.evaluate("state.voice.done.length")
-    if n != 7: fails.append(f'сохранено комплексов: {n}, ждали 7')
+    total = pg.evaluate('VOICE_SETS.length')
+    if n != total: fails.append(f'сохранено комплексов: {n}, ждали {total}')
     pg.goto(URL + '#today'); pg.wait_for_timeout(300)
     if 'Голос и речь: сделано' not in pg.inner_text('body'): fails.append('на «Сегодня» нет отметки «Голос и речь: сделано»')
     if errs: fails.append('ошибки: ' + '; '.join(errs))

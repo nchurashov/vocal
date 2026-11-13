@@ -433,7 +433,7 @@ function viewToday() {
 
 // ===== Экран: Упражнения =====
 function viewExercises() {
-  let h = `<h1>Упражнения</h1><button class="item sec" style="margin-top:14px" onclick="go('voice')"><div class="dot ear">🗣️</div><div class="t"><b>Голос и речь</b><span class="small muted">7 комплексов: зажимы, дыхание, резонанс, дикция, плавная речь, низкий голос, диапазон</span></div><span class="muted">›</span></button><div class="sec" style="margin-top:14px"><div class="seg">` +
+  let h = `<h1>Упражнения</h1><button class="item sec" style="margin-top:14px" onclick="go('voice')"><div class="dot ear">🗣️</div><div class="t"><b>Голос и речь</b><span class="small muted">${VOICE_SETS.length} комплексов: зажимы, дыхание, резонанс, дикция, карандаш, плавная речь, низкий голос, диапазон</span></div><span class="muted">›</span></button><div class="sec" style="margin-top:14px"><div class="seg">` +
     [['all', 'Все'], ...Object.entries(CATS).map(([k, v]) => [k, v.name])].map(([k, n]) => `<button class="${exFilter === k ? 'on' : ''}" onclick="exFilter='${k}';render()">${n}</button>`).join('') + `</div></div>`;
   for (const L of [1, 2, 3]) {
     const list = EXERCISES.filter(e => e.level === L && (exFilter === 'all' || e.cat === exFilter));
