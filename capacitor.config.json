@@ -1,6 +1,6 @@
 {
   "appId": "ru.nchurashov.vocal",
-  "appName": "Вокал",
+  "appName": "Вокал под бокал",
   "webDir": "www",
   "ios": { "contentInset": "never", "backgroundColor": "#FAF6F0" }
 }
