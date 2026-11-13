@@ -9,7 +9,8 @@ CHROME = os.environ.get('CHROME', '/usr/bin/google-chrome')
 CHECK = """(([b, lo, hi]) => { const r = lo == null ? null : { lo, hi }, bad = [];
   const L = r ? lo : b - 2, H = r ? hi : b + 12;
   for (const s of WU_STEPS.filter(s => s.pat)) { const ks = warmupKeys(s, b, r);
-    for (const k of ks) if (k + Math.min(...s.pat) < L || k + Math.max(...s.pat) > H) bad.push(s.id + ' ' + k);
+    ks.forEach((k, i) => { const edge = s.edge && r && i === ks.length - 1 && k + Math.min(...s.pat) === L - 1;
+      if (!edge && (k + Math.min(...s.pat) < L || k + Math.max(...s.pat) > H)) bad.push(s.id + ' ' + k); });
     if (ks.length === 0 && (H - L) >= 12) bad.push(s.id + ': пусто'); }
   return bad; })"""
 fails = []
@@ -22,9 +23,18 @@ with sync_playwright() as p:
         if bad: fails.append(f'база {case[0]}, диапазон {case[1]}-{case[2]}: вне границ {bad}')
     # нижний регистр: спуск доходит до замеренного низа
     low = pg.evaluate("warmupKeys(WU_STEPS.find(s=>s.id==='low'), 43, {lo:43, hi:64})")
-    if not low or low[-1] != 43: fails.append(f'спуск вниз не доходит до низа диапазона: {low}')
+    if not low or low[-2] != 43 or low[-1] != 42: fails.append(f'спуск вниз: ждали ...43, 42 (шаг за край), а не {low}')
+    nolow = pg.evaluate("warmupKeys(WU_STEPS.find(s=>s.id==='low'), 48, null)")
+    if min(nolow) < 46: fails.append(f'без замера спуск ушёл ниже базы-2: {nolow}')
+    # оценка ответа: чистое пение, октава, чужая тональность
+    SC = """(([shift, strict, wrong]) => { const pat = [0,2,4,5,7,5,4,2,0], k = 50, fr = []; let t = 0;
+      pat.forEach(x => { for (let i = 0; i < 20; i++, t += 1/60) fr.push({ t, m: k + x + shift + (wrong || 0) + .15 * Math.sin(t * 35) }); });
+      return wuScore(pat, k, fr, strict); })"""
+    for name, a, want in [('чисто', [0, False, 0], True), ('октавой выше', [12, False, 0], True), ('октавой выше строго', [12, True, 0], False), ('на полутон выше', [0, False, 1], False)]:
+        r = pg.evaluate(SC, a)
+        if r['ok'] != want: fails.append(f'оценка ответа «{name}»: {r["n"]}/{len(r["notes"])}, ждали ok={want}')
     # полный проход на ускорении
-    pg.evaluate("window.WU_SPEED=40; state.warmups=[]; save()")
+    pg.evaluate("window.WU_SPEED=40; state.warmups=[]; state.settings.wuMode='along'; save()")
     pg.goto(URL + '#warmup'); pg.wait_for_timeout(300)
     pg.click('#wuplay')
     pg.wait_for_function("document.body.innerText.includes('Распевка сделана')", timeout=60000)
