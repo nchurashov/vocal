@@ -68,10 +68,11 @@ function setWuMode(m) { state.settings.wuMode = m; save(); render(); }
 function viewWarmup() {
   warmupStop();
   WU = { i: 0, plan: warmupPlan(), playing: false, res: {}, R: { fr: [], lo: null, hi: null }, timers: [] };
-  afterHooks.push(warmupDraw);
+  afterHooks.push(warmupDraw); afterHooks.push(() => { if (camOn()) camStart(); });
   const r = lastRange(), st = warmupStreak();
   return `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Распевка дня</h1>
     <p class="muted" style="margin:6px 0 0">${WU.plan.length} ${plural(WU.plan.length, 'упражнение', 'упражнения', 'упражнений')}, около ${warmupMin()} мин. Тональность сдвигается по полутону.${st ? ` Дней подряд: ${st}.` : ''}</p>
+    ${camToggleHTML()}
     ${MIC_DIRECT ? `<div class="seg sec" style="margin-top:12px"><button class="${wuMode() === 'echo' ? 'on' : ''}" onclick="setWuMode('echo')">Повтори за мной</button><button class="${wuMode() === 'along' ? 'on' : ''}" onclick="setWuMode('along')">Вместе с пианино</button></div>
     <p class="tiny muted" style="margin:6px 0 0">${wuMode() === 'echo' ? 'Пианино играет фразу, потом тишина: повтори её. Микрофон слушает только твой ответ и покажет, какие ноты взяты чисто.' : 'Поёшь одновременно с пианино. Без проверки нот, просто разогрев.'}</p>` : ''}
     <p class="tiny muted" style="margin:6px 0 0">${r ? `Границы - твой замер ${noteShort(r.lo)} - ${noteShort(r.hi)}. В спуске вниз последняя тональность на полутон ниже: попробуй, но не дави.` : `Диапазон не замерен, поэтому держусь рядом с ${noteShort(base())}. <a href="#range">Замерить</a>, чтобы распевка шла по твоим границам.`}</p>
@@ -111,14 +112,15 @@ function warmupNext() {
     const all = Object.values(WU.res).flat();
     (state.warmups ||= []).push({ date: nowLocal(), steps: WU.plan.length, mode: wuMode(), ...(all.length ? { keys: all.length, clean: all.filter(x => x.ok).length } : {}) });
     if (state.warmups.length > 400) state.warmups.shift(); save();
+    camRecStop(all.length ? `Чисто ${all.filter(x => x.ok).length} из ${all.length}` : 'Распевка ✓');
     warmupStop();
   }
   warmupDraw(); if (WU.i < WU.plan.length) WU.timers.push(setTimeout(warmupPlay, 300));
 }
 // микрофон для режима «Повтори за мной»: открывается один раз на всю распевку
-async function wuEnsureMic() {
+async function wuEnsureMic(forCam) {
   if (WU.stream) return true;
-  let stream; try { stream = await openMic(); } catch (e) { toast('Нет доступа к микрофону. Распевка пойдёт без проверки.'); state.settings.wuMode = 'along'; save(); return false; }
+  let stream; try { stream = await openMic(); } catch (e) { if (!forCam) { toast('Нет доступа к микрофону. Распевка пойдёт без проверки.'); state.settings.wuMode = 'along'; save(); } return false; }
   const c = ac(); WU.stream = stream; busy = true;
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
@@ -137,9 +139,13 @@ async function wuEnsureMic() {
   loop();
   return true;
 }
+// карточка для видео: шаг и текущая нота
+const wuPanel = () => { const s = WU && WU.plan[WU.i]; return s ? { top: `Распевка · ${s.title}`, big: ($('#wunow') || {}).textContent || '', sub: ($('#wusub') || {}).textContent || '' } : { big: 'Распевка сделана!' }; };
 async function warmupPlay() {
   if (!WU) return;
   if (WU.playing) { wuPause(); warmupDraw(); return; }
+  // камера: микрофон распевки открываем сразу и пишем им видео до конца распевки
+  if (camOn() && !camRecording()) { if (await wuEnsureMic(true)) await camSession('Распевка дня', wuPanel, WU.stream); }
   const s = WU.plan[WU.i], sp = window.WU_SPEED || 1;
   if (s.pat && wuMode() === 'echo') await wuEnsureMic();
   const echo = !!(s.pat && wuMode() === 'echo' && WU.stream);

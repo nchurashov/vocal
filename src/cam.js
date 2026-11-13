@@ -24,7 +24,7 @@ function camMime() {
 // переключатель на экранах уровней
 function camToggleHTML() {
   if (!CAM_OK) return '';
-  return `<label class="check sec" style="margin-top:10px;padding:10px 12px"><input type="checkbox" ${camOn() ? 'checked' : ''} onchange="camSet(this.checked)"><span class="small"><b>🎥 Снимать себя на видео.</b> Камера пишет тебя, пока играешь, и снизу саму игру. Потом можно посмотреть и отправить друзьям. Видео остаётся только у тебя в телефоне.</span></label>
+  return `<label class="check sec" style="margin-top:10px;padding:10px 12px"><input type="checkbox" ${camOn() ? 'checked' : ''} onchange="camSet(this.checked)"><span class="small"><b>🎥 Снимать себя на видео.</b> Камера пишет тебя, пока поёшь, а снизу - игру или упражнение. Потом можно посмотреть и отправить друзьям. Видео остаётся только у тебя в телефоне.</span></label>
     <div id="camerr" class="small" style="color:var(--bad)"></div>`;
 }
 async function camSet(on) { state.settings.cam = !!on; save(); if (on) await camStart(); else camOff(); }
@@ -48,8 +48,11 @@ function camOff() {
   if (CAM.rec && CAM.rec.state !== 'finished') camRecStop(null, true);
   if (CAM.stream) CAM.stream.getTracks().forEach(t => t.stop());
   CAM.stream = null; $('#campv')?.remove(); CAM.video = null;
+  if (CAM.mic) { CAM.mic.getTracks().forEach(t => t.stop()); CAM.mic = null; afterMic(); }
 }
-// запись: canvasSel - холст игры, title - подпись сверху, micStream - поток микрофона игры
+const camRecording = () => !!(CAM.rec && CAM.rec.state === 'rec');
+// запись: canvasSel - селектор холста игры ИЛИ функция-карточка () => ({ top, big, sub }) для упражнений;
+// title - подпись сверху, micStream - поток микрофона
 function camRecStart(canvasSel, title, micStream) {
   if (!camOn() || !CAM.stream || !CAM.video || (CAM.rec && CAM.rec.state === 'rec')) return;
   const W = 720, H = 1280, out = document.createElement('canvas'); out.width = W; out.height = H;
@@ -62,6 +65,7 @@ function camRecStart(canvasSel, title, micStream) {
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.onstop = () => {
     R.state = 'finished'; cancelAnimationFrame(R.raf); tracks.forEach(t => t.stop()); au.close();
+    if (CAM.mic && !busy) { CAM.mic.getTracks().forEach(t => t.stop()); CAM.mic = null; afterMic(); }
     if (!chunks.length || R.discard) return;
     const blob = new Blob(chunks, { type: R.mime.split(';')[0] });
     const clip = { blob, url: URL.createObjectURL(blob), title: R.title, outro: R.outro, date: nowLocal(), ext: R.mime.includes('mp4') ? 'mp4' : 'webm' };
@@ -74,6 +78,7 @@ function camRecStart(canvasSel, title, micStream) {
     // камера сверху на 2/3, игра снизу на 1/3 (над плашкой бренда)
     const area = H - 96, camH = Math.round(area * .67);
     camFrame(g, W, H, R.title, R.outro, camH);
+    if (typeof R.canvasSel === 'function') { let pc = null; try { pc = R.canvasSel(); } catch (e) { } camPanel(g, W, camH + 10, area - camH - 20, pc || {}); g.textAlign = 'left'; return; }
     const cv = R.canvasSel && document.querySelector(R.canvasSel);
     if (cv && cv.width) {
       const gy = camH + 10, gh = area - gy - 10, s = Math.min((W - 20) / cv.width, gh / cv.height), dw = cv.width * s, dh = cv.height * s, x = (W - dw) / 2, y = gy + (gh - dh) / 2;
@@ -91,6 +96,34 @@ function camRecStop(outro, now) {
   if (outro && !now) camPending();
   const end = () => { try { R.mr.stop(); } catch (e) { R.state = 'finished'; } };
   if (now || !outro) end(); else setTimeout(end, 2500);
+}
+// карточка упражнения в нижней трети видео: подпись шага, крупный текст (нота, слог, скороговорка), строка под ним
+function camPanel(g, W, y, h, p) {
+  g.fillStyle = '#FAF6F0'; camRound(g, 16, y, W - 32, h, 22); g.fill();
+  g.textAlign = 'center'; g.fillStyle = '#7A6E66'; g.font = '700 26px Manrope, system-ui, sans-serif';
+  if (p.top) g.fillText(String(p.top).slice(0, 40), W / 2, y + 46);
+  const big = String(p.big || '').trim();
+  if (big) {
+    let fs = big.length > 60 ? 34 : big.length > 28 ? 42 : big.length > 12 ? 58 : 84, n;
+    for (; fs >= 26; fs -= 4) { g.font = `800 ${fs}px Lora, Georgia, serif`; n = camWrap(g, big, W / 2, 0, W - 80, fs * 1.18, false); if (n * fs * 1.18 <= h - 120) break; }
+    g.fillStyle = '#2B231E'; const lh = fs * 1.18, top = y + 70 + (h - 120 - n * lh) / 2 + fs * .9;
+    camWrap(g, big, W / 2, top, W - 80, lh);
+  }
+  if (p.sub) { g.fillStyle = '#C8573A'; g.font = '700 26px Manrope, system-ui, sans-serif'; g.fillText(String(p.sub).slice(0, 48), W / 2, y + h - 24); }
+}
+// микрофон для записи в упражнениях (там, где своего нет): открывается один раз на сессию, закрывается в camOff
+async function camMic() {
+  if (CAM.mic && CAM.mic.getAudioTracks().some(t => t.readyState === 'live')) return CAM.mic;
+  try { CAM.mic = await openMic(); } catch (e) { CAM.mic = null; }
+  return CAM.mic;
+}
+// начать запись сессии упражнения, если включена камера: panel - функция карточки
+async function camSession(title, panel, mic) {
+  if (!camOn() || camRecording()) return false;
+  if (!CAM.stream && !(await camStart())) return false;
+  const m = mic || await camMic(); if (!m) return false;
+  camRecStart(panel, (profName() ? profName() + ' · ' : '') + title, m);
+  return camRecording();
 }
 function camRound(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 // общий кадр: камера на весь экран (зеркально), подпись сверху, плашка бренда снизу, крупный итог (outro)

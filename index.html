@@ -1138,7 +1138,8 @@ function stopRecordingIfAny() { if (rec && rec.mr && rec.mr.state === 'recording
 function recorderUI(box, getRef, opts) {
   // getRef(): {notes,bpm}; opts: {anyKeyToggle, onResult}
   const id = 'r' + uid();
-  box.innerHTML = `${opts.anyKeyToggle ? `<label class="check" style="border:0;padding:0 0 12px"><input type="checkbox" id="${id}-any"><span class="small">Я пел в своей тональности, а не от ноты примера (проверятся только расстояния между нотами)</span></label>` : ''}
+  if (MIC_DIRECT && camOn()) camStart();
+  box.innerHTML = `${MIC_DIRECT && typeof camToggleHTML === 'function' ? camToggleHTML() : ''}${opts.anyKeyToggle ? `<label class="check" style="border:0;padding:0 0 12px"><input type="checkbox" id="${id}-any"><span class="small">Я пел в своей тональности, а не от ноты примера (проверятся только расстояния между нотами)</span></label>` : ''}
     ${MIC_DIRECT ? `<div class="row wrap"><button class="btn" id="${id}-mic">${ICON.mic} Записать с микрофона</button>
     <label class="btn ghost">${ICON.file} Загрузить запись<input type="file" accept="audio/*,video/*" class="hidden recfile"></label></div>` :
     `<div class="row wrap"><label class="btn">${ICON.mic} Записать голос<input type="file" accept="video/*,audio/*" capture="user" class="hidden recfile"></label>
@@ -1150,7 +1151,7 @@ function recorderUI(box, getRef, opts) {
     msg.innerHTML = '<span class="muted">Слушаю запись и ищу ноты...</span>';
     let audio;
     try { audio = await new Promise((ok, bad) => { const p = ac().decodeAudioData(arrayBuf, ok, bad); if (p && p.then) p.then(ok, bad); }); }
-    catch (e) { msg.innerHTML = '<div class="note">Не получилось прочитать файл. Подойдут записи в форматах m4a, mp3, wav, ogg, webm.</div>'; busy = false; return; }
+    catch (e) { if (camRecording()) camRecStop(null, true); msg.innerHTML = '<div class="note">Не получилось прочитать файл. Подойдут записи в форматах m4a, mp3, wav, ogg, webm.</div>'; busy = false; return; }
     setTimeout(() => {
       const chs = []; const maxLen = Math.min(audio.length, audio.sampleRate * 45);
       for (let c = 0; c < audio.numberOfChannels; c++) chs.push(audio.getChannelData(c).subarray(0, maxLen));
@@ -1159,9 +1160,10 @@ function recorderUI(box, getRef, opts) {
       const anyKey = opts.anyKeyToggle ? $('#' + id + '-any').checked : false;
       msg.innerHTML = '';
       busy = false;
-      if (!a.segs.length) { res.innerHTML = '<div class="note" style="margin-top:10px">Не слышу в записи голоса с понятной высотой. Пой громче и ближе к телефону, на гласную «а» или «ма».</div>'; return; }
+      if (!a.segs.length) { if (camRecording()) camRecStop(null, true); res.innerHTML = '<div class="note" style="margin-top:10px">Не слышу в записи голоса с понятной высотой. Пой громче и ближе к телефону, на гласную «а» или «ма».</div>'; return; }
       const ev = VA.evaluate(ref.notes.map(([s, b]) => ({ midi: base() + s, beats: b })), a.segs, anyKey, strictOct());
       ev.anyKey = anyKey;
+      if (camRecording()) camRecStop(ev.pitchScore + '% нот');
       lastAudio = audio;
       res.innerHTML = resultHTML(ref, ev, audio);
       opts.onResult(ev);
@@ -1183,11 +1185,12 @@ function recorderUI(box, getRef, opts) {
       return;
     }
     const chunks = []; const mr = new MediaRecorder(stream); rec = { mr, cancel: false }; busy = true;
+    if (camOn()) { const ref = getRef(); camRecStart(() => ({ top: ref.title || 'Пою мелодию', big: (ref.notes || []).map(([x]) => VA.noteName(base() + x)).join(' '), sub: 'Запись...' }), (profName() ? profName() + ' · ' : '') + (ref.title || 'Оценка'), stream); }
     mr.ondataavailable = e => e.data.size && chunks.push(e.data);
     mr.onstop = async () => {
       stream.getTracks().forEach(t => t.stop()); clearInterval(rec.tick); afterMic();
       btn.innerHTML = ICON.mic + ' Записать с микрофона';
-      if (rec.cancel) return;
+      if (rec.cancel) { if (camRecording()) camRecStop(null, true); return; }
       const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
       handleBuffer(await blob.arrayBuffer());
     };
@@ -2170,12 +2173,12 @@ function rangeStop() {
 }
 function viewRange() {
   if (!RG || RG.mode === 'live') RG = { mode: 'idle', fr: [] };
-  afterHooks.push(rangeDraw);
+  afterHooks.push(rangeDraw); afterHooks.push(() => { if (camOn()) camStart(); });
   const hist = state.range || [];
   let h = `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Мой диапазон</h1>
     <p class="muted" style="margin:6px 0 0">Пой на «а». Сначала самую низкую ноту, которую берёшь без хрипа и давления, и подержи секунду. Потом поднимайся ступеньками до самой высокой, где голос ещё звучит свободно, и тоже подержи.</p>
     <p class="tiny muted" style="margin:6px 0 0">Засчитываются только ноты, удержанные ровно ${RANGE_HOLD} с. Случайный писк или хрип не попадёт. <a href="#learn">Что значат E2, C4?</a></p>
-    <div class="card sec stack" id="rgbox"></div>`;
+    ${camToggleHTML()}<div class="card sec stack" id="rgbox"></div>`;
   if (hist.length) {
     const f = hist[0], l = hist[hist.length - 1];
     h += `<div class="sec"><h2>Замеры</h2>`;
@@ -2225,6 +2228,7 @@ async function rangeStart() {
   RG = { mode: 'live', fr: [], stream, lo: null, hi: null };
   rangeDraw();
   const T = micTap(stream), hist = [];
+  if (camOn()) camRecStart(() => ({ top: 'Замер диапазона', big: RG && RG.cur != null ? noteShort(RG.cur) : '...', sub: RG && RG.lo != null ? `низ ${noteShort(RG.lo)} · верх ${noteShort(RG.hi)}` : '' }), (profName() ? profName() + ' · ' : '') + 'Мой диапазон', stream);
   const loop = () => {
     if (!RG || RG.mode !== 'live') return;
     RG.raf = requestAnimationFrame(loop);
@@ -2247,7 +2251,9 @@ async function rangeStart() {
 }
 function rangeDone() {
   if (!RG) return;
-  const { lo, hi } = RG, chestHi = RG.chestHi != null && RG.chestHi < RG.hi ? RG.chestHi : null; rangeStop();
+  const { lo, hi } = RG, chestHi = RG.chestHi != null && RG.chestHi < RG.hi ? RG.chestHi : null;
+  if (camRecording()) camRecStop(lo == null ? null : `${noteShort(lo)} - ${noteShort(hi)}`, lo == null);
+  rangeStop();
   if (lo == null) { RG = { mode: 'idle', fr: [], err: 'Не услышал ни одной удержанной ноты. Пой громче и держи каждую ноту секунду.' }; rangeDraw(); return; }
   (state.range ||= []).push({ date: nowLocal(), lo, hi, ...(chestHi != null ? { chestHi } : {}) }); if (state.range.length > 100) state.range.shift();
   save();
@@ -2330,10 +2336,11 @@ function setWuMode(m) { state.settings.wuMode = m; save(); render(); }
 function viewWarmup() {
   warmupStop();
   WU = { i: 0, plan: warmupPlan(), playing: false, res: {}, R: { fr: [], lo: null, hi: null }, timers: [] };
-  afterHooks.push(warmupDraw);
+  afterHooks.push(warmupDraw); afterHooks.push(() => { if (camOn()) camStart(); });
   const r = lastRange(), st = warmupStreak();
   return `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Распевка дня</h1>
     <p class="muted" style="margin:6px 0 0">${WU.plan.length} ${plural(WU.plan.length, 'упражнение', 'упражнения', 'упражнений')}, около ${warmupMin()} мин. Тональность сдвигается по полутону.${st ? ` Дней подряд: ${st}.` : ''}</p>
+    ${camToggleHTML()}
     ${MIC_DIRECT ? `<div class="seg sec" style="margin-top:12px"><button class="${wuMode() === 'echo' ? 'on' : ''}" onclick="setWuMode('echo')">Повтори за мной</button><button class="${wuMode() === 'along' ? 'on' : ''}" onclick="setWuMode('along')">Вместе с пианино</button></div>
     <p class="tiny muted" style="margin:6px 0 0">${wuMode() === 'echo' ? 'Пианино играет фразу, потом тишина: повтори её. Микрофон слушает только твой ответ и покажет, какие ноты взяты чисто.' : 'Поёшь одновременно с пианино. Без проверки нот, просто разогрев.'}</p>` : ''}
     <p class="tiny muted" style="margin:6px 0 0">${r ? `Границы - твой замер ${noteShort(r.lo)} - ${noteShort(r.hi)}. В спуске вниз последняя тональность на полутон ниже: попробуй, но не дави.` : `Диапазон не замерен, поэтому держусь рядом с ${noteShort(base())}. <a href="#range">Замерить</a>, чтобы распевка шла по твоим границам.`}</p>
@@ -2373,14 +2380,15 @@ function warmupNext() {
     const all = Object.values(WU.res).flat();
     (state.warmups ||= []).push({ date: nowLocal(), steps: WU.plan.length, mode: wuMode(), ...(all.length ? { keys: all.length, clean: all.filter(x => x.ok).length } : {}) });
     if (state.warmups.length > 400) state.warmups.shift(); save();
+    camRecStop(all.length ? `Чисто ${all.filter(x => x.ok).length} из ${all.length}` : 'Распевка ✓');
     warmupStop();
   }
   warmupDraw(); if (WU.i < WU.plan.length) WU.timers.push(setTimeout(warmupPlay, 300));
 }
 // микрофон для режима «Повтори за мной»: открывается один раз на всю распевку
-async function wuEnsureMic() {
+async function wuEnsureMic(forCam) {
   if (WU.stream) return true;
-  let stream; try { stream = await openMic(); } catch (e) { toast('Нет доступа к микрофону. Распевка пойдёт без проверки.'); state.settings.wuMode = 'along'; save(); return false; }
+  let stream; try { stream = await openMic(); } catch (e) { if (!forCam) { toast('Нет доступа к микрофону. Распевка пойдёт без проверки.'); state.settings.wuMode = 'along'; save(); } return false; }
   const c = ac(); WU.stream = stream; busy = true;
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
@@ -2399,9 +2407,13 @@ async function wuEnsureMic() {
   loop();
   return true;
 }
+// карточка для видео: шаг и текущая нота
+const wuPanel = () => { const s = WU && WU.plan[WU.i]; return s ? { top: `Распевка · ${s.title}`, big: ($('#wunow') || {}).textContent || '', sub: ($('#wusub') || {}).textContent || '' } : { big: 'Распевка сделана!' }; };
 async function warmupPlay() {
   if (!WU) return;
   if (WU.playing) { wuPause(); warmupDraw(); return; }
+  // камера: микрофон распевки открываем сразу и пишем им видео до конца распевки
+  if (camOn() && !camRecording()) { if (await wuEnsureMic(true)) await camSession('Распевка дня', wuPanel, WU.stream); }
   const s = WU.plan[WU.i], sp = window.WU_SPEED || 1;
   if (s.pat && wuMode() === 'echo') await wuEnsureMic();
   const echo = !!(s.pat && wuMode() === 'echo' && WU.stream);
@@ -2538,7 +2550,7 @@ function phonStep(P, now, active) {
 let VS = null;
 function voiceStop() {
   if (!VS) return; clearInterval(VS.tick); clearTimeout(VS.timer); (VS.timers || []).forEach(clearTimeout); VS.timers = []; stopAll(); cancelAnimationFrame(VS.raf);
-  if (VS.stream) { VS.stream.getTracks().forEach(t => t.stop()); VS.stream = null; afterMic(); }
+  if (VS.stream) { if (VS.stream !== CAM.mic) { VS.stream.getTracks().forEach(t => t.stop()); afterMic(); } VS.stream = null; }
   VS.playing = false; busy = false;
 }
 function recLine(k, name) {
@@ -2561,8 +2573,9 @@ function viewVoiceSet(id) {
   const set = voiceSet(id); if (!set) return '<div class="empty">Комплекс не найден</div>';
   VS = { set, i: 0, playing: false, timers: [], tw: null };
   afterHooks.push(voiceDraw);
+  afterHooks.push(() => { if (camOn()) camStart(); });
   return `<button class="back" onclick="go('voice')">${ICON.back} Голос и речь</button><h1>${set.icon} ${set.title}</h1>
-    <p class="muted" style="margin:6px 0 0">${esc(set.desc)} Около ${setMin(set)} мин.</p>${set.note ? `<p class="tiny muted" style="margin:6px 0 0">${esc(set.note)}</p>` : ''}
+    <p class="muted" style="margin:6px 0 0">${esc(set.desc)} Около ${setMin(set)} мин.</p>${set.note ? `<p class="tiny muted" style="margin:6px 0 0">${esc(set.note)}</p>` : ''}${camToggleHTML()}
     <div id="vsbox" class="sec"></div>`;
 }
 function vsList(s) {
@@ -2583,7 +2596,7 @@ function voiceDraw() {
   }
   const s = set.steps[VS.i];
   let body = '';
-  if (s.kind === 'text') { const tw = vsList(s); body = `<div style="font:700 21px Lora,serif;text-align:center;padding:8px 0">«${esc(tw.items[tw.k])}»</div><div class="tiny muted" style="text-align:center">${tw.k + 1} из ${tw.items.length}</div>`; }
+  if (s.kind === 'text') { const tw = vsList(s); body = `<div id="vstext" style="font:700 21px Lora,serif;text-align:center;padding:8px 0">«${esc(tw.items[tw.k])}»</div><div class="tiny muted" style="text-align:center">${tw.k + 1} из ${tw.items.length}</div>`; }
   else if (s.kind === 'mpt' || s.kind === 'exhale') { const b = recBest(s.kind); body = `<div id="vsnow" style="text-align:center;font:800 40px Lora,serif">${VS.result != null ? VS.result.toFixed(1) + ' с' : '0.0 с'}</div>${VS.playing ? levelBar('vslvl') : ''}<div id="vssub" class="small muted" style="text-align:center;min-height:20px">${VS.resultText || (b ? 'Лучший: ' + b.sec.toFixed(1) + ' с' : 'Первый замер')}</div>`; }
   else body = `<div id="vsnow" style="text-align:center;font:800 26px Lora,serif;min-height:36px">${VS.playing ? '' : stepSec(s) + ' с'}</div><div id="vssub" class="small muted" style="text-align:center;min-height:20px"></div>`;
   const meas = (s.kind === 'mpt' || s.kind === 'exhale');
@@ -2595,11 +2608,15 @@ function voiceDraw() {
 }
 function voiceNextStep() {
   voiceStop(); VS.i++; VS.result = null; VS.resultText = '';
-  if (VS.i >= VS.set.steps.length) { voiceState().done.push({ date: nowLocal(), id: VS.set.id }); if (state.voice.done.length > 500) state.voice.done.shift(); save(); }
+  if (VS.i >= VS.set.steps.length) { voiceState().done.push({ date: nowLocal(), id: VS.set.id }); if (state.voice.done.length > 500) state.voice.done.shift(); save(); camRecStop(`${VS.set.title} ✓`); }
   voiceDraw();
 }
+// карточка для видео: комплекс, шаг и то, что сейчас крупно на экране (слог, скороговорка, секунды)
+const vsPanel = () => { if (!VS) return {}; const s = VS.set.steps[VS.i]; if (!s) return { top: VS.set.title, big: 'Готово! ✓' };
+  return { top: `${VS.set.title} · ${s.t}`, big: ($('#vstext') || $('#vsnow') || {}).textContent || s.t, sub: ($('#vssub') || {}).textContent || '' }; };
 async function voicePlay() {
   if (!VS) return;
+  if (camOn() && !camRecording()) await camSession(`Голос и речь · ${VS.set.title}`, vsPanel);
   const s = VS.set.steps[VS.i], sp = window.VS_SPEED || 1;
   if (s.kind === 'text') { const tw = vsList(s); if (tw.k < tw.items.length - 1) { tw.k++; voiceDraw(); } else voiceNextStep(); return; }
   if (VS.playing && VS.P && (s.kind === 'mpt' || s.kind === 'exhale')) return voiceMeasureDone(s, VS.P.sec);
@@ -2626,7 +2643,7 @@ async function voicePlay() {
 }
 // замер: длинный звук (голос, по высоте тона) или выдох на «с» (шум выше фона)
 async function voiceMeasure(s) {
-  let stream; try { stream = await openMic(); } catch (e) { toast('Нет доступа к микрофону'); return; }
+  let stream; try { stream = camRecording() && CAM.mic ? CAM.mic : await openMic(); } catch (e) { toast('Нет доступа к микрофону'); return; }
   VS.stream = stream; VS.playing = true; busy = true; VS.result = null; VS.resultText = ''; voiceDraw();
   const T = micTap(stream), t0 = performance.now() / 1000, floor = [], P = VS.P = { start: null, last: 0, sec: 0, done: false };
   const say = (a, b) => { if ($('#vsnow')) $('#vsnow').textContent = a; if ($('#vssub')) $('#vssub').textContent = b; };
@@ -2681,7 +2698,7 @@ function camMime() {
 // переключатель на экранах уровней
 function camToggleHTML() {
   if (!CAM_OK) return '';
-  return `<label class="check sec" style="margin-top:10px;padding:10px 12px"><input type="checkbox" ${camOn() ? 'checked' : ''} onchange="camSet(this.checked)"><span class="small"><b>🎥 Снимать себя на видео.</b> Камера пишет тебя, пока играешь, и снизу саму игру. Потом можно посмотреть и отправить друзьям. Видео остаётся только у тебя в телефоне.</span></label>
+  return `<label class="check sec" style="margin-top:10px;padding:10px 12px"><input type="checkbox" ${camOn() ? 'checked' : ''} onchange="camSet(this.checked)"><span class="small"><b>🎥 Снимать себя на видео.</b> Камера пишет тебя, пока поёшь, а снизу - игру или упражнение. Потом можно посмотреть и отправить друзьям. Видео остаётся только у тебя в телефоне.</span></label>
     <div id="camerr" class="small" style="color:var(--bad)"></div>`;
 }
 async function camSet(on) { state.settings.cam = !!on; save(); if (on) await camStart(); else camOff(); }
@@ -2705,8 +2722,11 @@ function camOff() {
   if (CAM.rec && CAM.rec.state !== 'finished') camRecStop(null, true);
   if (CAM.stream) CAM.stream.getTracks().forEach(t => t.stop());
   CAM.stream = null; $('#campv')?.remove(); CAM.video = null;
+  if (CAM.mic) { CAM.mic.getTracks().forEach(t => t.stop()); CAM.mic = null; afterMic(); }
 }
-// запись: canvasSel - холст игры, title - подпись сверху, micStream - поток микрофона игры
+const camRecording = () => !!(CAM.rec && CAM.rec.state === 'rec');
+// запись: canvasSel - селектор холста игры ИЛИ функция-карточка () => ({ top, big, sub }) для упражнений;
+// title - подпись сверху, micStream - поток микрофона
 function camRecStart(canvasSel, title, micStream) {
   if (!camOn() || !CAM.stream || !CAM.video || (CAM.rec && CAM.rec.state === 'rec')) return;
   const W = 720, H = 1280, out = document.createElement('canvas'); out.width = W; out.height = H;
@@ -2719,6 +2739,7 @@ function camRecStart(canvasSel, title, micStream) {
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.onstop = () => {
     R.state = 'finished'; cancelAnimationFrame(R.raf); tracks.forEach(t => t.stop()); au.close();
+    if (CAM.mic && !busy) { CAM.mic.getTracks().forEach(t => t.stop()); CAM.mic = null; afterMic(); }
     if (!chunks.length || R.discard) return;
     const blob = new Blob(chunks, { type: R.mime.split(';')[0] });
     const clip = { blob, url: URL.createObjectURL(blob), title: R.title, outro: R.outro, date: nowLocal(), ext: R.mime.includes('mp4') ? 'mp4' : 'webm' };
@@ -2731,6 +2752,7 @@ function camRecStart(canvasSel, title, micStream) {
     // камера сверху на 2/3, игра снизу на 1/3 (над плашкой бренда)
     const area = H - 96, camH = Math.round(area * .67);
     camFrame(g, W, H, R.title, R.outro, camH);
+    if (typeof R.canvasSel === 'function') { let pc = null; try { pc = R.canvasSel(); } catch (e) { } camPanel(g, W, camH + 10, area - camH - 20, pc || {}); g.textAlign = 'left'; return; }
     const cv = R.canvasSel && document.querySelector(R.canvasSel);
     if (cv && cv.width) {
       const gy = camH + 10, gh = area - gy - 10, s = Math.min((W - 20) / cv.width, gh / cv.height), dw = cv.width * s, dh = cv.height * s, x = (W - dw) / 2, y = gy + (gh - dh) / 2;
@@ -2748,6 +2770,34 @@ function camRecStop(outro, now) {
   if (outro && !now) camPending();
   const end = () => { try { R.mr.stop(); } catch (e) { R.state = 'finished'; } };
   if (now || !outro) end(); else setTimeout(end, 2500);
+}
+// карточка упражнения в нижней трети видео: подпись шага, крупный текст (нота, слог, скороговорка), строка под ним
+function camPanel(g, W, y, h, p) {
+  g.fillStyle = '#FAF6F0'; camRound(g, 16, y, W - 32, h, 22); g.fill();
+  g.textAlign = 'center'; g.fillStyle = '#7A6E66'; g.font = '700 26px Manrope, system-ui, sans-serif';
+  if (p.top) g.fillText(String(p.top).slice(0, 40), W / 2, y + 46);
+  const big = String(p.big || '').trim();
+  if (big) {
+    let fs = big.length > 60 ? 34 : big.length > 28 ? 42 : big.length > 12 ? 58 : 84, n;
+    for (; fs >= 26; fs -= 4) { g.font = `800 ${fs}px Lora, Georgia, serif`; n = camWrap(g, big, W / 2, 0, W - 80, fs * 1.18, false); if (n * fs * 1.18 <= h - 120) break; }
+    g.fillStyle = '#2B231E'; const lh = fs * 1.18, top = y + 70 + (h - 120 - n * lh) / 2 + fs * .9;
+    camWrap(g, big, W / 2, top, W - 80, lh);
+  }
+  if (p.sub) { g.fillStyle = '#C8573A'; g.font = '700 26px Manrope, system-ui, sans-serif'; g.fillText(String(p.sub).slice(0, 48), W / 2, y + h - 24); }
+}
+// микрофон для записи в упражнениях (там, где своего нет): открывается один раз на сессию, закрывается в camOff
+async function camMic() {
+  if (CAM.mic && CAM.mic.getAudioTracks().some(t => t.readyState === 'live')) return CAM.mic;
+  try { CAM.mic = await openMic(); } catch (e) { CAM.mic = null; }
+  return CAM.mic;
+}
+// начать запись сессии упражнения, если включена камера: panel - функция карточки
+async function camSession(title, panel, mic) {
+  if (!camOn() || camRecording()) return false;
+  if (!CAM.stream && !(await camStart())) return false;
+  const m = mic || await camMic(); if (!m) return false;
+  camRecStart(panel, (profName() ? profName() + ' · ' : '') + title, m);
+  return camRecording();
 }
 function camRound(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 // общий кадр: камера на весь экран (зеркально), подпись сверху, плашка бренда снизу, крупный итог (outro)

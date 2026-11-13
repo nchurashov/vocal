@@ -44,12 +44,12 @@ function rangeStop() {
 }
 function viewRange() {
   if (!RG || RG.mode === 'live') RG = { mode: 'idle', fr: [] };
-  afterHooks.push(rangeDraw);
+  afterHooks.push(rangeDraw); afterHooks.push(() => { if (camOn()) camStart(); });
   const hist = state.range || [];
   let h = `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Мой диапазон</h1>
     <p class="muted" style="margin:6px 0 0">Пой на «а». Сначала самую низкую ноту, которую берёшь без хрипа и давления, и подержи секунду. Потом поднимайся ступеньками до самой высокой, где голос ещё звучит свободно, и тоже подержи.</p>
     <p class="tiny muted" style="margin:6px 0 0">Засчитываются только ноты, удержанные ровно ${RANGE_HOLD} с. Случайный писк или хрип не попадёт. <a href="#learn">Что значат E2, C4?</a></p>
-    <div class="card sec stack" id="rgbox"></div>`;
+    ${camToggleHTML()}<div class="card sec stack" id="rgbox"></div>`;
   if (hist.length) {
     const f = hist[0], l = hist[hist.length - 1];
     h += `<div class="sec"><h2>Замеры</h2>`;
@@ -99,6 +99,7 @@ async function rangeStart() {
   RG = { mode: 'live', fr: [], stream, lo: null, hi: null };
   rangeDraw();
   const T = micTap(stream), hist = [];
+  if (camOn()) camRecStart(() => ({ top: 'Замер диапазона', big: RG && RG.cur != null ? noteShort(RG.cur) : '...', sub: RG && RG.lo != null ? `низ ${noteShort(RG.lo)} · верх ${noteShort(RG.hi)}` : '' }), (profName() ? profName() + ' · ' : '') + 'Мой диапазон', stream);
   const loop = () => {
     if (!RG || RG.mode !== 'live') return;
     RG.raf = requestAnimationFrame(loop);
@@ -121,7 +122,9 @@ async function rangeStart() {
 }
 function rangeDone() {
   if (!RG) return;
-  const { lo, hi } = RG, chestHi = RG.chestHi != null && RG.chestHi < RG.hi ? RG.chestHi : null; rangeStop();
+  const { lo, hi } = RG, chestHi = RG.chestHi != null && RG.chestHi < RG.hi ? RG.chestHi : null;
+  if (camRecording()) camRecStop(lo == null ? null : `${noteShort(lo)} - ${noteShort(hi)}`, lo == null);
+  rangeStop();
   if (lo == null) { RG = { mode: 'idle', fr: [], err: 'Не услышал ни одной удержанной ноты. Пой громче и держи каждую ноту секунду.' }; rangeDraw(); return; }
   (state.range ||= []).push({ date: nowLocal(), lo, hi, ...(chestHi != null ? { chestHi } : {}) }); if (state.range.length > 100) state.range.shift();
   save();

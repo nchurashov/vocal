@@ -42,6 +42,25 @@ with sync_playwright() as p:
     pg.evaluate("camShow(CAM.clips[CAM.clips.length - 1])"); pg.wait_for_timeout(500)
     if pg.evaluate('window._saves') != 1: fails.append('повторный просмотр сохранил видео в Фото второй раз')
     pg.evaluate("closeSheet(); delete window.Capacitor; state.settings.cam = false; save()")
+    # камера в упражнениях: распевка, «Голос и речь», упражнение с записью, замер диапазона
+    pg.evaluate("state.settings.cam = true; state.settings.wuMode = 'along'; window.WU_SPEED = 40; window.VS_SPEED = 60; save()")
+    def clips(): return pg.evaluate("CAM.clips.length ? CAM.clips[CAM.clips.length - 1].url : ''")
+    def checked(name, before):
+        pg.wait_for_function("(b) => CAM.clips.length && CAM.clips[CAM.clips.length - 1].url !== b", arg=before, timeout=60000)
+        r = pg.evaluate(CHECK); pg.evaluate("closeSheet()")
+        if not r or (r['w'], r['h']) != (720, 1280) or not (1 < r['dur'] < 120): fails.append(f'{name}: видео {r}')
+    n0 = clips(); pg.goto(URL + '#warmup'); pg.reload(); pg.evaluate('window.WU_SPEED = 40'); pg.wait_for_timeout(1200); pg.click('#wuplay')
+    pg.wait_for_function("document.body.innerText.includes('Распевка сделана')", timeout=60000); checked('распевка', n0)
+    n0 = clips(); pg.goto(URL + '#voice-relax'); pg.reload(); pg.evaluate('window.VS_SPEED = 60'); pg.wait_for_timeout(1200)
+    for _ in range(20):
+        if pg.evaluate("VS.i >= VS.set.steps.length"): break
+        i0 = pg.evaluate("VS.i"); pg.click('#vsplay'); pg.wait_for_function(f"VS.i !== {i0}", timeout=20000)
+    checked('голос и речь', n0)
+    exid = pg.evaluate("EXERCISES.find(e => e.kind === 'sing').id")
+    n0 = clips(); pg.goto(URL + '#ex-' + exid); pg.reload(); pg.wait_for_timeout(1200)
+    pg.click('text=Записать с микрофона'); pg.wait_for_timeout(4000); pg.click('text=Остановить'); checked('упражнение с записью', n0)
+    n0 = clips(); pg.goto(URL + '#range'); pg.reload(); pg.wait_for_timeout(1200); pg.click('text=Начать замер'); pg.wait_for_timeout(4000); pg.click('text=Готово'); checked('замер диапазона', n0)
+    pg.evaluate("state.settings.cam = false; save()")
     pg.goto(URL + '#today'); pg.wait_for_timeout(300)
     if pg.evaluate("!!CAM.stream || !!document.getElementById('campv')"): fails.append('камера не выключилась при уходе с уровня')
     if errs: fails.append('ошибки: ' + '; '.join(errs))

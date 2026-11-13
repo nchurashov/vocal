@@ -92,7 +92,7 @@ function phonStep(P, now, active) {
 let VS = null;
 function voiceStop() {
   if (!VS) return; clearInterval(VS.tick); clearTimeout(VS.timer); (VS.timers || []).forEach(clearTimeout); VS.timers = []; stopAll(); cancelAnimationFrame(VS.raf);
-  if (VS.stream) { VS.stream.getTracks().forEach(t => t.stop()); VS.stream = null; afterMic(); }
+  if (VS.stream) { if (VS.stream !== CAM.mic) { VS.stream.getTracks().forEach(t => t.stop()); afterMic(); } VS.stream = null; }
   VS.playing = false; busy = false;
 }
 function recLine(k, name) {
@@ -115,8 +115,9 @@ function viewVoiceSet(id) {
   const set = voiceSet(id); if (!set) return '<div class="empty">Комплекс не найден</div>';
   VS = { set, i: 0, playing: false, timers: [], tw: null };
   afterHooks.push(voiceDraw);
+  afterHooks.push(() => { if (camOn()) camStart(); });
   return `<button class="back" onclick="go('voice')">${ICON.back} Голос и речь</button><h1>${set.icon} ${set.title}</h1>
-    <p class="muted" style="margin:6px 0 0">${esc(set.desc)} Около ${setMin(set)} мин.</p>${set.note ? `<p class="tiny muted" style="margin:6px 0 0">${esc(set.note)}</p>` : ''}
+    <p class="muted" style="margin:6px 0 0">${esc(set.desc)} Около ${setMin(set)} мин.</p>${set.note ? `<p class="tiny muted" style="margin:6px 0 0">${esc(set.note)}</p>` : ''}${camToggleHTML()}
     <div id="vsbox" class="sec"></div>`;
 }
 function vsList(s) {
@@ -137,7 +138,7 @@ function voiceDraw() {
   }
   const s = set.steps[VS.i];
   let body = '';
-  if (s.kind === 'text') { const tw = vsList(s); body = `<div style="font:700 21px Lora,serif;text-align:center;padding:8px 0">«${esc(tw.items[tw.k])}»</div><div class="tiny muted" style="text-align:center">${tw.k + 1} из ${tw.items.length}</div>`; }
+  if (s.kind === 'text') { const tw = vsList(s); body = `<div id="vstext" style="font:700 21px Lora,serif;text-align:center;padding:8px 0">«${esc(tw.items[tw.k])}»</div><div class="tiny muted" style="text-align:center">${tw.k + 1} из ${tw.items.length}</div>`; }
   else if (s.kind === 'mpt' || s.kind === 'exhale') { const b = recBest(s.kind); body = `<div id="vsnow" style="text-align:center;font:800 40px Lora,serif">${VS.result != null ? VS.result.toFixed(1) + ' с' : '0.0 с'}</div>${VS.playing ? levelBar('vslvl') : ''}<div id="vssub" class="small muted" style="text-align:center;min-height:20px">${VS.resultText || (b ? 'Лучший: ' + b.sec.toFixed(1) + ' с' : 'Первый замер')}</div>`; }
   else body = `<div id="vsnow" style="text-align:center;font:800 26px Lora,serif;min-height:36px">${VS.playing ? '' : stepSec(s) + ' с'}</div><div id="vssub" class="small muted" style="text-align:center;min-height:20px"></div>`;
   const meas = (s.kind === 'mpt' || s.kind === 'exhale');
@@ -149,11 +150,15 @@ function voiceDraw() {
 }
 function voiceNextStep() {
   voiceStop(); VS.i++; VS.result = null; VS.resultText = '';
-  if (VS.i >= VS.set.steps.length) { voiceState().done.push({ date: nowLocal(), id: VS.set.id }); if (state.voice.done.length > 500) state.voice.done.shift(); save(); }
+  if (VS.i >= VS.set.steps.length) { voiceState().done.push({ date: nowLocal(), id: VS.set.id }); if (state.voice.done.length > 500) state.voice.done.shift(); save(); camRecStop(`${VS.set.title} ✓`); }
   voiceDraw();
 }
+// карточка для видео: комплекс, шаг и то, что сейчас крупно на экране (слог, скороговорка, секунды)
+const vsPanel = () => { if (!VS) return {}; const s = VS.set.steps[VS.i]; if (!s) return { top: VS.set.title, big: 'Готово! ✓' };
+  return { top: `${VS.set.title} · ${s.t}`, big: ($('#vstext') || $('#vsnow') || {}).textContent || s.t, sub: ($('#vssub') || {}).textContent || '' }; };
 async function voicePlay() {
   if (!VS) return;
+  if (camOn() && !camRecording()) await camSession(`Голос и речь · ${VS.set.title}`, vsPanel);
   const s = VS.set.steps[VS.i], sp = window.VS_SPEED || 1;
   if (s.kind === 'text') { const tw = vsList(s); if (tw.k < tw.items.length - 1) { tw.k++; voiceDraw(); } else voiceNextStep(); return; }
   if (VS.playing && VS.P && (s.kind === 'mpt' || s.kind === 'exhale')) return voiceMeasureDone(s, VS.P.sec);
@@ -180,7 +185,7 @@ async function voicePlay() {
 }
 // замер: длинный звук (голос, по высоте тона) или выдох на «с» (шум выше фона)
 async function voiceMeasure(s) {
-  let stream; try { stream = await openMic(); } catch (e) { toast('Нет доступа к микрофону'); return; }
+  let stream; try { stream = camRecording() && CAM.mic ? CAM.mic : await openMic(); } catch (e) { toast('Нет доступа к микрофону'); return; }
   VS.stream = stream; VS.playing = true; busy = true; VS.result = null; VS.resultText = ''; voiceDraw();
   const T = micTap(stream), t0 = performance.now() / 1000, floor = [], P = VS.P = { start: null, last: 0, sec: 0, done: false };
   const say = (a, b) => { if ($('#vsnow')) $('#vsnow').textContent = a; if ($('#vssub')) $('#vssub').textContent = b; };

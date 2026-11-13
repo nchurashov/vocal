@@ -609,7 +609,8 @@ function stopRecordingIfAny() { if (rec && rec.mr && rec.mr.state === 'recording
 function recorderUI(box, getRef, opts) {
   // getRef(): {notes,bpm}; opts: {anyKeyToggle, onResult}
   const id = 'r' + uid();
-  box.innerHTML = `${opts.anyKeyToggle ? `<label class="check" style="border:0;padding:0 0 12px"><input type="checkbox" id="${id}-any"><span class="small">Я пел в своей тональности, а не от ноты примера (проверятся только расстояния между нотами)</span></label>` : ''}
+  if (MIC_DIRECT && camOn()) camStart();
+  box.innerHTML = `${MIC_DIRECT && typeof camToggleHTML === 'function' ? camToggleHTML() : ''}${opts.anyKeyToggle ? `<label class="check" style="border:0;padding:0 0 12px"><input type="checkbox" id="${id}-any"><span class="small">Я пел в своей тональности, а не от ноты примера (проверятся только расстояния между нотами)</span></label>` : ''}
     ${MIC_DIRECT ? `<div class="row wrap"><button class="btn" id="${id}-mic">${ICON.mic} Записать с микрофона</button>
     <label class="btn ghost">${ICON.file} Загрузить запись<input type="file" accept="audio/*,video/*" class="hidden recfile"></label></div>` :
     `<div class="row wrap"><label class="btn">${ICON.mic} Записать голос<input type="file" accept="video/*,audio/*" capture="user" class="hidden recfile"></label>
@@ -621,7 +622,7 @@ function recorderUI(box, getRef, opts) {
     msg.innerHTML = '<span class="muted">Слушаю запись и ищу ноты...</span>';
     let audio;
     try { audio = await new Promise((ok, bad) => { const p = ac().decodeAudioData(arrayBuf, ok, bad); if (p && p.then) p.then(ok, bad); }); }
-    catch (e) { msg.innerHTML = '<div class="note">Не получилось прочитать файл. Подойдут записи в форматах m4a, mp3, wav, ogg, webm.</div>'; busy = false; return; }
+    catch (e) { if (camRecording()) camRecStop(null, true); msg.innerHTML = '<div class="note">Не получилось прочитать файл. Подойдут записи в форматах m4a, mp3, wav, ogg, webm.</div>'; busy = false; return; }
     setTimeout(() => {
       const chs = []; const maxLen = Math.min(audio.length, audio.sampleRate * 45);
       for (let c = 0; c < audio.numberOfChannels; c++) chs.push(audio.getChannelData(c).subarray(0, maxLen));
@@ -630,9 +631,10 @@ function recorderUI(box, getRef, opts) {
       const anyKey = opts.anyKeyToggle ? $('#' + id + '-any').checked : false;
       msg.innerHTML = '';
       busy = false;
-      if (!a.segs.length) { res.innerHTML = '<div class="note" style="margin-top:10px">Не слышу в записи голоса с понятной высотой. Пой громче и ближе к телефону, на гласную «а» или «ма».</div>'; return; }
+      if (!a.segs.length) { if (camRecording()) camRecStop(null, true); res.innerHTML = '<div class="note" style="margin-top:10px">Не слышу в записи голоса с понятной высотой. Пой громче и ближе к телефону, на гласную «а» или «ма».</div>'; return; }
       const ev = VA.evaluate(ref.notes.map(([s, b]) => ({ midi: base() + s, beats: b })), a.segs, anyKey, strictOct());
       ev.anyKey = anyKey;
+      if (camRecording()) camRecStop(ev.pitchScore + '% нот');
       lastAudio = audio;
       res.innerHTML = resultHTML(ref, ev, audio);
       opts.onResult(ev);
@@ -654,11 +656,12 @@ function recorderUI(box, getRef, opts) {
       return;
     }
     const chunks = []; const mr = new MediaRecorder(stream); rec = { mr, cancel: false }; busy = true;
+    if (camOn()) { const ref = getRef(); camRecStart(() => ({ top: ref.title || 'Пою мелодию', big: (ref.notes || []).map(([x]) => VA.noteName(base() + x)).join(' '), sub: 'Запись...' }), (profName() ? profName() + ' · ' : '') + (ref.title || 'Оценка'), stream); }
     mr.ondataavailable = e => e.data.size && chunks.push(e.data);
     mr.onstop = async () => {
       stream.getTracks().forEach(t => t.stop()); clearInterval(rec.tick); afterMic();
       btn.innerHTML = ICON.mic + ' Записать с микрофона';
-      if (rec.cancel) return;
+      if (rec.cancel) { if (camRecording()) camRecStop(null, true); return; }
       const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
       handleBuffer(await blob.arrayBuffer());
     };
