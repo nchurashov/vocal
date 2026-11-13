@@ -140,10 +140,15 @@ details summary{cursor:pointer}
 .pk-sep{stroke:var(--line);stroke-width:.5}
 .pk-w.pk-in2{fill:color-mix(in srgb,var(--near) 28%,#fff)}.pk-b.pk-in2{fill:color-mix(in srgb,var(--near) 55%,#2B231E)}
 .campv{position:fixed;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));width:84px;height:112px;border-radius:14px;object-fit:cover;transform:scaleX(-1);z-index:40;box-shadow:0 4px 16px rgba(0,0,0,.25);border:2px solid #fff;background:#000}
+.who{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:8px 12px;font-weight:700;font-size:13.5px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inp{border:1px solid var(--line);border-radius:12px;padding:11px 12px;font:inherit;background:var(--card);color:var(--ink);min-width:0}
+.brand b{white-space:nowrap}.who{max-width:112px}
+.who{max-width:92px;padding:8px 10px}
+@media (max-width:390px){.brand b{font-size:16px}.brand{gap:8px}}
 
 .app{padding-top:max(16px,env(safe-area-inset-top))}</style></head>
 <body><div class="app"><header class="top"><div class="brand"><div class="logo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg></div><b>Вокал под бокал</b></div>
-<button class="iconbtn" aria-label="Настройки" onclick="openSettings()" id="gear"></button></header>
+<div class="row" style="gap:8px"><button class="who" id="who" onclick="openProfiles()" aria-label="Кто поёт"></button><button class="iconbtn" aria-label="Настройки" onclick="openSettings()" id="gear"></button></div></header>
 <main id="view"></main></div><nav class="tabs" id="tabs"></nav>
 <script>// ===== Анализ записи: высота тона, ноты, сравнение с эталоном =====
 const VA = (() => {
@@ -715,16 +720,29 @@ function octLock(S, v, target, collect = true) {
 const DEFAULT = () => ({ v: 1, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] } });
 let state = DEFAULT();
 const store = { mode: 'none', db: null, uid: null, timer: null, chain: Promise.resolve(), lastSessionsJSON: '', lastStateJSON: '' };
-try { const raw = localStorage.getItem('vocal-practice'); if (raw) { state = Object.assign(DEFAULT(), JSON.parse(raw)); store.mode = 'local'; } } catch (e) { }
+// Профили: несколько человек на одном телефоне («Кто поёт?»). У каждого свой state в localStorage.
+// Первый профиль p1 хранится по старому ключу 'vocal-practice' (совместимость), остальные - 'vocal-practice:<id>'.
+// Облако (db артефакта Claude) - только для p1.
+let PROF = { list: [{ id: 'p1', name: '' }], cur: 'p1' };
+try { const r = localStorage.getItem('vocal-profiles'); if (r) { const x = JSON.parse(r); if (x && x.list && x.list.length) PROF = x; } } catch (e) { }
+const profKey = id => id === 'p1' ? 'vocal-practice' : 'vocal-practice:' + id;
+const profCur = () => PROF.list.find(p => p.id === PROF.cur) || PROF.list[0];
+const profName = () => (profCur().name || '').trim();
+function profSave() { try { localStorage.setItem('vocal-profiles', JSON.stringify(PROF)); } catch (e) { } }
+function loadState() {
+  state = DEFAULT();
+  try { const raw = localStorage.getItem(profKey(PROF.cur)); if (raw) { state = Object.assign(DEFAULT(), JSON.parse(raw)); state.settings = Object.assign(DEFAULT().settings, state.settings || {}); store.mode = 'local'; } } catch (e) { }
+}
+loadState();
 function save() {
-  try { localStorage.setItem('vocal-practice', JSON.stringify(state)); if (store.mode === 'none') store.mode = 'local'; } catch (e) { }
-  if (!store.db) return;
+  try { localStorage.setItem(profKey(PROF.cur), JSON.stringify(state)); if (store.mode === 'none') store.mode = 'local'; } catch (e) { }
+  if (!store.db || PROF.cur !== 'p1') return;
   clearTimeout(store.timer);
   store.timer = setTimeout(pushDb, 700);
 }
 function pushDb() {
   const sJSON = JSON.stringify({ sessions: state.sessions });
-  const stJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball });
+  const stJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball, range: state.range, warmups: state.warmups, voice: state.voice, diary: state.diary });
   const root = 'data/users/' + store.uid;
   store.chain = store.chain.then(async () => {
     try {
@@ -739,7 +757,7 @@ function pushDb() {
   });
 }
 async function initDb() {
-  if (!window.claude || !window.claude.use) return;
+  if (!window.claude || !window.claude.use || PROF.cur !== 'p1') return;
   try {
     const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
     if (!db || !user) return;
@@ -752,7 +770,7 @@ async function initDb() {
       state = Object.assign(DEFAULT(), JSON.parse(JSON.stringify(st)), { sessions: JSON.parse(JSON.stringify(ss.sessions || [])) });
       state.settings = Object.assign(DEFAULT().settings, state.settings || {});
       state.game ||= { best: {}, plays: [] }; state.ball ||= { best: {}, plays: [] };
-      store.lastStateJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball });
+      store.lastStateJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball, range: state.range, warmups: state.warmups, voice: state.voice, diary: state.diary });
       store.lastSessionsJSON = JSON.stringify({ sessions: state.sessions });
       try { localStorage.setItem('vocal-practice', JSON.stringify(state)); } catch (e) { }
       store.mode = 'cloud';
@@ -763,6 +781,32 @@ async function initDb() {
     }
     updateSaveBadge();
   } catch (e) { console.warn('db init', e); }
+}
+function profSwitch(id) {
+  if (busy || !PROF.list.some(p => p.id === id)) return;
+  save(); PROF.cur = id; profSave(); loadState(); closeSheet();
+  toast(profName() ? 'Привет, ' + profName() + '!' : 'Профиль переключён');
+  if (location.hash === '#today') render(); else go('today');
+}
+function profAdd(name) {
+  name = (name || '').trim().slice(0, 30); if (!name) return;
+  const id = 'p' + Date.now().toString(36); PROF.list.push({ id, name }); profSave(); profSwitch(id);
+}
+function profRename(name) { profCur().name = (name || '').trim().slice(0, 30); profSave(); render(); if ($('#sheet')) openProfiles(); }
+async function profDel(id) {
+  if (PROF.list.length < 2 || !confirm('Удалить профиль «' + (PROF.list.find(p => p.id === id).name || 'без имени') + '» со всем прогрессом и видео?')) return;
+  try { const st = JSON.parse(localStorage.getItem(profKey(id)) || '{}'); for (const d of st.diary || []) { try { await vidDel(d.id); } catch (e) { } } } catch (e) { }
+  try { localStorage.removeItem(profKey(id)); } catch (e) { }
+  PROF.list = PROF.list.filter(p => p.id !== id); if (PROF.cur === id) { PROF.cur = PROF.list[0].id; loadState(); }
+  profSave(); closeSheet(); render(); openProfiles();
+}
+function openProfiles() {
+  sheet(`<div class="row between"><h2>Кто поёт?</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
+    <p class="small muted" style="margin:0">У каждого свой прогресс, рекорды, диапазон и видео. Удобно, когда телефон передают по кругу.</p>
+    ${PROF.list.map(p => `<div class="row" style="gap:8px"><button class="item" style="flex:1;margin:0" onclick="profSwitch('${p.id}')"><div class="dot ${p.id === PROF.cur ? 'pitch' : 'ear'}">${p.id === PROF.cur ? '✓' : '🎤'}</div><div class="t"><b>${esc(p.name || 'Без имени')}</b><span class="small muted">${p.id === PROF.cur ? 'сейчас поёт' : 'переключиться'}</span></div></button>${PROF.list.length > 1 ? `<button class="iconbtn" aria-label="Удалить профиль" onclick="profDel('${p.id}')">🗑</button>` : ''}</div>`).join('')}
+    <div class="card stack"><b>Моё имя</b><div class="row"><input id="pfname" class="inp" style="flex:1" maxlength="30" placeholder="Как тебя зовут?" value="${esc(profName())}"><button class="btn" onclick="profRename($('#pfname').value)">Сохранить</button></div></div>
+    <div class="card stack"><b>Новый человек</b><div class="row"><input id="pfnew" class="inp" style="flex:1" maxlength="30" placeholder="Имя"><button class="btn" onclick="profAdd($('#pfnew').value)">Добавить</button></div></div>
+    <div class="tiny muted">Всё хранится только на этом телефоне. Вход с синхронизацией между устройствами появится позже.</div>`);
 }
 function updateSaveBadge() { const el = $('#savebadge'); if (el) el.textContent = saveText(); }
 const saveText = () => store.mode === 'cloud' ? 'Данные сохраняются в твоём аккаунте и доступны с любого устройства.' : store.mode === 'local' ? 'Данные сохраняются только в этом браузере.' : 'Сохранение недоступно: данные пропадут после закрытия.';
@@ -849,6 +893,7 @@ function render() {
   if (typeof camOff === 'function') camOff();
   stopAll();
   const tabRoute = route.startsWith('ex-') || route.startsWith('voice') ? 'exercises' : /^(game|ball)/.test(route) ? 'ball' : route;
+  { const w = $('#who'); if (w) w.innerHTML = `🎤 ${esc(profName() || 'Кто?')}`; }
   $('#tabs').innerHTML = '<div class="tabs-in">' + TABS.map(([k, n, ic]) => `<button class="tab ${tabRoute === k ? 'on' : ''}" onclick="go('${k}')">${ic}<span>${n}</span></button>`).join('') + '</div>';
   const v = $('#view');
   if (route.startsWith('ex-')) v.innerHTML = viewExercise(exById(route.slice(3)));
@@ -885,7 +930,8 @@ function viewToday() {
   const due = dueList(), fresh = freshList(), n7 = state.sessions.filter(s => daysBetween(s.date.slice(0, 10), ymd()) < 7).length, st = streak();
   const d = new Date();
   let h = `<h1>Сегодня</h1><div class="muted">${d.getDate()} ${MONTHS[d.getMonth()]}</div>
-    <p class="small" style="margin:8px 0 0">🍷 Налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.</p>`;
+    <p class="small" style="margin:8px 0 0">🍷 ${profName() ? esc(profName()) + ', налей' : 'Налей'} бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.</p>`;
+  if (!profName()) h += `<div class="card sec stack" style="padding:14px"><b>Как тебя зовут?</b><div class="row"><input id="tdname" class="inp" style="flex:1" maxlength="30" placeholder="Имя"><button class="btn" onclick="profRename($('#tdname').value)">Готово</button></div><div class="tiny muted">Имя появится в твоих видео. Если телефон передают друзьям, у каждого может быть свой профиль: нажми 🎤 вверху.</div></div>`;
   if (!state.sessions.length) {
     h += `<div class="card sec stack"><h3>Привет! С чего начнём</h3>
       <p class="small" style="margin:0">Твой уровень пока не определён, и приложение ничего не додумывает. Оно отталкивается только от того, что ты сам отметишь после практики.</p>
@@ -1556,7 +1602,7 @@ async function gameLive() {
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const t0 = gameCountIn(); let last = c.currentTime - t0;
-  camRecStart('#gcv', `Попади в ноту · уровень ${G.lv.n}`, stream);
+  camRecStart('#gcv', `${profName() ? profName() + ' · ' : ''}Попади в ноту · уровень ${G.lv.n}`, stream);
   $('#glive').innerHTML = ICON.stop + ' Остановить'; $('#glive').onclick = () => gameFinish(true);
   const loop = () => {
     if (!G || G.stopped || G.mode !== 'live') return;
@@ -1928,7 +1974,7 @@ async function ballLive() {
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const t0 = ballCountIn(); ballSchedule(t0, false);
-  camRecStart('#bcv', `Шарик · уровень ${B.lv.n}`, stream);
+  camRecStart('#bcv', `${profName() ? profName() + ' · ' : ''}Шарик · уровень ${B.lv.n}`, stream);
   $('#blive').innerHTML = ICON.stop + ' Остановить';
   let last = -9;
   const loop = () => {
@@ -2609,7 +2655,7 @@ function voiceMeasureDone(s, sec) {
 }
 
 // ===== Камера: снять себя во время уровня и поделиться видео =====
-// Видео 9:16 (720x1280): на весь кадр фронтальная камера (зеркально), игра окошком в правом нижнем углу, внизу плашка с адресом сайта.
+// Видео 9:16 (720x1280): сверху фронтальная камера (зеркально) на 2/3, снизу игра на 1/3, внизу плашка с адресом сайта.
 // Звук - копия дорожки микрофона игры (голос и пианино из динамика). После финиша ещё 2.5 с крупный итог - для реакции.
 // Видео живёт только в памяти телефона; наружу уходит, только если человек сам нажмёт «Поделиться» или «Сохранить».
 const CAM = { stream: null, video: null, rec: null, clips: [] };
@@ -2670,13 +2716,13 @@ function camRecStart(canvasSel, title, micStream) {
   const draw = () => {
     if (R.state === 'finished') return;
     R.raf = requestAnimationFrame(draw);
-    camFrame(g, W, H, R.title, R.outro);
-    // игра: окошко в правом нижнем углу над плашкой
+    // камера сверху на 2/3, игра снизу на 1/3 (над плашкой бренда)
+    const area = H - 96, camH = Math.round(area * .67);
+    camFrame(g, W, H, R.title, R.outro, camH);
     const cv = R.canvasSel && document.querySelector(R.canvasSel);
     if (cv && cv.width) {
-      const iw = 330, ih = Math.round(iw * cv.height / cv.width), x = W - iw - 22, y = H - 96 - ih - 22;
-      g.save(); g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 18; g.fillStyle = '#fff'; camRound(g, x - 5, y - 5, iw + 10, ih + 10, 20); g.fill(); g.restore();
-      g.save(); camRound(g, x, y, iw, ih, 16); g.clip(); g.drawImage(cv, x, y, iw, ih); g.restore();
+      const gy = camH + 10, gh = area - gy - 10, s = Math.min((W - 20) / cv.width, gh / cv.height), dw = cv.width * s, dh = cv.height * s, x = (W - dw) / 2, y = gy + (gh - dh) / 2;
+      g.save(); camRound(g, x, y, dw, dh, 14); g.clip(); g.drawImage(cv, x, y, dw, dh); g.restore();
     }
     g.textAlign = 'left';
   };
@@ -2692,12 +2738,13 @@ function camRecStop(outro, now) {
 }
 function camRound(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 // общий кадр: камера на весь экран (зеркально), подпись сверху, плашка бренда снизу, крупный итог (outro)
-function camFrame(g, W, H, title, outro) {
+// camH - высота области камеры (по умолчанию весь кадр над плашкой)
+function camFrame(g, W, H, title, outro, camH = H - 96) {
   g.fillStyle = '#1B1714'; g.fillRect(0, 0, W, H);
   const v = CAM.video;
   if (v && v.videoWidth) {
-    const s = Math.max(W / v.videoWidth, H / v.videoHeight), dw = v.videoWidth * s, dh = v.videoHeight * s;
-    g.save(); g.translate(W, 0); g.scale(-1, 1); g.drawImage(v, (W - dw) / 2, (H - dh) / 2, dw, dh); g.restore();
+    const s = Math.max(W / v.videoWidth, camH / v.videoHeight), dw = v.videoWidth * s, dh = v.videoHeight * s;
+    g.save(); g.beginPath(); g.rect(0, 0, W, camH); g.clip(); g.translate(W, 0); g.scale(-1, 1); g.drawImage(v, (W - dw) / 2, (camH - dh) / 2, dw, dh); g.restore();
   }
   g.fillStyle = 'rgba(0,0,0,.4)'; g.fillRect(0, 0, W, 70);
   g.fillStyle = '#fff'; g.font = '700 30px Manrope, system-ui, sans-serif'; g.textAlign = 'left'; g.fillText(title, 24, 46);
@@ -2705,10 +2752,18 @@ function camFrame(g, W, H, title, outro) {
   g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = '800 36px Lora, Georgia, serif'; g.fillText('Вокал под бокал 🍷', W / 2, H - 52);
   g.font = '600 22px Manrope, system-ui, sans-serif'; g.fillText('nchurashov.github.io/vocal', W / 2, H - 18);
   if (outro) {
-    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, H * .36, W, 170);
-    g.fillStyle = '#FFD27A'; g.font = '800 64px Lora, Georgia, serif'; g.fillText(outro, W / 2, H * .36 + 108);
+    const oy = Math.round(camH / 2 - 85);
+    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, oy, W, 170);
+    g.fillStyle = '#FFD27A'; g.font = '800 64px Lora, Georgia, serif'; g.fillText(outro, W / 2, oy + 108);
   }
   g.textAlign = 'left';
+}
+// перенос текста по словам на холсте; возвращает число строк
+function camWrap(g, text, x, y, maxW, lh, draw = true) {
+  const words = text.split(' '); let line = '', n = 0;
+  for (const w of words) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > maxW && line) { if (draw) g.fillText(line, x, y + n * lh); n++; line = w; } else line = t; }
+  if (line) { if (draw) g.fillText(line, x, y + n * lh); n++; }
+  return n;
 }
 function camShow(clip) {
   sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
@@ -2743,11 +2798,13 @@ function recCanvas(draw, audioTracks = [], W = 720, H = 1280) {
 }
 
 // ===== Голос: до и после (#diary) =====
-// Видео «до»: рассказ о себе + чтение одного и того же текста. Через месяц - «после». Потом видео сравнения для соцсетей.
+// Видео «до»: ответы на вопросы (субтитры под камерой, впечатываются в видео). Через месяц - «после». Потом видео сравнения для соцсетей.
 // Метрики только из микрофона: средняя высота речи (медиана тона) и разброс интонаций (от 10-го до 90-го процентиля).
 // Видео хранится в IndexedDB этого браузера (никуда не загружается); метаданные - в state.diary.
-const DIARY_TEXT = 'Сегодня я начинаю заниматься голосом. Мне интересно, как он звучит со стороны и каким станет через месяц. Я говорю спокойно, не тороплюсь и дышу свободно. Раз, два, три, четыре, пять - вышел зайчик погулять.';
-const DIARY_MAX = 90;
+// вопросы для живой речи: человек думает и отвечает, а не читает. В «до» и «после» одни и те же - сравнение честное
+const DIARY_Q = ['Как тебя зовут и чем ты занимаешься?', 'Расскажи самый смешной случай за последнее время.', 'Что бы ты делал, если бы завтра был свободный день?', 'Чего ты хочешь от своего голоса?'];
+const DIARY_QSEC = 20;
+const DIARY_MAX = 120;
 // --- IndexedDB для видео
 function idb() { return new Promise((ok, bad) => { const r = indexedDB.open('vpb', 1); r.onupgradeneeded = () => r.result.createObjectStore('videos'); r.onsuccess = () => ok(r.result); r.onerror = () => bad(r.error); }); }
 async function idbDo(mode, f) { const db = await idb(); return new Promise((ok, bad) => { const tx = db.transaction('videos', mode), st = tx.objectStore('videos'); const r = f(st); tx.oncomplete = () => ok(r && r.result); tx.onerror = () => bad(tx.error); }); }
@@ -2776,7 +2833,7 @@ function diaryStop() {
 function diaryTodayItem() {
   if (!CAM_OK) return '';
   const L = diaryList(), last = L[L.length - 1];
-  if (!L.length) return `<button class="item" onclick="go('diary')"><div class="dot near">🎬</div><div class="t"><b>Запиши голос «до»</b><span class="small muted">Минута на камеру: расскажи о себе. Через месяц сравнишь и не узнаешь свой голос</span></div><span class="muted">›</span></button>`;
+  if (!L.length) return `<button class="item" onclick="go('diary')"><div class="dot near">🎬</div><div class="t"><b>Запиши голос «до»</b><span class="small muted">Полторы минуты на камеру: ответь на 4 вопроса. Через месяц сравнишь и не узнаешь свой голос</span></div><span class="muted">›</span></button>`;
   const d = daysSince(last.date);
   if (d >= 30) return `<button class="item" onclick="go('diary')"><div class="dot near">🎬</div><div class="t"><b>Прошёл месяц: запиши голос «после»</b><span class="small muted">Последнее видео ${fmtDay(last.date.slice(0, 10)).toLowerCase()}. Сравни, как изменился голос</span></div><span class="muted">›</span></button>`;
   return '';
@@ -2786,7 +2843,7 @@ function viewDiary() {
   afterHooks.push(diaryDraw);
   const L = diaryList();
   return `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Голос: до и после</h1>
-    <p class="muted" style="margin:6px 0 0">Налей бокал и запиши короткое видео: расскажи о себе и прочитай текст. Занимайся по упражнению в день, а через месяц запиши ещё раз. Сравни и покажи друзьям.</p>
+    <p class="muted" style="margin:6px 0 0">Налей бокал и запиши короткое видео: под камерой по очереди появятся ${DIARY_Q.length} вопроса, просто отвечай своими словами. Занимайся по упражнению в день, а через месяц запиши ещё раз. Сравни и покажи друзьям.</p>
     ${CAM_OK ? '' : '<div class="note sec">Для видео нужна камера и микрофон: открой сайт в Safari или Chrome.</div>'}
     <div id="dybox" class="sec"></div>
     ${L.length >= 2 ? diaryCompareHTML(L[0], L[L.length - 1]) : ''}
@@ -2818,26 +2875,41 @@ function diaryDraw() {
   if (DY.mode === 'idle') {
     const wait = L.length && daysSince(L[L.length - 1].date) < 30 ? 30 - daysSince(L[L.length - 1].date) : 0;
     box.innerHTML = `<div class="card stack">${wait ? `<div class="small">До видео «после» осталось ${wait} ${plural(wait, 'день', 'дня', 'дней')}. Можно записать и раньше, но за месяц разница заметнее.</div>` : ''}
-      <button class="btn" onclick="diaryRec()">🎥 Записать видео «${next}»</button><div class="tiny muted">Будет нужен доступ к камере и микрофону. Займёт около минуты.</div></div>`;
+      <button class="btn" onclick="diaryRec()">🎥 Записать видео «${next}»</button><div class="tiny muted">Будет нужен доступ к камере и микрофону. Около полутора минут: по 20 секунд на вопрос, можно листать быстрее.</div></div>`;
     return;
   }
   if (DY.mode === 'rec') {
-    box.innerHTML = `<div class="card stack"><video id="dyprev" muted playsinline autoplay style="width:100%;max-height:46vh;object-fit:cover;border-radius:14px;transform:scaleX(-1);background:#000"></video>
+    box.innerHTML = `<div class="card stack"><video id="dyprev" muted playsinline autoplay style="width:100%;max-height:44vh;object-fit:cover;border-radius:14px;transform:scaleX(-1);background:#000"></video>
       <div class="row between"><span class="small"><span class="rec-dot"></span> Запись</span><b id="dyt">0 с</b></div>
-      <div class="small"><b>1.</b> Расскажи о себе в 2-3 предложениях: как зовут, чем занимаешься, что любишь.</div>
-      <div class="small"><b>2.</b> Прочитай вслух:</div><div style="font:600 17px Lora,serif;line-height:1.45">${DIARY_TEXT}</div>
-      <button class="btn block" onclick="diaryRecStop()">${ICON.stop} Готово</button></div>`;
+      <div class="tiny muted">Вопрос <span id="dyqn">1</span> из ${DIARY_Q.length}. Отвечай как в разговоре, своими словами. Можно задуматься - это тоже часть голоса.</div>
+      <div id="dyq" style="font:700 21px Lora,serif;line-height:1.35;min-height:58px">${DIARY_Q[0]}</div>
+      <div style="height:5px;background:var(--line);border-radius:3px;overflow:hidden"><i id="dyqbar" style="display:block;height:100%;width:0;background:var(--accent)"></i></div>
+      <div class="row"><button class="btn ghost" style="flex:1" onclick="diaryNextQ()">Следующий вопрос ›</button><button class="btn" style="flex:1" onclick="diaryRecStop()">${ICON.stop} Готово</button></div></div>`;
     const v = $('#dyprev'); if (v && CAM.stream) { v.srcObject = CAM.stream; v.play().catch(() => { }); }
   }
+}
+// следующий вопрос; после последнего - конец записи
+function diaryNextQ() {
+  if (!DY || DY.mode !== 'rec') return;
+  if (DY.q >= DIARY_Q.length - 1) return diaryRecStop();
+  DY.q++; DY.qT = performance.now();
+  if ($('#dyq')) $('#dyq').textContent = DIARY_Q[DY.q]; if ($('#dyqn')) $('#dyqn').textContent = DY.q + 1;
 }
 async function diaryRec() {
   if (!(await camStart(true))) { toast('Нет доступа к камере'); return; }
   let mic; try { mic = await openMic(); } catch (e) { toast('Нет доступа к микрофону'); return; }
-  DY = { mode: 'rec', mic, ms: [], t0: performance.now() }; busy = true;
+  DY = { mode: 'rec', mic, ms: [], t0: performance.now(), q: 0, qT: performance.now() }; busy = true;
   $('#campv')?.remove();
   const L = diaryList(), title = `${L.length ? 'после' : 'до'} · ${dateRu(ymd())}`;
   const T = micTap(mic), hist = [];
-  DY.rec = recCanvas((g, W, H) => camFrame(g, W, H, 'Голос ' + title, null), mic.getAudioTracks().map(t => t.clone()));
+  DY.rec = recCanvas((g, W, H) => {
+    camFrame(g, W, H, (profName() ? profName() + ' · ' : '') + 'голос ' + title, null);
+    // субтитр: текущий вопрос над плашкой бренда
+    const q = DIARY_Q[DY ? DY.q : 0]; g.font = '700 34px Manrope, system-ui, sans-serif'; g.textAlign = 'center';
+    const n = camWrap(g, q, W / 2, 0, W - 80, 44, false), bh = n * 44 + 36, by = H - 96 - bh - 24;
+    g.fillStyle = 'rgba(0,0,0,.6)'; camRound(g, 24, by, W - 48, bh, 18); g.fill();
+    g.fillStyle = '#fff'; camWrap(g, q, W / 2, by + 50, W - 80, 44); g.textAlign = 'left';
+  }, mic.getAudioTracks().map(t => t.clone()));
   diaryDraw();
   const loop = () => {
     if (!DY || DY.mode !== 'rec') return;
@@ -2845,6 +2917,8 @@ async function diaryRec() {
     const buf = T.read(); hist.push(VA.livePitch(buf, T.c.sampleRate)); if (hist.length > 3) hist.shift();
     const v = hist.filter(x => x != null); DY.ms.push(v.length >= 2 ? VA.median(v) : null);
     const s = Math.floor((performance.now() - DY.t0) / 1000); const el = $('#dyt'); if (el) el.textContent = s + ' с';
+    const qe = (performance.now() - DY.qT) / 1000 * (window.DY_SPEED || 1), bar = $('#dyqbar'); if (bar) bar.style.width = Math.min(100, qe / DIARY_QSEC * 100) + '%';
+    if (qe >= DIARY_QSEC) diaryNextQ();
     if (s >= DIARY_MAX) diaryRecStop();
   };
   loop();

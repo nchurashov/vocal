@@ -192,16 +192,29 @@ function octLock(S, v, target, collect = true) {
 const DEFAULT = () => ({ v: 1, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] } });
 let state = DEFAULT();
 const store = { mode: 'none', db: null, uid: null, timer: null, chain: Promise.resolve(), lastSessionsJSON: '', lastStateJSON: '' };
-try { const raw = localStorage.getItem('vocal-practice'); if (raw) { state = Object.assign(DEFAULT(), JSON.parse(raw)); store.mode = 'local'; } } catch (e) { }
+// Профили: несколько человек на одном телефоне («Кто поёт?»). У каждого свой state в localStorage.
+// Первый профиль p1 хранится по старому ключу 'vocal-practice' (совместимость), остальные - 'vocal-practice:<id>'.
+// Облако (db артефакта Claude) - только для p1.
+let PROF = { list: [{ id: 'p1', name: '' }], cur: 'p1' };
+try { const r = localStorage.getItem('vocal-profiles'); if (r) { const x = JSON.parse(r); if (x && x.list && x.list.length) PROF = x; } } catch (e) { }
+const profKey = id => id === 'p1' ? 'vocal-practice' : 'vocal-practice:' + id;
+const profCur = () => PROF.list.find(p => p.id === PROF.cur) || PROF.list[0];
+const profName = () => (profCur().name || '').trim();
+function profSave() { try { localStorage.setItem('vocal-profiles', JSON.stringify(PROF)); } catch (e) { } }
+function loadState() {
+  state = DEFAULT();
+  try { const raw = localStorage.getItem(profKey(PROF.cur)); if (raw) { state = Object.assign(DEFAULT(), JSON.parse(raw)); state.settings = Object.assign(DEFAULT().settings, state.settings || {}); store.mode = 'local'; } } catch (e) { }
+}
+loadState();
 function save() {
-  try { localStorage.setItem('vocal-practice', JSON.stringify(state)); if (store.mode === 'none') store.mode = 'local'; } catch (e) { }
-  if (!store.db) return;
+  try { localStorage.setItem(profKey(PROF.cur), JSON.stringify(state)); if (store.mode === 'none') store.mode = 'local'; } catch (e) { }
+  if (!store.db || PROF.cur !== 'p1') return;
   clearTimeout(store.timer);
   store.timer = setTimeout(pushDb, 700);
 }
 function pushDb() {
   const sJSON = JSON.stringify({ sessions: state.sessions });
-  const stJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball });
+  const stJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball, range: state.range, warmups: state.warmups, voice: state.voice, diary: state.diary });
   const root = 'data/users/' + store.uid;
   store.chain = store.chain.then(async () => {
     try {
@@ -216,7 +229,7 @@ function pushDb() {
   });
 }
 async function initDb() {
-  if (!window.claude || !window.claude.use) return;
+  if (!window.claude || !window.claude.use || PROF.cur !== 'p1') return;
   try {
     const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
     if (!db || !user) return;
@@ -229,7 +242,7 @@ async function initDb() {
       state = Object.assign(DEFAULT(), JSON.parse(JSON.stringify(st)), { sessions: JSON.parse(JSON.stringify(ss.sessions || [])) });
       state.settings = Object.assign(DEFAULT().settings, state.settings || {});
       state.game ||= { best: {}, plays: [] }; state.ball ||= { best: {}, plays: [] };
-      store.lastStateJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball });
+      store.lastStateJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball, range: state.range, warmups: state.warmups, voice: state.voice, diary: state.diary });
       store.lastSessionsJSON = JSON.stringify({ sessions: state.sessions });
       try { localStorage.setItem('vocal-practice', JSON.stringify(state)); } catch (e) { }
       store.mode = 'cloud';
@@ -240,6 +253,32 @@ async function initDb() {
     }
     updateSaveBadge();
   } catch (e) { console.warn('db init', e); }
+}
+function profSwitch(id) {
+  if (busy || !PROF.list.some(p => p.id === id)) return;
+  save(); PROF.cur = id; profSave(); loadState(); closeSheet();
+  toast(profName() ? 'Привет, ' + profName() + '!' : 'Профиль переключён');
+  if (location.hash === '#today') render(); else go('today');
+}
+function profAdd(name) {
+  name = (name || '').trim().slice(0, 30); if (!name) return;
+  const id = 'p' + Date.now().toString(36); PROF.list.push({ id, name }); profSave(); profSwitch(id);
+}
+function profRename(name) { profCur().name = (name || '').trim().slice(0, 30); profSave(); render(); if ($('#sheet')) openProfiles(); }
+async function profDel(id) {
+  if (PROF.list.length < 2 || !confirm('Удалить профиль «' + (PROF.list.find(p => p.id === id).name || 'без имени') + '» со всем прогрессом и видео?')) return;
+  try { const st = JSON.parse(localStorage.getItem(profKey(id)) || '{}'); for (const d of st.diary || []) { try { await vidDel(d.id); } catch (e) { } } } catch (e) { }
+  try { localStorage.removeItem(profKey(id)); } catch (e) { }
+  PROF.list = PROF.list.filter(p => p.id !== id); if (PROF.cur === id) { PROF.cur = PROF.list[0].id; loadState(); }
+  profSave(); closeSheet(); render(); openProfiles();
+}
+function openProfiles() {
+  sheet(`<div class="row between"><h2>Кто поёт?</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
+    <p class="small muted" style="margin:0">У каждого свой прогресс, рекорды, диапазон и видео. Удобно, когда телефон передают по кругу.</p>
+    ${PROF.list.map(p => `<div class="row" style="gap:8px"><button class="item" style="flex:1;margin:0" onclick="profSwitch('${p.id}')"><div class="dot ${p.id === PROF.cur ? 'pitch' : 'ear'}">${p.id === PROF.cur ? '✓' : '🎤'}</div><div class="t"><b>${esc(p.name || 'Без имени')}</b><span class="small muted">${p.id === PROF.cur ? 'сейчас поёт' : 'переключиться'}</span></div></button>${PROF.list.length > 1 ? `<button class="iconbtn" aria-label="Удалить профиль" onclick="profDel('${p.id}')">🗑</button>` : ''}</div>`).join('')}
+    <div class="card stack"><b>Моё имя</b><div class="row"><input id="pfname" class="inp" style="flex:1" maxlength="30" placeholder="Как тебя зовут?" value="${esc(profName())}"><button class="btn" onclick="profRename($('#pfname').value)">Сохранить</button></div></div>
+    <div class="card stack"><b>Новый человек</b><div class="row"><input id="pfnew" class="inp" style="flex:1" maxlength="30" placeholder="Имя"><button class="btn" onclick="profAdd($('#pfnew').value)">Добавить</button></div></div>
+    <div class="tiny muted">Всё хранится только на этом телефоне. Вход с синхронизацией между устройствами появится позже.</div>`);
 }
 function updateSaveBadge() { const el = $('#savebadge'); if (el) el.textContent = saveText(); }
 const saveText = () => store.mode === 'cloud' ? 'Данные сохраняются в твоём аккаунте и доступны с любого устройства.' : store.mode === 'local' ? 'Данные сохраняются только в этом браузере.' : 'Сохранение недоступно: данные пропадут после закрытия.';
@@ -326,6 +365,7 @@ function render() {
   if (typeof camOff === 'function') camOff();
   stopAll();
   const tabRoute = route.startsWith('ex-') || route.startsWith('voice') ? 'exercises' : /^(game|ball)/.test(route) ? 'ball' : route;
+  { const w = $('#who'); if (w) w.innerHTML = `🎤 ${esc(profName() || 'Кто?')}`; }
   $('#tabs').innerHTML = '<div class="tabs-in">' + TABS.map(([k, n, ic]) => `<button class="tab ${tabRoute === k ? 'on' : ''}" onclick="go('${k}')">${ic}<span>${n}</span></button>`).join('') + '</div>';
   const v = $('#view');
   if (route.startsWith('ex-')) v.innerHTML = viewExercise(exById(route.slice(3)));
@@ -362,7 +402,8 @@ function viewToday() {
   const due = dueList(), fresh = freshList(), n7 = state.sessions.filter(s => daysBetween(s.date.slice(0, 10), ymd()) < 7).length, st = streak();
   const d = new Date();
   let h = `<h1>Сегодня</h1><div class="muted">${d.getDate()} ${MONTHS[d.getMonth()]}</div>
-    <p class="small" style="margin:8px 0 0">🍷 Налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.</p>`;
+    <p class="small" style="margin:8px 0 0">🍷 ${profName() ? esc(profName()) + ', налей' : 'Налей'} бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.</p>`;
+  if (!profName()) h += `<div class="card sec stack" style="padding:14px"><b>Как тебя зовут?</b><div class="row"><input id="tdname" class="inp" style="flex:1" maxlength="30" placeholder="Имя"><button class="btn" onclick="profRename($('#tdname').value)">Готово</button></div><div class="tiny muted">Имя появится в твоих видео. Если телефон передают друзьям, у каждого может быть свой профиль: нажми 🎤 вверху.</div></div>`;
   if (!state.sessions.length) {
     h += `<div class="card sec stack"><h3>Привет! С чего начнём</h3>
       <p class="small" style="margin:0">Твой уровень пока не определён, и приложение ничего не додумывает. Оно отталкивается только от того, что ты сам отметишь после практики.</p>

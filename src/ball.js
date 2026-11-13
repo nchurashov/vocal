@@ -272,7 +272,7 @@ async function ballLive() {
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const t0 = ballCountIn(); ballSchedule(t0, false);
-  camRecStart('#bcv', `Шарик · уровень ${B.lv.n}`, stream);
+  camRecStart('#bcv', `${profName() ? profName() + ' · ' : ''}Шарик · уровень ${B.lv.n}`, stream);
   $('#blive').innerHTML = ICON.stop + ' Остановить';
   let last = -9;
   const loop = () => {

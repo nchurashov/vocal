@@ -13,7 +13,7 @@ html = f'''<!DOCTYPE html>
 <style>{css}
 .app{{padding-top:max(16px,env(safe-area-inset-top))}}</style></head>
 <body><div class="app"><header class="top"><div class="brand"><div class="logo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg></div><b>Вокал под бокал</b></div>
-<button class="iconbtn" aria-label="Настройки" onclick="openSettings()" id="gear"></button></header>
+<div class="row" style="gap:8px"><button class="who" id="who" onclick="openProfiles()" aria-label="Кто поёт"></button><button class="iconbtn" aria-label="Настройки" onclick="openSettings()" id="gear"></button></div></header>
 <main id="view"></main></div><nav class="tabs" id="tabs"></nav>
 <script>{js}
 document.getElementById('gear').innerHTML = ICON.gear;

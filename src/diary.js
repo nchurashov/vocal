@@ -1,9 +1,11 @@
 // ===== Голос: до и после (#diary) =====
-// Видео «до»: рассказ о себе + чтение одного и того же текста. Через месяц - «после». Потом видео сравнения для соцсетей.
+// Видео «до»: ответы на вопросы (субтитры под камерой, впечатываются в видео). Через месяц - «после». Потом видео сравнения для соцсетей.
 // Метрики только из микрофона: средняя высота речи (медиана тона) и разброс интонаций (от 10-го до 90-го процентиля).
 // Видео хранится в IndexedDB этого браузера (никуда не загружается); метаданные - в state.diary.
-const DIARY_TEXT = 'Сегодня я начинаю заниматься голосом. Мне интересно, как он звучит со стороны и каким станет через месяц. Я говорю спокойно, не тороплюсь и дышу свободно. Раз, два, три, четыре, пять - вышел зайчик погулять.';
-const DIARY_MAX = 90;
+// вопросы для живой речи: человек думает и отвечает, а не читает. В «до» и «после» одни и те же - сравнение честное
+const DIARY_Q = ['Как тебя зовут и чем ты занимаешься?', 'Расскажи самый смешной случай за последнее время.', 'Что бы ты делал, если бы завтра был свободный день?', 'Чего ты хочешь от своего голоса?'];
+const DIARY_QSEC = 20;
+const DIARY_MAX = 120;
 // --- IndexedDB для видео
 function idb() { return new Promise((ok, bad) => { const r = indexedDB.open('vpb', 1); r.onupgradeneeded = () => r.result.createObjectStore('videos'); r.onsuccess = () => ok(r.result); r.onerror = () => bad(r.error); }); }
 async function idbDo(mode, f) { const db = await idb(); return new Promise((ok, bad) => { const tx = db.transaction('videos', mode), st = tx.objectStore('videos'); const r = f(st); tx.oncomplete = () => ok(r && r.result); tx.onerror = () => bad(tx.error); }); }
@@ -32,7 +34,7 @@ function diaryStop() {
 function diaryTodayItem() {
   if (!CAM_OK) return '';
   const L = diaryList(), last = L[L.length - 1];
-  if (!L.length) return `<button class="item" onclick="go('diary')"><div class="dot near">🎬</div><div class="t"><b>Запиши голос «до»</b><span class="small muted">Минута на камеру: расскажи о себе. Через месяц сравнишь и не узнаешь свой голос</span></div><span class="muted">›</span></button>`;
+  if (!L.length) return `<button class="item" onclick="go('diary')"><div class="dot near">🎬</div><div class="t"><b>Запиши голос «до»</b><span class="small muted">Полторы минуты на камеру: ответь на 4 вопроса. Через месяц сравнишь и не узнаешь свой голос</span></div><span class="muted">›</span></button>`;
   const d = daysSince(last.date);
   if (d >= 30) return `<button class="item" onclick="go('diary')"><div class="dot near">🎬</div><div class="t"><b>Прошёл месяц: запиши голос «после»</b><span class="small muted">Последнее видео ${fmtDay(last.date.slice(0, 10)).toLowerCase()}. Сравни, как изменился голос</span></div><span class="muted">›</span></button>`;
   return '';
@@ -42,7 +44,7 @@ function viewDiary() {
   afterHooks.push(diaryDraw);
   const L = diaryList();
   return `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Голос: до и после</h1>
-    <p class="muted" style="margin:6px 0 0">Налей бокал и запиши короткое видео: расскажи о себе и прочитай текст. Занимайся по упражнению в день, а через месяц запиши ещё раз. Сравни и покажи друзьям.</p>
+    <p class="muted" style="margin:6px 0 0">Налей бокал и запиши короткое видео: под камерой по очереди появятся ${DIARY_Q.length} вопроса, просто отвечай своими словами. Занимайся по упражнению в день, а через месяц запиши ещё раз. Сравни и покажи друзьям.</p>
     ${CAM_OK ? '' : '<div class="note sec">Для видео нужна камера и микрофон: открой сайт в Safari или Chrome.</div>'}
     <div id="dybox" class="sec"></div>
     ${L.length >= 2 ? diaryCompareHTML(L[0], L[L.length - 1]) : ''}
@@ -74,26 +76,41 @@ function diaryDraw() {
   if (DY.mode === 'idle') {
     const wait = L.length && daysSince(L[L.length - 1].date) < 30 ? 30 - daysSince(L[L.length - 1].date) : 0;
     box.innerHTML = `<div class="card stack">${wait ? `<div class="small">До видео «после» осталось ${wait} ${plural(wait, 'день', 'дня', 'дней')}. Можно записать и раньше, но за месяц разница заметнее.</div>` : ''}
-      <button class="btn" onclick="diaryRec()">🎥 Записать видео «${next}»</button><div class="tiny muted">Будет нужен доступ к камере и микрофону. Займёт около минуты.</div></div>`;
+      <button class="btn" onclick="diaryRec()">🎥 Записать видео «${next}»</button><div class="tiny muted">Будет нужен доступ к камере и микрофону. Около полутора минут: по 20 секунд на вопрос, можно листать быстрее.</div></div>`;
     return;
   }
   if (DY.mode === 'rec') {
-    box.innerHTML = `<div class="card stack"><video id="dyprev" muted playsinline autoplay style="width:100%;max-height:46vh;object-fit:cover;border-radius:14px;transform:scaleX(-1);background:#000"></video>
+    box.innerHTML = `<div class="card stack"><video id="dyprev" muted playsinline autoplay style="width:100%;max-height:44vh;object-fit:cover;border-radius:14px;transform:scaleX(-1);background:#000"></video>
       <div class="row between"><span class="small"><span class="rec-dot"></span> Запись</span><b id="dyt">0 с</b></div>
-      <div class="small"><b>1.</b> Расскажи о себе в 2-3 предложениях: как зовут, чем занимаешься, что любишь.</div>
-      <div class="small"><b>2.</b> Прочитай вслух:</div><div style="font:600 17px Lora,serif;line-height:1.45">${DIARY_TEXT}</div>
-      <button class="btn block" onclick="diaryRecStop()">${ICON.stop} Готово</button></div>`;
+      <div class="tiny muted">Вопрос <span id="dyqn">1</span> из ${DIARY_Q.length}. Отвечай как в разговоре, своими словами. Можно задуматься - это тоже часть голоса.</div>
+      <div id="dyq" style="font:700 21px Lora,serif;line-height:1.35;min-height:58px">${DIARY_Q[0]}</div>
+      <div style="height:5px;background:var(--line);border-radius:3px;overflow:hidden"><i id="dyqbar" style="display:block;height:100%;width:0;background:var(--accent)"></i></div>
+      <div class="row"><button class="btn ghost" style="flex:1" onclick="diaryNextQ()">Следующий вопрос ›</button><button class="btn" style="flex:1" onclick="diaryRecStop()">${ICON.stop} Готово</button></div></div>`;
     const v = $('#dyprev'); if (v && CAM.stream) { v.srcObject = CAM.stream; v.play().catch(() => { }); }
   }
+}
+// следующий вопрос; после последнего - конец записи
+function diaryNextQ() {
+  if (!DY || DY.mode !== 'rec') return;
+  if (DY.q >= DIARY_Q.length - 1) return diaryRecStop();
+  DY.q++; DY.qT = performance.now();
+  if ($('#dyq')) $('#dyq').textContent = DIARY_Q[DY.q]; if ($('#dyqn')) $('#dyqn').textContent = DY.q + 1;
 }
 async function diaryRec() {
   if (!(await camStart(true))) { toast('Нет доступа к камере'); return; }
   let mic; try { mic = await openMic(); } catch (e) { toast('Нет доступа к микрофону'); return; }
-  DY = { mode: 'rec', mic, ms: [], t0: performance.now() }; busy = true;
+  DY = { mode: 'rec', mic, ms: [], t0: performance.now(), q: 0, qT: performance.now() }; busy = true;
   $('#campv')?.remove();
   const L = diaryList(), title = `${L.length ? 'после' : 'до'} · ${dateRu(ymd())}`;
   const T = micTap(mic), hist = [];
-  DY.rec = recCanvas((g, W, H) => camFrame(g, W, H, 'Голос ' + title, null), mic.getAudioTracks().map(t => t.clone()));
+  DY.rec = recCanvas((g, W, H) => {
+    camFrame(g, W, H, (profName() ? profName() + ' · ' : '') + 'голос ' + title, null);
+    // субтитр: текущий вопрос над плашкой бренда
+    const q = DIARY_Q[DY ? DY.q : 0]; g.font = '700 34px Manrope, system-ui, sans-serif'; g.textAlign = 'center';
+    const n = camWrap(g, q, W / 2, 0, W - 80, 44, false), bh = n * 44 + 36, by = H - 96 - bh - 24;
+    g.fillStyle = 'rgba(0,0,0,.6)'; camRound(g, 24, by, W - 48, bh, 18); g.fill();
+    g.fillStyle = '#fff'; camWrap(g, q, W / 2, by + 50, W - 80, 44); g.textAlign = 'left';
+  }, mic.getAudioTracks().map(t => t.clone()));
   diaryDraw();
   const loop = () => {
     if (!DY || DY.mode !== 'rec') return;
@@ -101,6 +118,8 @@ async function diaryRec() {
     const buf = T.read(); hist.push(VA.livePitch(buf, T.c.sampleRate)); if (hist.length > 3) hist.shift();
     const v = hist.filter(x => x != null); DY.ms.push(v.length >= 2 ? VA.median(v) : null);
     const s = Math.floor((performance.now() - DY.t0) / 1000); const el = $('#dyt'); if (el) el.textContent = s + ' с';
+    const qe = (performance.now() - DY.qT) / 1000 * (window.DY_SPEED || 1), bar = $('#dyqbar'); if (bar) bar.style.width = Math.min(100, qe / DIARY_QSEC * 100) + '%';
+    if (qe >= DIARY_QSEC) diaryNextQ();
     if (s >= DIARY_MAX) diaryRecStop();
   };
   loop();

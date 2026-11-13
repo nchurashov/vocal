@@ -21,7 +21,11 @@ with sync_playwright() as p:
     pg.evaluate("state.diary = []; save()")
     for k in range(2):
         pg.goto(URL + '#diary'); pg.reload(); pg.wait_for_timeout(400)
-        pg.click('text=Записать видео'); pg.wait_for_timeout(4500); pg.click('text=Готово'); pg.wait_for_timeout(2500)
+        pg.click('text=Записать видео'); pg.wait_for_timeout(2500)
+        if k == 0:
+            q0 = pg.inner_text('#dyq'); pg.click('text=Следующий вопрос'); pg.wait_for_timeout(300)
+            if pg.inner_text('#dyq') == q0 or pg.evaluate("DY.q") != 1: fails.append('вопрос не переключился')
+        pg.wait_for_timeout(2000); pg.click('text=Готово'); pg.wait_for_timeout(2500)
         pg.evaluate("closeSheet()")
         if k == 0: pg.evaluate("state.diary[0].date = '2026-10-13T10:00:00'; save()")
     d = pg.evaluate("state.diary")

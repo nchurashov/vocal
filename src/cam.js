@@ -1,5 +1,5 @@
 // ===== Камера: снять себя во время уровня и поделиться видео =====
-// Видео 9:16 (720x1280): на весь кадр фронтальная камера (зеркально), игра окошком в правом нижнем углу, внизу плашка с адресом сайта.
+// Видео 9:16 (720x1280): сверху фронтальная камера (зеркально) на 2/3, снизу игра на 1/3, внизу плашка с адресом сайта.
 // Звук - копия дорожки микрофона игры (голос и пианино из динамика). После финиша ещё 2.5 с крупный итог - для реакции.
 // Видео живёт только в памяти телефона; наружу уходит, только если человек сам нажмёт «Поделиться» или «Сохранить».
 const CAM = { stream: null, video: null, rec: null, clips: [] };
@@ -60,13 +60,13 @@ function camRecStart(canvasSel, title, micStream) {
   const draw = () => {
     if (R.state === 'finished') return;
     R.raf = requestAnimationFrame(draw);
-    camFrame(g, W, H, R.title, R.outro);
-    // игра: окошко в правом нижнем углу над плашкой
+    // камера сверху на 2/3, игра снизу на 1/3 (над плашкой бренда)
+    const area = H - 96, camH = Math.round(area * .67);
+    camFrame(g, W, H, R.title, R.outro, camH);
     const cv = R.canvasSel && document.querySelector(R.canvasSel);
     if (cv && cv.width) {
-      const iw = 330, ih = Math.round(iw * cv.height / cv.width), x = W - iw - 22, y = H - 96 - ih - 22;
-      g.save(); g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 18; g.fillStyle = '#fff'; camRound(g, x - 5, y - 5, iw + 10, ih + 10, 20); g.fill(); g.restore();
-      g.save(); camRound(g, x, y, iw, ih, 16); g.clip(); g.drawImage(cv, x, y, iw, ih); g.restore();
+      const gy = camH + 10, gh = area - gy - 10, s = Math.min((W - 20) / cv.width, gh / cv.height), dw = cv.width * s, dh = cv.height * s, x = (W - dw) / 2, y = gy + (gh - dh) / 2;
+      g.save(); camRound(g, x, y, dw, dh, 14); g.clip(); g.drawImage(cv, x, y, dw, dh); g.restore();
     }
     g.textAlign = 'left';
   };
@@ -82,12 +82,13 @@ function camRecStop(outro, now) {
 }
 function camRound(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 // общий кадр: камера на весь экран (зеркально), подпись сверху, плашка бренда снизу, крупный итог (outro)
-function camFrame(g, W, H, title, outro) {
+// camH - высота области камеры (по умолчанию весь кадр над плашкой)
+function camFrame(g, W, H, title, outro, camH = H - 96) {
   g.fillStyle = '#1B1714'; g.fillRect(0, 0, W, H);
   const v = CAM.video;
   if (v && v.videoWidth) {
-    const s = Math.max(W / v.videoWidth, H / v.videoHeight), dw = v.videoWidth * s, dh = v.videoHeight * s;
-    g.save(); g.translate(W, 0); g.scale(-1, 1); g.drawImage(v, (W - dw) / 2, (H - dh) / 2, dw, dh); g.restore();
+    const s = Math.max(W / v.videoWidth, camH / v.videoHeight), dw = v.videoWidth * s, dh = v.videoHeight * s;
+    g.save(); g.beginPath(); g.rect(0, 0, W, camH); g.clip(); g.translate(W, 0); g.scale(-1, 1); g.drawImage(v, (W - dw) / 2, (camH - dh) / 2, dw, dh); g.restore();
   }
   g.fillStyle = 'rgba(0,0,0,.4)'; g.fillRect(0, 0, W, 70);
   g.fillStyle = '#fff'; g.font = '700 30px Manrope, system-ui, sans-serif'; g.textAlign = 'left'; g.fillText(title, 24, 46);
@@ -95,10 +96,18 @@ function camFrame(g, W, H, title, outro) {
   g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = '800 36px Lora, Georgia, serif'; g.fillText('Вокал под бокал 🍷', W / 2, H - 52);
   g.font = '600 22px Manrope, system-ui, sans-serif'; g.fillText('nchurashov.github.io/vocal', W / 2, H - 18);
   if (outro) {
-    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, H * .36, W, 170);
-    g.fillStyle = '#FFD27A'; g.font = '800 64px Lora, Georgia, serif'; g.fillText(outro, W / 2, H * .36 + 108);
+    const oy = Math.round(camH / 2 - 85);
+    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(0, oy, W, 170);
+    g.fillStyle = '#FFD27A'; g.font = '800 64px Lora, Georgia, serif'; g.fillText(outro, W / 2, oy + 108);
   }
   g.textAlign = 'left';
+}
+// перенос текста по словам на холсте; возвращает число строк
+function camWrap(g, text, x, y, maxW, lh, draw = true) {
+  const words = text.split(' '); let line = '', n = 0;
+  for (const w of words) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > maxW && line) { if (draw) g.fillText(line, x, y + n * lh); n++; line = w; } else line = t; }
+  if (line) { if (draw) g.fillText(line, x, y + n * lh); n++; }
+  return n;
 }
 function camShow(clip) {
   sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>

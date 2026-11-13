@@ -165,7 +165,7 @@ async function gameLive() {
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const t0 = gameCountIn(); let last = c.currentTime - t0;
-  camRecStart('#gcv', `Попади в ноту · уровень ${G.lv.n}`, stream);
+  camRecStart('#gcv', `${profName() ? profName() + ' · ' : ''}Попади в ноту · уровень ${G.lv.n}`, stream);
   $('#glive').innerHTML = ICON.stop + ' Остановить'; $('#glive').onclick = () => gameFinish(true);
   const loop = () => {
     if (!G || G.stopped || G.mode !== 'live') return;
