@@ -42,6 +42,15 @@ with sync_playwright() as p:
             full = pg.evaluate(SIM, FAIR['вовремя'])
             if acc >= full - 5: fails.append(f'ур.{n}: нижнее До вместо верхнего не снизило счёт ({acc}%)')
         rows.append(f'ур.{n}: ' + ' '.join(map(str, row)))
+    # работа над нижним регистром: база G2, строго в октаве
+    pg.evaluate("state.settings.base=43;state.settings.strict=true;save()")
+    for n in (1, 6, 12):
+        pg.goto(f'{URL}#game-{n}'); pg.wait_for_timeout(150)
+        ok = pg.evaluate(SIM, FAIR['вовремя']); up = pg.evaluate(SIM, FAIR['октавой выше'])
+        rows.append(f'строго, ур.{n}: в октаве {ok}, октавой выше {up}')
+        if ok < 85: fails.append(f'строго ур.{n}: певец в нужной октаве {ok}%')
+        if up >= 50: fails.append(f'строго ур.{n}: октавой выше прошло {up}%')
+    pg.evaluate("state.settings.base=48;state.settings.strict=false;save()")
     br.close()
 if '-v' in sys.argv: print('\n'.join(rows))
 print('\n'.join(fails) if fails else 'OK: «Попади в ноту» честная на всех 12 уровнях')

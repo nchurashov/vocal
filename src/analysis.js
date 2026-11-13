@@ -157,9 +157,10 @@ const VA = (() => {
     return { cost: D[n][m], pairs, extra };
   }
 
-  function align(ref, segs, anyKey) {
+  function align(ref, segs, anyKey, strict) {
     let cands;
-    if (anyKey) { cands = []; for (const s of segs) for (const r of ref) cands.push(s.pitch - r); }
+    if (strict && !anyKey) cands = [0];
+    else if (anyKey) { cands = []; for (const s of segs) for (const r of ref) cands.push(s.pitch - r); }
     else cands = [-24, -12, 0, 12, 24];
     if (!cands.length) cands = [0];
     let best = null;
@@ -175,9 +176,10 @@ const VA = (() => {
   const noteName = m => { const r = Math.round(m); return NOTE_NAMES[((r % 12) + 12) % 12]; };
 
   // ref: [{midi, beats}], segs: результат segment()
-  function evaluate(ref, segs, anyKey) {
+  // strict: октава засчитывается только та, что задана (работа над регистром)
+  function evaluate(ref, segs, anyKey, strict) {
     const refM = ref.map(r => r.midi);
-    const a = align(refM, segs, anyKey);
+    const a = align(refM, segs, anyKey, strict);
     const notes = ref.map((r, i) => {
       const j = a.pairs[i];
       if (j < 0) return { i, ref: r.midi, status: 'missed' };

@@ -97,6 +97,13 @@ function clap(t) {
   s.connect(f).connect(g).connect(master); s.start(t); s.stop(t + .15); playing.push(s);
 }
 const base = () => state.settings.base;
+const strictOct = () => !!state.settings.strict;
+// полное имя ноты: «Ля большой октавы (A2)»
+const OCT_RU = ['субконтроктавы', 'контроктавы', 'большой октавы', 'малой октавы', 'первой октавы', 'второй октавы', 'третьей октавы'];
+const LAT = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+function noteFull(m) { m = Math.round(m); const o = Math.floor(m / 12) - 1; return `${VA.noteName(m)} ${OCT_RU[o] || ''} (${LAT[m % 12]}${o})`; }
+const noteShort = m => { m = Math.round(m); return LAT[m % 12] + (Math.floor(m / 12) - 1); };
+const BASE_MIN = 36, BASE_MAX = 76;
 function playNotes(notes, bpm, offset = 0) {
   stopAll(); const c = ac(), b = 60 / bpm; let t = c.currentTime + .08;
   for (const [s, beats] of notes) { tone(base() + s + offset, t, beats * b * .95); t += beats * b; }
@@ -114,13 +121,42 @@ function playRhythm(ex, withClaps = true) {
 // Октава голоса: определяется по первым нотам и дальше не меняется,
 // чтобы мужской и женский голос подходили, но нижнее и верхнее До различались
 // collect=false: кадр не идёт в определение октавы (например, до первой ноты микрофон слышит подсказку пианино из динамика)
-// подсказка про октаву на экранах игр
+// ===== Высота работы и диапазон =====
 function setVoice(m) { state.settings.base = m; state.settings.voiceSet = true; save(); render(); }
+function setBase(m) {
+  state.settings.base = Math.max(BASE_MIN, Math.min(BASE_MAX, m)); state.settings.voiceSet = true; save(); render();
+  if ($('#sheet')) openSettings();
+}
+function setStrict(on) { state.settings.strict = !!on; save(); render(); if ($('#sheet')) openSettings(); }
+const lastRange = () => (state.range || [])[(state.range || []).length - 1];
+function rangeWarn() {
+  const r = lastRange(); if (!r) return '';
+  const lo = base(), hi = base() + 12;
+  if (lo < r.lo) return `<div class="tiny" style="color:var(--bad)">Нижняя нота ниже твоего замеренного диапазона (${noteShort(r.lo)} - ${noteShort(r.hi)}). Не дави, пой мягко.</div>`;
+  if (hi > r.hi) return `<div class="tiny" style="color:var(--near)">Верх уровней (до ${noteShort(hi)}) выше твоего замеренного диапазона (${noteShort(r.lo)} - ${noteShort(r.hi)}). На самых высоких нотах можно не дотянуть.</div>`;
+  return '';
+}
+// карточка «где работаем»: на экранах игр и в настройках
+function registerCard(inSheet) {
+  const r = lastRange();
+  return `<div class="card ${inSheet ? '' : 'sec'} stack" style="padding:14px;${inSheet ? '' : 'margin-top:10px'}">
+    <div class="row between"><b>Где работаем</b>${r ? `<span class="tiny muted">диапазон ${noteShort(r.lo)} - ${noteShort(r.hi)}</span>` : ''}</div>
+    <div class="row"><button class="btn ghost" style="min-width:46px;padding:0" aria-label="Ниже на полутон" onclick="setBase(base()-1)">−</button>
+      <div style="flex:1;text-align:center"><div style="font-weight:800">${noteFull(base())}</div><div class="tiny muted">уровни идут от неё вверх до ${noteShort(base() + 12)}</div></div>
+      <button class="btn ghost" style="min-width:46px;padding:0" aria-label="Выше на полутон" onclick="setBase(base()+1)">+</button></div>
+    <div class="row wrap" style="gap:6px"><button class="btn ghost" style="flex:1;min-height:38px;padding:6px 10px" onclick="setBase(base()-12)">Октавой ниже</button><button class="btn ghost" style="flex:1;min-height:38px;padding:6px 10px" onclick="setBase(base()+12)">Октавой выше</button><button class="btn ghost" style="min-height:38px;padding:6px 10px" aria-label="Послушать ноту" onclick="playNotes([[0,2]],80)">${ICON.play}</button></div>
+    <label class="check" style="border:0;padding:0"><input type="checkbox" ${strictOct() ? 'checked' : ''} onchange="setStrict(this.checked)"><span class="small"><b>Только в этой октаве.</b> Для работы над регистром: октавой выше или ниже не засчитается.${strictOct() ? '' : ' Сейчас подходит любая октава.'}</span></label>
+    ${rangeWarn()}
+    <a href="#range" class="small" ${inSheet ? 'onclick="closeSheet()"' : ''}>${r ? 'Замерить диапазон заново' : 'Замерить мой диапазон'}</a></div>`;
+}
+// подсказка на экранах игр: при первом заходе - выбор голоса, потом - карточка высоты
 function octaveHint() {
-  if (!state.settings.voiceSet && base() === 48) return `<div class="card sec" style="padding:14px;margin-top:10px"><div><b>Какой у тебя голос?</b></div><div class="small muted" style="margin:4px 0 10px">Подсказки зазвучат в твоей высоте. Потом можно поменять в настройках.</div>
+  if (!state.settings.voiceSet && base() === 48 && !lastRange()) return `<div class="card sec" style="padding:14px;margin-top:10px"><div><b>Какой у тебя голос?</b></div><div class="small muted" style="margin:4px 0 10px">Подсказки зазвучат в твоей высоте. Потом можно поменять или <a href="#range">замерить диапазон</a>.</div>
     <div class="row">${[[48, 'Низкий', 'мужской, от C3'], [60, 'Высокий', 'женский, от C4']].map(([m, t, d]) => `<button class="btn ghost" style="flex:1;flex-direction:column;gap:2px" onclick="setVoice(${m})"><span>${t}</span><span class="tiny muted" style="font-weight:500">${d}</span></button>`).join('')}</div></div>`;
-  const b = BASES.find(x => x[0] === base()); return `<p class="tiny muted" style="margin:6px 0 0">Подсказки звучат от ноты ${b ? b[1].split(',')[0] : VA.noteName(base())}. Пой в своей октаве: женский голос октавой выше тоже засчитается. <a href="#" onclick="openSettings();return false">Сменить ноту</a></p>`; }
+  return registerCard(false);
+}
 function octLock(S, v, target, collect = true) {
+  if (strictOct()) return v;
   if (S.oct == null) {
     if (collect) (S.octBuf ||= []).push(v - target);
     if (S.octBuf.length >= 8) S.oct = 12 * Math.round(VA.median(S.octBuf) / 12);
@@ -249,7 +285,7 @@ let route = 'today', exFilter = 'all';
 function readHash() {
   const h = location.hash.replace('#', '');
   if (h.startsWith('ex-') && exById(h.slice(3))) return h;
-  if (/^(game|ball)-\d+$/.test(h) || h === 'game') return h;
+  if (/^(game|ball)-\d+$/.test(h) || h === 'game' || h === 'range') return h;
   return TABS.some(t => t[0] === h) ? h : 'today';
 }
 function go(r) { if (busy) stopRecordingIfAny(); location.hash = r; }
@@ -259,6 +295,7 @@ function start() { state.game ||= { best: {}, plays: [] }; state.ball ||= { best
 function render() {
   if (typeof gameStop === 'function') gameStop();
   if (typeof ballStop === 'function') ballStop();
+  if (typeof rangeStop === 'function') rangeStop();
   stopAll();
   const tabRoute = route.startsWith('ex-') ? 'exercises' : /^(game|ball)/.test(route) ? 'ball' : route;
   $('#tabs').innerHTML = '<div class="tabs-in">' + TABS.map(([k, n, ic]) => `<button class="tab ${tabRoute === k ? 'on' : ''}" onclick="go('${k}')">${ic}<span>${n}</span></button>`).join('') + '</div>';
@@ -266,7 +303,7 @@ function render() {
   if (route.startsWith('ex-')) v.innerHTML = viewExercise(exById(route.slice(3)));
   else if (route.startsWith('game-')) v.innerHTML = viewGameLevel(+route.slice(5));
   else if (route.startsWith('ball-')) v.innerHTML = viewBallLevel(+route.slice(5));
-  else v.innerHTML = ({ ball: viewBall, game: viewGame, today: viewToday, exercises: viewExercises, check: viewCheck, history: viewHistory, notes: viewNotes })[route]();
+  else v.innerHTML = ({ ball: viewBall, game: viewGame, today: viewToday, exercises: viewExercises, check: viewCheck, history: viewHistory, notes: viewNotes, range: viewRange })[route]();
   afterRender();
 }
 let afterHooks = [];
@@ -300,12 +337,14 @@ function viewToday() {
     h += `<div class="card sec stack"><h3>Привет! С чего начнём</h3>
       <p class="small" style="margin:0">Твой уровень пока не определён, и приложение ничего не додумывает. Оно отталкивается только от того, что ты сам отметишь после практики.</p>
       <p class="small" style="margin:0">Выбери любое упражнение уровня 1 или пройди <a href="#check">оценку по мелодии</a>: споёшь короткую мелодию, и запись покажет, какие ноты верные.</p>
-      <button class="btn soft" onclick="openSettings()">Выбрать удобную ноту для голоса</button></div>`;
+      <button class="btn soft" onclick="go('range')">Замерить диапазон и выбрать ноту</button></div>`;
   } else {
     h += `<div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">За 7 дней: ${n7} ${plural(n7, 'занятие', 'занятия', 'занятий')}</span><span class="pill">Дней подряд: ${st}</span></div>`;
   }
   { const g = state.ball || { best: {} }; const nx = BALL_LEVELS.find(l => ballUnlocked(l.n) && !(g.best[l.n]?.stars >= 1)) || BALL_LEVELS[BALL_LEVELS.length - 1];
     h += `<button class="item sec" style="margin-top:18px" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в окно</span></div><span class="muted">›</span></button>`; }
+  { const r = lastRange();
+    h += `<button class="item" onclick="go('range')"><div class="dot ear">↕</div><div class="t"><b>${r ? 'Мой диапазон: ' + noteShort(r.lo) + ' - ' + noteShort(r.hi) : 'Замерить мой диапазон'}</b><span class="small muted">${r ? 'Последний замер ' + fmtDay(r.date.slice(0, 10)).toLowerCase() + ' · работаем от ' + noteShort(base()) + (strictOct() ? ', строго в октаве' : '') : 'Минута: узнаешь свой низ и верх и выберешь, где работать'}</span></div><span class="muted">›</span></button>`; }
   h += `<div class="sec"><h2>Повторить сегодня</h2>`;
   if (due.length) h += due.map(e => { const s = state.srs[e.id]; return exItem(e, `В прошлый раз: ${RATINGS[s.lastRating].label.toLowerCase()} · ${fmtDay(s.last).toLowerCase()}`); }).join('');
   else h += `<div class="card small muted">${state.sessions.length ? 'На сегодня повторов нет. Можно взять новое упражнение ниже.' : 'Повторы появятся после первых отметок: что не получилось, вернётся раньше, что получилось уверенно, реже.'}</div>`;
@@ -516,7 +555,7 @@ function recorderUI(box, getRef, opts) {
       msg.innerHTML = '';
       busy = false;
       if (!a.segs.length) { res.innerHTML = '<div class="note" style="margin-top:10px">Не слышу в записи голоса с понятной высотой. Пой громче и ближе к телефону, на гласную «а» или «ма».</div>'; return; }
-      const ev = VA.evaluate(ref.notes.map(([s, b]) => ({ midi: base() + s, beats: b })), a.segs, anyKey);
+      const ev = VA.evaluate(ref.notes.map(([s, b]) => ({ midi: base() + s, beats: b })), a.segs, anyKey, strictOct());
       ev.anyKey = anyKey;
       lastAudio = audio;
       res.innerHTML = resultHTML(ref, ev, audio);
@@ -753,9 +792,7 @@ function sheet(html) { closeSheet(); const d = document.createElement('div'); d.
 function closeSheet() { $('#sheet')?.remove(); }
 function openSettings() {
   sheet(`<div class="row between"><h2>Настройки</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
-    <div class="card stack"><h3>Нота для упражнений</h3><p class="small muted" style="margin:0">Выбери ноту, на которой удобно петь «а» без напряжения. От неё строятся все примеры и мелодии. Мелодии поднимаются от неё максимум на октаву.</p>
-    <select id="baseSel" onchange="state.settings.base=+this.value;state.settings.voiceSet=true;save()">${BASES.map(([m, n]) => `<option value="${m}" ${base() === m ? 'selected' : ''}>${n}</option>`).join('')}</select>
-    <button class="btn ghost" onclick="playNotes([[0,2],[4,1],[7,1],[12,2]],90)">${ICON.play} Послушать диапазон</button></div>
+    <p class="small muted" style="margin:0">От этой ноты строятся упражнения, мелодии и уровни игр. Выбирай ноту, на которой удобно петь «а» без напряжения.</p>${registerCard(true)}
     <div class="card stack"><h3>Задержка звука для ритма</h3><p class="small muted" style="margin:0">Нужна, если ты в Bluetooth-наушниках: звук приходит позже. Сейчас: ${state.settings.latency || 0} мс.</p>
     <button class="tap" id="calbtn" style="width:150px" disabled>Тап</button><div id="calmsg" class="small muted" style="text-align:center"></div>
     <button class="btn ghost" onclick="calibrate()">Настроить: стучи в такт 8 щелчкам</button></div>

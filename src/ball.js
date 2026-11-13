@@ -305,7 +305,7 @@ async function ballTake(arrayBuf) {
     for (let k = 0; k < audio.numberOfChannels; k++) chs.push(audio.getChannelData(k).subarray(0, len));
     const a = VA.analyzeSamples(chs, audio.sampleRate); lastAudio = audio;
     if (!a.segs.length) { busy = false; $('#bres').innerHTML = '<div class="note" style="margin-top:10px">Не слышу в записи голоса. Пой громче и ближе к телефону, на «ма» или «ла».</div>'; return; }
-    const ev = VA.evaluate(B.walls.map(w => ({ midi: base() + w.rel, beats: (w.t1 - w.t0) * B.lv.bpm / 60 })), a.segs, false);
+    const ev = VA.evaluate(B.walls.map(w => ({ midi: base() + w.rel, beats: (w.t1 - w.t0) * B.lv.bpm / 60 })), a.segs, false, strictOct());
     const sung = ev.notes.map(r => r.dev == null ? null : r.ref - base() + r.dev / 100);
     B.devs = ev.notes.map(r => r.dev);
     const c = ac(), t0 = c.currentTime + .3; B.mode = 'replay'; let last = -9;

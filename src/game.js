@@ -220,7 +220,7 @@ async function gameTake(arrayBuf) {
     const a = VA.analyzeSamples(chs, audio.sampleRate); busy = false; lastAudio = audio;
     if (!a.segs.length) { $('#gres').innerHTML = '<div class="note" style="margin-top:10px">Не слышу в записи голоса. Пой громче и ближе к телефону, на «ма» или «ла».</div>'; return; }
     const ref = G.tl.map(n => ({ midi: base() + n.rel, beats: 1 }));
-    const ev = VA.evaluate(ref, a.segs, false), tol = G.lv.tol;
+    const ev = VA.evaluate(ref, a.segs, false, strictOct()), tol = G.lv.tol;
     const scores = ev.notes.map(r => r.dev == null ? 0 : Math.abs(r.dev) <= tol ? 1 : Math.abs(r.dev) <= tol * 1.6 ? .5 : 0);
     // показываем спетое на поле: точка-след по нотам
     G.tl.forEach((n, i) => { n.done = true; n.score = scores[i]; const r = ev.notes[i]; if (r.dev != null) { const v = n.rel + r.dev / 100; G.trail.push({ t: n.start + .05, rel: v }, { t: n.end - .05, rel: v }, { t: n.end, rel: null }); } });

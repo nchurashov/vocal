@@ -40,6 +40,15 @@ with sync_playwright() as p:
         pg.goto(f'{URL}#ball-{n}'); pg.wait_for_timeout(100)
         r = pg.evaluate(SIM, [.12, .08, .15, 0, 12, 0])
         if 'X' not in r: fails.append(f'ур.{n}: нижнее До вместо верхнего прошло: {r}')
+    # строго в октаве (нижний регистр): октавой выше разбивается, в нужной октаве проходит
+    pg.evaluate("state.settings.base=43;state.settings.strict=true;save()")
+    for n in (1, 7, 12):
+        pg.goto(f'{URL}#ball-{n}'); pg.wait_for_timeout(100)
+        r = pg.evaluate(SIM, [.12, .08, .15, 0, -99, 0])
+        if 'X' in r: fails.append(f'строго ур.{n}: певец в нужной октаве разбился: {r}')
+        r = pg.evaluate(SIM, [.12, .08, .15, 12, -99, 0])
+        if r.count('X') < len(r) * .7: fails.append(f'строго ур.{n}: октавой выше прошло: {r}')
+    pg.evaluate("state.settings.base=48;state.settings.strict=false;save()")
     br.close()
 print('\n'.join(fails) if fails else 'OK: все уровни честные (±40 и ±20)')
 sys.exit(1 if fails else 0)
