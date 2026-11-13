@@ -126,7 +126,7 @@ async function diaryRec() {
 }
 async function diaryRecStop() {
   if (!DY || DY.mode !== 'rec') return;
-  DY.mode = 'saving'; cancelAnimationFrame(DY.raf);
+  DY.mode = 'saving'; cancelAnimationFrame(DY.raf); camPending();
   const dur = (performance.now() - DY.t0) / 1000, stats = speechStats(DY.ms), rec = DY.rec; DY.rec = null;
   const { blob, ext } = await rec.stop();
   if (DY.mic) { DY.mic.getTracks().forEach(t => t.stop()); DY.mic = null; afterMic(); }
@@ -135,13 +135,13 @@ async function diaryRecStop() {
   try { await vidPut(id, blob); } catch (e) { toast('Не получилось сохранить видео в памяти браузера'); }
   diaryList().push({ id, date: nowLocal(), dur: Math.round(dur), stats, ext }); save();
   render();
-  diaryPlay(id);
+  diaryPlay(id, true);
 }
 async function diaryBlob(id) { try { return await vidGet(id); } catch (e) { return null; } }
-async function diaryPlay(id) {
+async function diaryPlay(id, fresh) {
   const b = await diaryBlob(id); if (!b) { toast('Видео не найдено: браузер мог его стереть'); return; }
   const e = diaryList().find(x => x.id === id), url = URL.createObjectURL(b);
-  CAM.clips.push({ blob: b, url, title: 'Голос', date: e ? e.date : nowLocal(), ext: (e && e.ext) || (b.type.includes('mp4') ? 'mp4' : 'webm') });
+  CAM.clips.push({ blob: b, url, title: 'Голос', autoSave: !!fresh, date: e ? e.date : nowLocal(), ext: (e && e.ext) || (b.type.includes('mp4') ? 'mp4' : 'webm') });
   camShow(CAM.clips[CAM.clips.length - 1]);
 }
 async function diaryShare(id) {
@@ -160,6 +160,7 @@ async function diaryMakeCompare() {
   const [ba, bb] = [await diaryBlob(a.id), await diaryBlob(b.id)];
   if (!ba || !bb) { if (out) out.textContent = 'Одно из видео не найдено: браузер мог его стереть.'; return; }
   if (out) out.textContent = 'Собираю видео, это займёт столько же времени, сколько длятся обе записи...';
+  camPending(); if ($('#campend b')) $('#campend b').textContent = 'Собираю «до и после»...';
   const c = ac(), dest = c.createMediaStreamDestination();
   const mk = async blob => { const v = document.createElement('video'); v.src = URL.createObjectURL(blob); v.muted = true; v.setAttribute('playsinline', ''); await new Promise(r => { v.onloadeddata = r; setTimeout(r, 4000); }); let buf = null; try { buf = await c.decodeAudioData(await blob.arrayBuffer()); } catch (e) { } return { v, buf }; };
   const A = await mk(ba), B = await mk(bb);

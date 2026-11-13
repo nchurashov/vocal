@@ -12,6 +12,7 @@
   "dependencies": {
     "@capacitor/cli": "^8.6.0",
     "@capacitor/core": "^8.6.0",
-    "@capacitor/ios": "^8.6.0"
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor-community/media": "^9.1.0"
   }
 }

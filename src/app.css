@@ -138,3 +138,4 @@ details summary{cursor:pointer}
 .brand b{white-space:nowrap}.who{max-width:112px}
 .who{max-width:92px;padding:8px 10px}
 @media (max-width:390px){.brand b{font-size:16px}.brand{gap:8px}}
+.spin{width:34px;height:34px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}

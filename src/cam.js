@@ -46,7 +46,7 @@ function camRecStart(canvasSel, title, micStream) {
   const tracks = [...vs.getVideoTracks()];
   if (micStream) micStream.getAudioTracks().forEach(t => { try { tracks.push(t.clone()); } catch (e) { } });
   const ms = new MediaStream(tracks), mime = camMime(), chunks = [];
-  let mr; try { mr = new MediaRecorder(ms, mime ? { mimeType: mime, videoBitsPerSecond: 2500000 } : undefined); } catch (e) { return; }
+  let mr; try { mr = new MediaRecorder(ms, mime ? { mimeType: mime, videoBitsPerSecond: 1600000 } : undefined); } catch (e) { return; }
   const R = CAM.rec = { state: 'rec', mr, out, g, tracks, title, canvasSel, outro: null, t0: performance.now(), mime: mr.mimeType || mime || 'video/webm' };
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.onstop = () => {
@@ -77,6 +77,7 @@ function camRecStart(canvasSel, title, micStream) {
 function camRecStop(outro, now) {
   const R = CAM.rec; if (!R || R.state !== 'rec') return;
   R.state = 'stopping'; R.outro = outro || null;
+  if (outro && !now) camPending();
   const end = () => { try { R.mr.stop(); } catch (e) { R.state = 'finished'; } };
   if (now || !outro) end(); else setTimeout(end, 2500);
 }
@@ -109,15 +110,37 @@ function camWrap(g, text, x, y, maxW, lh, draw = true) {
   if (line) { if (draw) g.fillText(line, x, y + n * lh); n++; }
   return n;
 }
-function camShow(clip) {
+// окно видео открывается сразу после финиша, пока файл дописывается (итог 2.5 с + сборка файла)
+function camPending() {
   sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
-    <video src="${clip.url}" controls playsinline style="width:100%;max-height:60vh;border-radius:14px;background:#000"></video>
-    <div class="row"><button class="btn" style="flex:1" onclick="camShare(${CAM.clips.indexOf(clip)})">Поделиться</button><a class="btn ghost" style="flex:1" href="${clip.url}" download="vocal-${clip.date.replace(/[:T]/g, '-')}.${clip.ext}">Сохранить</a></div>
-    <div class="tiny muted">Видео есть только у тебя в телефоне. Сохрани или отправь его, пока не закрыл страницу: после закрытия оно пропадёт. В видео попадает звук с микрофона.</div>`);
+    <div id="campend" style="aspect-ratio:9/16;max-height:60vh;margin:0 auto;border-radius:14px;background:#1B1714;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px">
+      <div class="spin"></div><b>Видео дописывается...</b><span class="small" style="opacity:.75">Ещё пара секунд: в конце видео твой итог.</span></div>`);
+}
+// iPhone-приложение: сохранить сразу в Фото (плагин @capacitor-community/media)
+const camNative = () => !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Media);
+async function camSaveNative(clip) {
+  if (!camNative()) return false;
+  try {
+    const data = await new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(clip.blob); });
+    await window.Capacitor.Plugins.Media.saveVideo({ path: data });
+    clip.saved = true; const el = $('#camsaved'); if (el) el.innerHTML = '✓ Сохранено в Фото';
+    return true;
+  } catch (e) { const el = $('#camsaved'); if (el) el.textContent = 'Не получилось сохранить в Фото. Разреши доступ: Настройки iPhone → Вокал под бокал → Фото.'; return false; }
+}
+function camShow(clip) {
+  const i = CAM.clips.indexOf(clip), nat = camNative();
+  sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
+    <video src="${clip.url}" controls playsinline preload="metadata" style="width:100%;max-height:60vh;border-radius:14px;background:#000"></video>
+    ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? '✓ Сохранено в Фото' : 'Сохраняю в Фото...'}</div>
+      <div class="row"><button class="btn" style="flex:1" onclick="camShare(${i})">Отправить</button></div>`
+    : `<div class="row"><button class="btn" style="flex:1" onclick="camShare(${i})">📥 В Фото</button><button class="btn ghost" style="flex:1" onclick="camShare(${i})">Отправить</button></div>
+      <div class="tiny muted">На iPhone откроется меню: выбери «Сохранить видео», и оно окажется в Фото. Сразу без меню сохраняет только приложение «Вокал под бокал».</div>`}
+    <div class="tiny muted">Видео есть только у тебя в телефоне. Если не сохранить, после закрытия страницы оно пропадёт.</div>`);
+  if (nat && !clip.saved && clip.autoSave !== false) camSaveNative(clip);
 }
 async function camShare(i) {
   const c = CAM.clips[i]; if (!c) return;
-  const file = new File([c.blob], `vocal.${c.ext}`, { type: c.blob.type });
+  const file = c.file || (c.file = new File([c.blob], `vocal-pod-bokal.${c.ext}`, { type: c.blob.type }));
   const text = 'Вокал под бокал: попробуй попасть в ноты голосом https://nchurashov.github.io/vocal/';
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Вокал под бокал', text }); return; }
@@ -131,7 +154,7 @@ function recCanvas(draw, audioTracks = [], W = 720, H = 1280) {
   const out = document.createElement('canvas'); out.width = W; out.height = H;
   const g = out.getContext('2d'), vs = out.captureStream(30), tracks = [...vs.getVideoTracks(), ...audioTracks];
   const mime = camMime(), chunks = [];
-  const mr = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: 2500000 } : undefined);
+  const mr = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: 1600000 } : undefined);
   const real = mr.mimeType || mime || 'video/webm';
   let raf = 0, alive = true;
   const loop = () => { if (!alive) return; raf = requestAnimationFrame(loop); draw(g, W, H); };

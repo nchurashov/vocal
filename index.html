@@ -145,6 +145,7 @@ details summary{cursor:pointer}
 .brand b{white-space:nowrap}.who{max-width:112px}
 .who{max-width:92px;padding:8px 10px}
 @media (max-width:390px){.brand b{font-size:16px}.brand{gap:8px}}
+.spin{width:34px;height:34px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 
 .app{padding-top:max(16px,env(safe-area-inset-top))}</style></head>
 <body><div class="app"><header class="top"><div class="brand"><div class="logo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg></div><b>Вокал под бокал</b></div>
@@ -2702,7 +2703,7 @@ function camRecStart(canvasSel, title, micStream) {
   const tracks = [...vs.getVideoTracks()];
   if (micStream) micStream.getAudioTracks().forEach(t => { try { tracks.push(t.clone()); } catch (e) { } });
   const ms = new MediaStream(tracks), mime = camMime(), chunks = [];
-  let mr; try { mr = new MediaRecorder(ms, mime ? { mimeType: mime, videoBitsPerSecond: 2500000 } : undefined); } catch (e) { return; }
+  let mr; try { mr = new MediaRecorder(ms, mime ? { mimeType: mime, videoBitsPerSecond: 1600000 } : undefined); } catch (e) { return; }
   const R = CAM.rec = { state: 'rec', mr, out, g, tracks, title, canvasSel, outro: null, t0: performance.now(), mime: mr.mimeType || mime || 'video/webm' };
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.onstop = () => {
@@ -2733,6 +2734,7 @@ function camRecStart(canvasSel, title, micStream) {
 function camRecStop(outro, now) {
   const R = CAM.rec; if (!R || R.state !== 'rec') return;
   R.state = 'stopping'; R.outro = outro || null;
+  if (outro && !now) camPending();
   const end = () => { try { R.mr.stop(); } catch (e) { R.state = 'finished'; } };
   if (now || !outro) end(); else setTimeout(end, 2500);
 }
@@ -2765,15 +2767,37 @@ function camWrap(g, text, x, y, maxW, lh, draw = true) {
   if (line) { if (draw) g.fillText(line, x, y + n * lh); n++; }
   return n;
 }
-function camShow(clip) {
+// окно видео открывается сразу после финиша, пока файл дописывается (итог 2.5 с + сборка файла)
+function camPending() {
   sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
-    <video src="${clip.url}" controls playsinline style="width:100%;max-height:60vh;border-radius:14px;background:#000"></video>
-    <div class="row"><button class="btn" style="flex:1" onclick="camShare(${CAM.clips.indexOf(clip)})">Поделиться</button><a class="btn ghost" style="flex:1" href="${clip.url}" download="vocal-${clip.date.replace(/[:T]/g, '-')}.${clip.ext}">Сохранить</a></div>
-    <div class="tiny muted">Видео есть только у тебя в телефоне. Сохрани или отправь его, пока не закрыл страницу: после закрытия оно пропадёт. В видео попадает звук с микрофона.</div>`);
+    <div id="campend" style="aspect-ratio:9/16;max-height:60vh;margin:0 auto;border-radius:14px;background:#1B1714;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px">
+      <div class="spin"></div><b>Видео дописывается...</b><span class="small" style="opacity:.75">Ещё пара секунд: в конце видео твой итог.</span></div>`);
+}
+// iPhone-приложение: сохранить сразу в Фото (плагин @capacitor-community/media)
+const camNative = () => !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Media);
+async function camSaveNative(clip) {
+  if (!camNative()) return false;
+  try {
+    const data = await new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(clip.blob); });
+    await window.Capacitor.Plugins.Media.saveVideo({ path: data });
+    clip.saved = true; const el = $('#camsaved'); if (el) el.innerHTML = '✓ Сохранено в Фото';
+    return true;
+  } catch (e) { const el = $('#camsaved'); if (el) el.textContent = 'Не получилось сохранить в Фото. Разреши доступ: Настройки iPhone → Вокал под бокал → Фото.'; return false; }
+}
+function camShow(clip) {
+  const i = CAM.clips.indexOf(clip), nat = camNative();
+  sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
+    <video src="${clip.url}" controls playsinline preload="metadata" style="width:100%;max-height:60vh;border-radius:14px;background:#000"></video>
+    ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? '✓ Сохранено в Фото' : 'Сохраняю в Фото...'}</div>
+      <div class="row"><button class="btn" style="flex:1" onclick="camShare(${i})">Отправить</button></div>`
+    : `<div class="row"><button class="btn" style="flex:1" onclick="camShare(${i})">📥 В Фото</button><button class="btn ghost" style="flex:1" onclick="camShare(${i})">Отправить</button></div>
+      <div class="tiny muted">На iPhone откроется меню: выбери «Сохранить видео», и оно окажется в Фото. Сразу без меню сохраняет только приложение «Вокал под бокал».</div>`}
+    <div class="tiny muted">Видео есть только у тебя в телефоне. Если не сохранить, после закрытия страницы оно пропадёт.</div>`);
+  if (nat && !clip.saved && clip.autoSave !== false) camSaveNative(clip);
 }
 async function camShare(i) {
   const c = CAM.clips[i]; if (!c) return;
-  const file = new File([c.blob], `vocal.${c.ext}`, { type: c.blob.type });
+  const file = c.file || (c.file = new File([c.blob], `vocal-pod-bokal.${c.ext}`, { type: c.blob.type }));
   const text = 'Вокал под бокал: попробуй попасть в ноты голосом https://nchurashov.github.io/vocal/';
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Вокал под бокал', text }); return; }
@@ -2787,7 +2811,7 @@ function recCanvas(draw, audioTracks = [], W = 720, H = 1280) {
   const out = document.createElement('canvas'); out.width = W; out.height = H;
   const g = out.getContext('2d'), vs = out.captureStream(30), tracks = [...vs.getVideoTracks(), ...audioTracks];
   const mime = camMime(), chunks = [];
-  const mr = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: 2500000 } : undefined);
+  const mr = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: 1600000 } : undefined);
   const real = mr.mimeType || mime || 'video/webm';
   let raf = 0, alive = true;
   const loop = () => { if (!alive) return; raf = requestAnimationFrame(loop); draw(g, W, H); };
@@ -2925,7 +2949,7 @@ async function diaryRec() {
 }
 async function diaryRecStop() {
   if (!DY || DY.mode !== 'rec') return;
-  DY.mode = 'saving'; cancelAnimationFrame(DY.raf);
+  DY.mode = 'saving'; cancelAnimationFrame(DY.raf); camPending();
   const dur = (performance.now() - DY.t0) / 1000, stats = speechStats(DY.ms), rec = DY.rec; DY.rec = null;
   const { blob, ext } = await rec.stop();
   if (DY.mic) { DY.mic.getTracks().forEach(t => t.stop()); DY.mic = null; afterMic(); }
@@ -2934,13 +2958,13 @@ async function diaryRecStop() {
   try { await vidPut(id, blob); } catch (e) { toast('Не получилось сохранить видео в памяти браузера'); }
   diaryList().push({ id, date: nowLocal(), dur: Math.round(dur), stats, ext }); save();
   render();
-  diaryPlay(id);
+  diaryPlay(id, true);
 }
 async function diaryBlob(id) { try { return await vidGet(id); } catch (e) { return null; } }
-async function diaryPlay(id) {
+async function diaryPlay(id, fresh) {
   const b = await diaryBlob(id); if (!b) { toast('Видео не найдено: браузер мог его стереть'); return; }
   const e = diaryList().find(x => x.id === id), url = URL.createObjectURL(b);
-  CAM.clips.push({ blob: b, url, title: 'Голос', date: e ? e.date : nowLocal(), ext: (e && e.ext) || (b.type.includes('mp4') ? 'mp4' : 'webm') });
+  CAM.clips.push({ blob: b, url, title: 'Голос', autoSave: !!fresh, date: e ? e.date : nowLocal(), ext: (e && e.ext) || (b.type.includes('mp4') ? 'mp4' : 'webm') });
   camShow(CAM.clips[CAM.clips.length - 1]);
 }
 async function diaryShare(id) {
@@ -2959,6 +2983,7 @@ async function diaryMakeCompare() {
   const [ba, bb] = [await diaryBlob(a.id), await diaryBlob(b.id)];
   if (!ba || !bb) { if (out) out.textContent = 'Одно из видео не найдено: браузер мог его стереть.'; return; }
   if (out) out.textContent = 'Собираю видео, это займёт столько же времени, сколько длятся обе записи...';
+  camPending(); if ($('#campend b')) $('#campend b').textContent = 'Собираю «до и после»...';
   const c = ac(), dest = c.createMediaStreamDestination();
   const mk = async blob => { const v = document.createElement('video'); v.src = URL.createObjectURL(blob); v.muted = true; v.setAttribute('playsinline', ''); await new Promise(r => { v.onloadeddata = r; setTimeout(r, 4000); }); let buf = null; try { buf = await c.decodeAudioData(await blob.arrayBuffer()); } catch (e) { } return { v, buf }; };
   const A = await mk(ba), B = await mk(bb);

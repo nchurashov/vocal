@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Камера нужна, чтобы снять тебя во время игры и записать видео «до и после».</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Чтобы сразу сохранять твои видео в Фото.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Микрофон нужен, чтобы слышать, как ты поёшь, и управлять шариком голосом.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
