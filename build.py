@@ -2,7 +2,7 @@
 """Собирает src/* в один index.html (корень = GitHub Pages) и копирует в www/ для iOS."""
 import os, shutil
 R = os.path.dirname(os.path.abspath(__file__)); S = lambda f: open(os.path.join(R, 'src', f), encoding='utf-8').read()
-css = S('app.css'); js = '\n'.join(S(f) for f in ['analysis.js', 'data.js', 'app.js', 'game.js', 'ball.js', 'learn.js', 'range.js', 'warmup.js'])
+css = S('app.css'); js = '\n'.join(S(f) for f in ['analysis.js', 'data.js', 'app.js', 'game.js', 'ball.js', 'learn.js', 'range.js', 'warmup.js', 'voice.js'])
 html = f'''<!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">

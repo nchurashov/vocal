@@ -287,7 +287,7 @@ let route = 'today', exFilter = 'all';
 function readHash() {
   const h = location.hash.replace('#', '');
   if (h.startsWith('ex-') && exById(h.slice(3))) return h;
-  if (/^(game|ball)-\d+$/.test(h) || h === 'game' || h === 'range' || h === 'warmup' || h === 'learn') return h;
+  if (/^(game|ball)-\d+$/.test(h) || h === 'game' || h === 'range' || h === 'warmup' || h === 'learn' || h === 'voice' || (h.startsWith('voice-') && typeof voiceSet === 'function' && voiceSet(h.slice(6)))) return h;
   return TABS.some(t => t[0] === h) ? h : 'today';
 }
 function go(r) { if (busy) stopRecordingIfAny(); location.hash = r; }
@@ -299,14 +299,16 @@ function render() {
   if (typeof ballStop === 'function') ballStop();
   if (typeof rangeStop === 'function') rangeStop();
   if (typeof warmupStop === 'function') warmupStop();
+  if (typeof voiceStop === 'function') voiceStop();
   stopAll();
-  const tabRoute = route.startsWith('ex-') ? 'exercises' : /^(game|ball)/.test(route) ? 'ball' : route;
+  const tabRoute = route.startsWith('ex-') || route.startsWith('voice') ? 'exercises' : /^(game|ball)/.test(route) ? 'ball' : route;
   $('#tabs').innerHTML = '<div class="tabs-in">' + TABS.map(([k, n, ic]) => `<button class="tab ${tabRoute === k ? 'on' : ''}" onclick="go('${k}')">${ic}<span>${n}</span></button>`).join('') + '</div>';
   const v = $('#view');
   if (route.startsWith('ex-')) v.innerHTML = viewExercise(exById(route.slice(3)));
   else if (route.startsWith('game-')) v.innerHTML = viewGameLevel(+route.slice(5));
   else if (route.startsWith('ball-')) v.innerHTML = viewBallLevel(+route.slice(5));
-  else v.innerHTML = ({ ball: viewBall, game: viewGame, today: viewToday, exercises: viewExercises, check: viewCheck, history: viewHistory, notes: viewNotes, range: viewRange, warmup: viewWarmup, learn: viewLearn })[route]();
+  else if (route.startsWith('voice-')) v.innerHTML = viewVoiceSet(route.slice(6));
+  else v.innerHTML = ({ ball: viewBall, game: viewGame, today: viewToday, exercises: viewExercises, check: viewCheck, history: viewHistory, notes: viewNotes, range: viewRange, warmup: viewWarmup, learn: viewLearn, voice: viewVoice })[route]();
   afterRender();
 }
 let afterHooks = [];
@@ -345,6 +347,8 @@ function viewToday() {
     h += `<div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">За 7 дней: ${n7} ${plural(n7, 'занятие', 'занятия', 'занятий')}</span><span class="pill">Дней подряд: ${st}</span></div>`;
   }
   h += `<button class="item sec" style="margin-top:18px" onclick="go('warmup')"><div class="dot rhythm">${doneToday() ? '✓' : '♪'}</div><div class="t"><b>Распевка дня${doneToday() ? ': сделана' : ''}</b><span class="small muted">${doneToday() ? 'Можно повторить или сразу петь' : `Около ${warmupMin()} мин: дыхание, трель, мычание, гаммы, спуск вниз`}</span></div><span class="muted">›</span></button>`;
+  { const nx = voiceNext(), dn = voiceDoneToday();
+    h += `<button class="item" onclick="go('voice-${nx.id}')"><div class="dot ear">${dn ? '✓' : nx.icon}</div><div class="t"><b>Голос и речь${dn ? ': сделано' : ''}: ${nx.title}</b><span class="small muted">${dn ? 'Можно ещё один комплекс' : setMin(nx) + ' мин · дыхание, дикция, плавная речь, сильный голос'}</span></div><span class="muted">›</span></button>`; }
   { const g = state.ball || { best: {} }; const nx = BALL_LEVELS.find(l => ballUnlocked(l.n) && !(g.best[l.n]?.stars >= 1)) || BALL_LEVELS[BALL_LEVELS.length - 1];
     h += `<button class="item" onclick="go('ball-${nx.n}')"><div class="dot pitch">🟠</div><div class="t"><b>Шарик: уровень ${nx.n}, «${esc(nx.title)}»</b><span class="small muted">Пой ноту, чтобы пролететь в окно</span></div><span class="muted">›</span></button>`; }
   { const r = lastRange();
@@ -362,7 +366,7 @@ function viewToday() {
 
 // ===== Экран: Упражнения =====
 function viewExercises() {
-  let h = `<h1>Упражнения</h1><div class="sec" style="margin-top:14px"><div class="seg">` +
+  let h = `<h1>Упражнения</h1><button class="item sec" style="margin-top:14px" onclick="go('voice')"><div class="dot ear">🗣️</div><div class="t"><b>Голос и речь</b><span class="small muted">7 комплексов: зажимы, дыхание, резонанс, дикция, плавная речь, низкий голос, диапазон</span></div><span class="muted">›</span></button><div class="sec" style="margin-top:14px"><div class="seg">` +
     [['all', 'Все'], ...Object.entries(CATS).map(([k, v]) => [k, v.name])].map(([k, n]) => `<button class="${exFilter === k ? 'on' : ''}" onclick="exFilter='${k}';render()">${n}</button>`).join('') + `</div></div>`;
   for (const L of [1, 2, 3]) {
     const list = EXERCISES.filter(e => e.level === L && (exFilter === 'all' || e.cat === exFilter));
