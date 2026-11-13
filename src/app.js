@@ -115,7 +115,11 @@ function playRhythm(ex, withClaps = true) {
 // чтобы мужской и женский голос подходили, но нижнее и верхнее До различались
 // collect=false: кадр не идёт в определение октавы (например, до первой ноты микрофон слышит подсказку пианино из динамика)
 // подсказка про октаву на экранах игр
-function octaveHint() { const b = BASES.find(x => x[0] === base()); return `<p class="tiny muted" style="margin:6px 0 0">Подсказки звучат от ноты ${b ? b[1].split(',')[0] : VA.noteName(base())}. Пой в своей октаве: женский голос октавой выше тоже засчитается. <a href="#" onclick="openSettings();return false">Сменить ноту</a></p>`; }
+function setVoice(m) { state.settings.base = m; state.settings.voiceSet = true; save(); render(); }
+function octaveHint() {
+  if (!state.settings.voiceSet && base() === 48) return `<div class="card sec" style="padding:14px;margin-top:10px"><div><b>Какой у тебя голос?</b></div><div class="small muted" style="margin:4px 0 10px">Подсказки зазвучат в твоей высоте. Потом можно поменять в настройках.</div>
+    <div class="row">${[[48, 'Низкий', 'мужской, от C3'], [60, 'Высокий', 'женский, от C4']].map(([m, t, d]) => `<button class="btn ghost" style="flex:1;flex-direction:column;gap:2px" onclick="setVoice(${m})"><span>${t}</span><span class="tiny muted" style="font-weight:500">${d}</span></button>`).join('')}</div></div>`;
+  const b = BASES.find(x => x[0] === base()); return `<p class="tiny muted" style="margin:6px 0 0">Подсказки звучат от ноты ${b ? b[1].split(',')[0] : VA.noteName(base())}. Пой в своей октаве: женский голос октавой выше тоже засчитается. <a href="#" onclick="openSettings();return false">Сменить ноту</a></p>`; }
 function octLock(S, v, target, collect = true) {
   if (S.oct == null) {
     if (collect) (S.octBuf ||= []).push(v - target);
@@ -750,7 +754,7 @@ function closeSheet() { $('#sheet')?.remove(); }
 function openSettings() {
   sheet(`<div class="row between"><h2>Настройки</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
     <div class="card stack"><h3>Нота для упражнений</h3><p class="small muted" style="margin:0">Выбери ноту, на которой удобно петь «а» без напряжения. От неё строятся все примеры и мелодии. Мелодии поднимаются от неё максимум на октаву.</p>
-    <select id="baseSel" onchange="state.settings.base=+this.value;save()">${BASES.map(([m, n]) => `<option value="${m}" ${base() === m ? 'selected' : ''}>${n}</option>`).join('')}</select>
+    <select id="baseSel" onchange="state.settings.base=+this.value;state.settings.voiceSet=true;save()">${BASES.map(([m, n]) => `<option value="${m}" ${base() === m ? 'selected' : ''}>${n}</option>`).join('')}</select>
     <button class="btn ghost" onclick="playNotes([[0,2],[4,1],[7,1],[12,2]],90)">${ICON.play} Послушать диапазон</button></div>
     <div class="card stack"><h3>Задержка звука для ритма</h3><p class="small muted" style="margin:0">Нужна, если ты в Bluetooth-наушниках: звук приходит позже. Сейчас: ${state.settings.latency || 0} мс.</p>
     <button class="tap" id="calbtn" style="width:150px" disabled>Тап</button><div id="calmsg" class="small muted" style="text-align:center"></div>

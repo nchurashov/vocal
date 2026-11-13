@@ -173,25 +173,29 @@ async function gameLive() {
     const m = VA.livePitch(buf, c.sampleRate);
     hist.push(m); if (hist.length > 3) hist.shift();
     const valid = hist.filter(v => v != null), rel = valid.length >= 2 ? VA.median(valid) - base() : null;
-    const act = G.tl.find(n => now >= n.start && now < n.end);
-    const near = act || G.tl.find(n => n.start > now) || G.tl[G.tl.length - 1];
-    G.voice = rel == null ? null : octLock(G, rel, near.rel, !!act && now > act.start + .1);
-    G.voiceHit = false;
-    if (act && now > act.start + .15) {
-      act.tot += dt;
-      if (G.voice != null && Math.abs(G.voice - act.rel) * 100 <= G.lv.tol) { act.in += dt; G.voiceHit = true; }
-    }
-    G.trail.push({ t: now, rel: G.voice }); if (G.trail.length > 400) G.trail.shift();
-    for (const n of G.tl) if (!n.done && now >= n.end) {
-      n.done = true; n.score = noteScore(n);
-      const good = n.score >= .5; G.combo = good ? G.combo + 1 : 0; G.maxCombo = Math.max(G.maxCombo, G.combo);
-      const W = G.W, nowX = W * .26;
-      G.pops.push({ t: now, x: Math.min(W - 60, nowX + 70), y: 34, good, text: good ? (n.score >= .95 ? 'Идеально!' : 'Есть!') : 'Мимо' });
-    }
+    gameStep(now, dt, rel);
     gameDraw(now);
     if (now < G.D + .4) G.raf = requestAnimationFrame(loop); else gameFinish(false);
   };
   loop();
+}
+// шаг живой игры (общий для микрофона и теста sim_game.py): rel - спетая высота в полутонах от базовой ноты или null
+function gameStep(now, dt, rel) {
+  const act = G.tl.find(n => now >= n.start && now < n.end);
+  const near = act || G.tl.find(n => n.start > now) || G.tl[G.tl.length - 1];
+  G.voice = rel == null ? null : octLock(G, rel, near.rel, !!act && now > act.start + .1);
+  G.voiceHit = false;
+  if (act && now > act.start + .15) {
+    act.tot += dt;
+    if (G.voice != null && Math.abs(G.voice - act.rel) * 100 <= G.lv.tol) { act.in += dt; G.voiceHit = true; }
+  }
+  G.trail.push({ t: now, rel: G.voice }); if (G.trail.length > 400) G.trail.shift();
+  for (const n of G.tl) if (!n.done && now >= n.end) {
+    n.done = true; n.score = noteScore(n);
+    const good = n.score >= .5; G.combo = good ? G.combo + 1 : 0; G.maxCombo = Math.max(G.maxCombo, G.combo);
+    const W = G.W, nowX = W * .26;
+    G.pops.push({ t: now, x: Math.min(W - 60, nowX + 70), y: 34, good, text: good ? (n.score >= .95 ? 'Идеально!' : 'Есть!') : 'Мимо' });
+  }
 }
 function gameFinish(aborted) {
   if (!G) return;
