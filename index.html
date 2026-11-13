@@ -137,6 +137,7 @@ details summary{cursor:pointer}
 .pk-lbl{font:700 5px Manrope,system-ui;fill:var(--muted)}
 .pk-oct{font:600 4.2px Manrope,system-ui;fill:var(--muted)}
 .pk-sep{stroke:var(--line);stroke-width:.5}
+.pk-w.pk-in2{fill:color-mix(in srgb,var(--near) 28%,#fff)}.pk-b.pk-in2{fill:color-mix(in srgb,var(--near) 55%,#2B231E)}
 
 .app{padding-top:max(16px,env(safe-area-inset-top))}</style></head>
 <body><div class="app"><header class="top"><div class="brand"><div class="logo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg></div><b>Вокал</b></div>
@@ -653,6 +654,7 @@ function rangeWarn() {
   const r = lastRange(); if (!r) return '';
   const lo = base(), hi = base() + 12;
   if (lo < r.lo) return `<div class="tiny" style="color:var(--bad)">Нижняя нота ниже твоего замеренного диапазона (${noteShort(r.lo)} - ${noteShort(r.hi)}). Не дави, пой мягко.</div>`;
+  if (r.chestHi != null && hi > r.chestHi && hi <= r.hi) return `<div class="tiny" style="color:var(--near)">Верх уровней (до ${noteShort(hi)}) выше твоего грудного голоса (до ${noteShort(r.chestHi)}): эти ноты придётся петь фальцетом.</div>`;
   if (hi > r.hi) return `<div class="tiny" style="color:var(--near)">Верх уровней (до ${noteShort(hi)}) выше твоего замеренного диапазона (${noteShort(r.lo)} - ${noteShort(r.hi)}). На самых высоких нотах можно не дотянуть.</div>`;
   return '';
 }
@@ -660,7 +662,7 @@ function rangeWarn() {
 function registerCard(inSheet) {
   const r = lastRange();
   return `<div class="card ${inSheet ? '' : 'sec'} stack" style="padding:14px;${inSheet ? '' : 'margin-top:10px'}">
-    <div class="row between"><b>Где работаем</b>${r ? `<span class="tiny muted">диапазон ${noteShort(r.lo)} - ${noteShort(r.hi)}</span>` : ''}</div>
+    <div class="row between"><b>Где работаем</b>${r ? `<span class="tiny muted">диапазон ${noteShort(r.lo)} - ${noteShort(r.hi)}${r.chestHi != null ? ', грудной до ' + noteShort(r.chestHi) : ''}</span>` : ''}</div>
     <div class="row"><button class="btn ghost" style="min-width:46px;padding:0" aria-label="Ниже на полутон" onclick="setBase(base()-1)">−</button>
       <div style="flex:1;text-align:center"><div style="font-weight:800">${noteFull(base())}</div><div class="tiny muted">уровни идут от неё вверх до ${noteShort(base() + 12)}</div></div>
       <button class="btn ghost" style="min-width:46px;padding:0" aria-label="Выше на полутон" onclick="setBase(base()+1)">+</button></div>
@@ -1976,9 +1978,9 @@ function pianoSVG(from, to, o = {}) {
   const WW = 10, WH = 50, BW = 6.2, BH = 31;
   const whites = []; for (let m = from; m <= to; m++) if (!isBlack(m)) whites.push(m);
   const W = whites.length * WW, x = {}; whites.forEach((m, i) => x[m] = i * WW);
-  const inBand = m => o.band && m >= o.band[0] && m <= o.band[1];
-  const cls = m => `pk ${isBlack(m) ? 'pk-b' : 'pk-w'}${inBand(m) ? ' pk-in' : ''}${o.cur != null && Math.round(o.cur) === m ? ' pk-cur' : ''}`;
-  const act = m => o.tap ? ` onclick="pianoTap(${m})" style="cursor:pointer"` : '';
+  const inBand = m => o.band && m >= o.band[0] && m <= o.band[1], inBand2 = m => o.band2 && m >= o.band2[0] && m <= o.band2[1];
+  const cls = m => `pk ${isBlack(m) ? 'pk-b' : 'pk-w'}${inBand(m) ? ' pk-in' : inBand2(m) ? ' pk-in2' : ''}${o.cur != null && Math.round(o.cur) === m ? ' pk-cur' : ''}`;
+  const act = m => o.tap ? ` onclick="${o.onTap || 'pianoTap'}(${m})" style="cursor:pointer"` : '';
   let s = `<svg ${o.id ? `id="${o.id}"` : ''} viewBox="-0.5 -0.5 ${W + 1} ${WH + (o.octaves ? 26 : 14)}" style="width:100%;display:block" role="img" aria-label="Клавиатура пианино">`;
   for (const m of whites) s += `<rect data-m="${m}" class="${cls(m)}" x="${x[m]}" y="0" width="${WW}" height="${WH}" rx="1.2"${act(m)}><title>${noteFull(m)}</title></rect>`;
   for (let m = from; m <= to; m++) if (isBlack(m)) s += `<rect data-m="${m}" class="${cls(m)}" x="${x[m - 1] + WW - BW / 2}" y="0" width="${BW}" height="${BH}" rx="1"${act(m)}><title>${noteFull(m)}</title></rect>`;
@@ -1995,9 +1997,11 @@ function pianoMark(id, m) {
   if (r != null) svg.querySelector(`[data-m="${r}"]`)?.classList.add('pk-cur');
   svg.dataset.cur = String(r);
 }
-function pianoBand(id, lo, hi) {
+// chestHi: верх грудного голоса; выше него до hi - фальцет (второй цвет)
+function pianoBand(id, lo, hi, chestHi) {
   const svg = document.getElementById(id); if (!svg) return;
-  svg.querySelectorAll('[data-m]').forEach(k => { const m = +k.dataset.m; k.classList.toggle('pk-in', lo != null && m >= lo && m <= hi); });
+  const ch = chestHi == null ? hi : chestHi;
+  svg.querySelectorAll('[data-m]').forEach(k => { const m = +k.dataset.m; k.classList.toggle('pk-in', lo != null && m >= lo && m <= ch); k.classList.toggle('pk-in2', lo != null && m > ch && m <= hi); });
 }
 function pianoTap(m) {
   if (busy) return;
@@ -2010,12 +2014,12 @@ const VOICES = [['Бас', 40, 64], ['Баритон', 45, 69], ['Тенор', 4
 function viewLearn() {
   const r = lastRange();
   const names = [['До', 'C'], ['Ре', 'D'], ['Ми', 'E'], ['Фа', 'F'], ['Соль', 'G'], ['Ля', 'A'], ['Си', 'B']];
-  const vrow = ([n, lo, hi]) => { const L = 36, H = 84, w = 100 / (H - L + 1); return `<div class="row" style="gap:8px;margin-top:6px"><span class="small" style="width:108px;flex:none">${n}</span><div style="flex:1;position:relative;height:14px;background:var(--line);border-radius:7px"><i style="position:absolute;left:${(lo - L) * w}%;width:${(hi - lo + 1) * w}%;top:0;bottom:0;border-radius:7px;background:${n === 'Твой замер' ? 'var(--accent)' : 'var(--ear)'};opacity:.8"></i></div><span class="tiny muted" style="width:62px;flex:none;text-align:right">${noteShort(lo)}-${noteShort(hi)}</span></div>`; };
+  const vrow = ([n, lo, hi, col]) => { const L = 36, H = 84, w = 100 / (H - L + 1); return `<div class="row" style="gap:8px;margin-top:6px"><span class="small" style="width:108px;flex:none">${n}</span><div style="flex:1;position:relative;height:14px;background:var(--line);border-radius:7px"><i style="position:absolute;left:${(lo - L) * w}%;width:${(hi - lo + 1) * w}%;top:0;bottom:0;border-radius:7px;background:${col || 'var(--ear)'};opacity:.8"></i></div><span class="tiny muted" style="width:62px;flex:none;text-align:right">${noteShort(lo)}-${noteShort(hi)}</span></div>`; };
   return `<button class="back" onclick="history.length > 1 ? history.back() : go('today')">${ICON.back} Назад</button><h1>Как устроены ноты</h1>
     <p class="muted" style="margin:6px 0 0">Коротко: что значат До, C4 и E2 и где это на пианино. Нажимай на клавиши, они звучат.</p>
     <div class="card sec stack"><div id="pkname" class="small" style="min-height:22px;text-align:center">Нажми на клавишу</div>
-      <div style="overflow-x:auto">${pianoSVG(36, 83, { tap: true, octaves: true, band: r ? [r.lo, r.hi] : null, id: 'pklearn' })}</div>
-      ${r ? `<div class="tiny muted">Цветом отмечен твой замеренный диапазон ${noteShort(r.lo)} - ${noteShort(r.hi)}.</div>` : ''}</div>
+      <div style="overflow-x:auto">${pianoSVG(36, 83, { tap: true, octaves: true, band: r ? [r.lo, r.chestHi ?? r.hi] : null, band2: r && r.chestHi != null && r.chestHi < r.hi ? [r.chestHi + 1, r.hi] : null, id: 'pklearn' })}</div>
+      ${r ? `<div class="tiny muted">Цветом отмечен твой замеренный диапазон ${noteShort(r.lo)} - ${noteShort(r.hi)}${r.chestHi != null && r.chestHi < r.hi ? `: грудной до ${noteShort(r.chestHi)}, выше - фальцет` : ''}.</div>` : ''}</div>
     <div class="card sec stack"><h3>7 нот</h3>
       <p class="small" style="margin:0">Белые клавиши - это 7 нот, которые повторяются по кругу. У них два названия: русское и латинское (буквы).</p>
       <div class="row wrap" style="gap:6px">${names.map(([ru, en]) => `<span class="pill" style="padding:6px 10px"><b>${en}</b> = ${ru}</span>`).join('')}</div>
@@ -2028,9 +2032,12 @@ function viewLearn() {
       <p class="small" style="margin:0">Цифра - это номер октавы, то есть насколько высоко. Буква - нота, цифра - этаж.</p>
       <div class="stack" style="gap:0">${[[2, 'большая октава', 'низкие мужские ноты'], [3, 'малая октава', 'обычная речь мужчин'], [4, 'первая октава', 'середина пианино, обычная речь женщин'], [5, 'вторая октава', 'высокие женские ноты']].map(([n, ru, d]) => `<div class="row small" style="gap:8px;padding:4px 0"><b style="width:28px">${n}</b><span style="flex:1"><b>${ru}</b> <span class="muted">- ${d}</span></span></div>`).join('')}</div>
       <p class="small" style="margin:0"><b>C4</b> = До первой октавы, «центральное до» в середине клавиатуры. <b>E2</b> = Ми большой октавы, очень низкая нота. <b>G5</b> = Соль второй октавы, очень высокая.</p></div>
+    <div class="card sec stack"><h3>Грудной голос и фальцет</h3>
+      <p class="small" style="margin:0"><b>Грудной голос</b> - обычный, плотный, как в разговоре. <b>Фальцет</b> - лёгкий, «воздушный» верх, на котором у мужчин можно взять очень высокие ноты.</p>
+      <p class="small" style="margin:0">Место, где голос сам хочет переключиться, называют <b>переходом</b>. У многих там «ломается» звук. Шов становится мягче от упражнений на переход: в распевке это шаг «Переход в фальцет», он появится, когда отметишь переход в замере.</p></div>
     <div class="card sec stack"><h3>Голоса</h3>
       <p class="small" style="margin:0">Примерные удобные диапазоны певческих голосов. У каждого по-своему, и диапазон растёт с тренировкой.</p>
-      <div>${VOICES.map(vrow).join('')}${r ? vrow(['Твой замер', r.lo, r.hi]) : ''}</div>
+      <div>${VOICES.map(vrow).join('')}${r ? (r.chestHi != null && r.chestHi < r.hi ? vrow(['Твой грудной', r.lo, r.chestHi, 'var(--accent)']) + vrow(['Твой фальцет', r.chestHi + 1, r.hi, 'var(--near)']) : vrow(['Твой замер', r.lo, r.hi, 'var(--accent)'])) : ''}</div>
       ${r ? '' : '<a href="#range" class="small">Замерить свой диапазон</a>'}</div>`;
 }
 
@@ -2050,6 +2057,27 @@ function rangeStep(R, now, m) {
   if (R.lo == null || n < R.lo) R.lo = n;
   if (R.hi == null || n > R.hi) R.hi = n;
   R.held = n; R.heldT = now; return n;
+}
+// куда работать после замера: считаем по грудному голосу (фальцет в уровни не берём)
+function rangeChoices(lo, hi, chestHi) {
+  const ch = chestHi == null ? hi : chestHi, span = ch - lo;
+  if (span < 12) return [[lo, false, 'Весь диапазон', 'подойдёт любая октава'], [lo, true, 'Строго в моей октаве', 'октавой выше или ниже не засчитается']];
+  return [[lo + Math.round((span - 12) / 2), false, 'В середине', 'удобно, подойдёт любая октава'], [lo, true, 'Нижний регистр', 'засчитается только эта октава'],
+    [ch - 12, true, 'Верхний регистр', chestHi == null ? 'засчитается только эта октава' : 'до верха грудного голоса, только эта октава']];
+}
+// отметка перехода: во время замера - «сейчас перешёл в фальцет», после - нажатием на клавишу
+function rangeMarkBreak() {
+  if (!RG || RG.hi == null) { toast('Сначала удержи хотя бы одну ноту грудным голосом'); return; }
+  RG.chestHi = RG.hi; toast('Отметил: грудной голос до ' + noteShort(RG.hi));
+  const el = $('#rgchest'); if (el) el.textContent = noteShort(RG.chestHi);
+  RG.bandKey = null;
+}
+function rangeSetBreak(m) {
+  if (!RG || RG.mode !== 'result') return;
+  m = Math.max(RG.lo, Math.min(RG.hi, m));
+  RG.chestHi = m >= RG.hi ? null : m;
+  const last = lastRange(); if (last && last.lo === RG.lo && last.hi === RG.hi) { if (RG.chestHi == null) delete last.chestHi; else last.chestHi = RG.chestHi; save(); }
+  rangeDraw();
 }
 function rangeStop() {
   if (!RG) return;
@@ -2074,7 +2102,7 @@ function viewRange() {
       const hi = dh > 0 ? 'верх поднялся на ' + st(dh) : dh < 0 ? 'верх опустился на ' + st(-dh) : 'верх тот же';
       h += `<p class="small" style="margin:0 0 10px">С первого замера (${fmtDay(f.date.slice(0, 10)).toLowerCase()}): ${lo}, ${hi}.</p>`;
     }
-    h += hist.slice().reverse().slice(0, 12).map(r => `<div class="item" style="cursor:default"><div class="t"><b>${noteShort(r.lo)} - ${noteShort(r.hi)}</b><span class="small muted">${fmtDay(r.date.slice(0, 10))} · ${r.hi - r.lo} ${plural(r.hi - r.lo, 'полутон', 'полутона', 'полутонов')}</span></div></div>`).join('') + '</div>';
+    h += hist.slice().reverse().slice(0, 12).map(r => `<div class="item" style="cursor:default"><div class="t"><b>${noteShort(r.lo)} - ${noteShort(r.hi)}</b><span class="small muted">${fmtDay(r.date.slice(0, 10))} · ${r.hi - r.lo} ${plural(r.hi - r.lo, 'полутон', 'полутона', 'полутонов')}${r.chestHi != null ? ' · грудной до ' + noteShort(r.chestHi) : ''}${r.from === 'warmup' ? ' · из распевки' : ''}</span></div></div>`).join('') + '</div>';
   }
   return h;
 }
@@ -2083,19 +2111,21 @@ function rangeDraw() {
   if (RG.mode === 'live') {
     box.innerHTML = `<div style="text-align:center"><div class="tiny muted">Сейчас</div><div id="rgcur" style="font:800 34px Lora,serif;min-height:44px">-</div><div id="rgcurru" class="small muted" style="min-height:20px"></div><div id="rgheld" class="small" style="min-height:20px;color:var(--ok)"></div></div>
       <div style="overflow-x:auto">${pianoSVG(36, 83, { id: 'pkrange' })}</div>
-      <div class="row" style="justify-content:space-around"><div style="text-align:center"><div class="tiny muted">Низ</div><b id="rglo">-</b></div><div style="text-align:center"><div class="tiny muted">Верх</div><b id="rghi">-</b></div></div>
+      <div class="row" style="justify-content:space-around"><div style="text-align:center"><div class="tiny muted">Низ</div><b id="rglo">-</b></div><div style="text-align:center"><div class="tiny muted">Верх</div><b id="rghi">-</b></div><div style="text-align:center"><div class="tiny muted">Грудной до</div><b id="rgchest">-</b></div></div>
+      <button class="btn ghost block" onclick="rangeMarkBreak()">Перешёл в фальцет</button>
+      <div class="tiny muted" style="text-align:center;margin-top:-4px">Нажми, когда голос переключился в фальцет. Можно отметить и после замера.</div>
       <button class="btn block" onclick="rangeDone()">${ICON.stop} Готово</button>`;
     return;
   }
   if (RG.mode === 'result') {
-    const lo = RG.lo, hi = RG.hi, span = hi - lo, mid = lo + Math.max(0, Math.round((span - 12) / 2)), top = Math.max(lo, hi - 12);
-    box.innerHTML = `<div><div class="tiny muted">Твой диапазон сегодня</div><div style="font:800 26px Lora,serif">${noteShort(lo)} - ${noteShort(hi)}</div><div class="small muted">${noteFull(lo)} - ${noteFull(hi)}, ${span} ${plural(span, 'полутон', 'полутона', 'полутонов')}</div></div>
-      <div style="overflow-x:auto">${pianoSVG(Math.min(36, lo), Math.max(83, hi), { band: [lo, hi], tap: true })}</div>
-      ${span < 12 ? `<div class="note small">Меньше октавы. Уровни игр идут на октаву вверх от базовой ноты, так что верх может не взяться. Это нормально, диапазон растёт с распевками.</div>` : ''}
-      <div class="small"><b>Где работать?</b> Уровни и упражнения пойдут от выбранной ноты на октаву вверх.</div>
-      ${(span >= 12 ? [[mid, false, 'В середине', 'удобно, подойдёт любая октава'], [lo, true, 'Нижний регистр', 'засчитается только эта октава'], [top, true, 'Верхний регистр', 'засчитается только эта октава']]
-        : [[lo, false, 'Весь диапазон', 'подойдёт любая октава'], [lo, true, 'Строго в моей октаве', 'октавой выше или ниже не засчитается']])
-        .map(([m, st, t, d]) => `<button class="btn ghost block" style="flex-direction:column;align-items:flex-start;gap:2px;text-align:left" onclick="rangeWork(${m},${st})"><span>${t}: от ${noteShort(m)} до ${noteShort(m + 12)}</span><span class="tiny muted" style="font-weight:500">${d}</span></button>`).join('')}
+    const lo = RG.lo, hi = RG.hi, span = hi - lo, ch = RG.chestHi;
+    box.innerHTML = `<div><div class="tiny muted">Твой диапазон сегодня</div><div style="font:800 26px Lora,serif">${noteShort(lo)} - ${noteShort(hi)}</div><div class="small muted">${noteFull(lo)} - ${noteFull(hi)}, ${span} ${plural(span, 'полутон', 'полутона', 'полутонов')}</div>
+        ${ch != null ? `<div class="small" style="margin-top:4px"><span style="color:var(--accent)">■</span> грудной ${noteShort(lo)} - ${noteShort(ch)} · <span style="color:var(--near)">■</span> фальцет ${noteShort(ch + 1)} - ${noteShort(hi)}</div>` : ''}</div>
+      <div style="overflow-x:auto">${pianoSVG(Math.min(36, lo), Math.max(83, hi), { band: [lo, ch ?? hi], band2: ch != null ? [ch + 1, hi] : null, tap: true, onTap: 'rangeSetBreak' })}</div>
+      <div class="tiny muted">${ch != null ? 'Не та граница? Нажми на клавишу - последнюю ноту, которую берёшь грудным голосом.' : 'Был фальцет? Нажми на клавишу - последнюю ноту, которую берёшь грудным голосом.'}${ch != null ? ' <a href="#" onclick="rangeSetBreak(RG.hi);return false">Фальцета не было</a>' : ''}</div>
+      ${(ch ?? hi) - lo < 12 ? `<div class="note small">${ch != null ? 'Грудной голос' : 'Диапазон'} меньше октавы. Уровни игр идут на октаву вверх от базовой ноты, так что верх может не взяться. Это нормально, диапазон растёт с распевками.</div>` : ''}
+      <div class="small"><b>Где работать?</b> Уровни и упражнения пойдут от выбранной ноты на октаву вверх${ch != null ? ', по грудному голосу' : ''}.</div>
+      ${rangeChoices(lo, hi, ch).map(([m, st, t, d]) => `<button class="btn ghost block" style="flex-direction:column;align-items:flex-start;gap:2px;text-align:left" onclick="rangeWork(${m},${st})"><span>${t}: от ${noteShort(m)} до ${noteShort(m + 12)}</span><span class="tiny muted" style="font-weight:500">${d}</span></button>`).join('')}
       <button class="btn soft" onclick="rangeStart()">${ICON.mic} Замерить ещё раз</button>`;
     return;
   }
@@ -2120,7 +2150,7 @@ async function rangeStart() {
     rangeStep(RG, c.currentTime, m);
     const cur = $('#rgcur'); if (cur) cur.textContent = m == null ? '-' : noteShort(m);
     const ru = $('#rgcurru'); if (ru) ru.textContent = m == null ? '' : noteFull(m).split(' (')[0];
-    pianoMark('pkrange', m); if (RG.lo != null && RG.bandKey !== RG.lo + ':' + RG.hi) { RG.bandKey = RG.lo + ':' + RG.hi; pianoBand('pkrange', RG.lo, RG.hi); }
+    pianoMark('pkrange', m); if (RG.lo != null && RG.bandKey !== RG.lo + ':' + RG.hi + ':' + RG.chestHi) { RG.bandKey = RG.lo + ':' + RG.hi + ':' + RG.chestHi; pianoBand('pkrange', RG.lo, RG.hi, RG.chestHi); }
     const hd = $('#rgheld'); if (hd) hd.textContent = RG.held != null && c.currentTime - RG.heldT < .4 ? '✓ ' + noteFull(RG.held) : '';
     if ($('#rglo')) $('#rglo').textContent = RG.lo == null ? '-' : noteShort(RG.lo);
     if ($('#rghi')) $('#rghi').textContent = RG.hi == null ? '-' : noteShort(RG.hi);
@@ -2130,11 +2160,11 @@ async function rangeStart() {
 }
 function rangeDone() {
   if (!RG) return;
-  const { lo, hi } = RG; rangeStop();
+  const { lo, hi } = RG, chestHi = RG.chestHi != null && RG.chestHi < RG.hi ? RG.chestHi : null; rangeStop();
   if (lo == null) { RG = { mode: 'idle', fr: [], err: 'Не услышал ни одной удержанной ноты. Пой громче и держи каждую ноту секунду.' }; rangeDraw(); return; }
-  (state.range ||= []).push({ date: nowLocal(), lo, hi }); if (state.range.length > 100) state.range.shift();
+  (state.range ||= []).push({ date: nowLocal(), lo, hi, ...(chestHi != null ? { chestHi } : {}) }); if (state.range.length > 100) state.range.shift();
   save();
-  RG = { mode: 'result', fr: [], lo, hi };
+  RG = { mode: 'result', fr: [], lo, hi, chestHi };
   render();
 }
 function rangeWork(m, strict) {
@@ -2153,6 +2183,7 @@ const WU_STEPS = [
   { id: 'trill', title: 'Губная трель', how: 'Губы расслаблены, «бррр» на звук. Если трель не идёт, придержи щёки пальцами.', pat: [0, 2, 4, 5, 7, 5, 4, 2, 0], from: 'mid', dir: 1, n: 6 },
   { id: 'hum', title: 'Мычание', how: '«М» с сомкнутыми губами и свободной челюстью. Почувствуй, как щекочет губы и нос.', pat: [0, 4, 7, 4, 0], from: 'mid', dir: 1, n: 5 },
   { id: 'siren', title: 'Сирена', how: 'На «у» скользи снизу вверх и обратно, как сирена. Без нажима, сколько удобно.', kind: 'timer', sec: 30 },
+  { id: 'break', title: 'Переход в фальцет', how: 'На «у» легко, почти шёпотом голоса. Наверху голос захочет переключиться: не дави и не кричи, дай ему мягко уйти в фальцет и так же мягко вернуться.', pat: [0, 4, 7, 12, 7, 4, 0], from: 'break', dir: 1, n: 6 },
   { id: 'mami', title: 'Ми-мэ-ма-мо-му', how: 'Каждый слог на своей ноте, рот открыт свободно, звук вперёд.', pat: [0, 2, 4, 5, 7, 5, 4, 2, 0], from: 'mid', dir: 1, n: 6 },
   { id: 'low', title: 'Спуск вниз', how: 'Сверху вниз на «а», мягко. Внизу не дави: лучше тише, чем с хрипом.', pat: [7, 5, 4, 2, 0], from: 'low', dir: -1, n: 6, edge: true },
 ];
@@ -2161,7 +2192,9 @@ function warmupKeys(step, b, range) {
   const span = Math.max(...step.pat) - Math.min(...step.pat);
   const lo = range ? range.lo : b - 2, hi = range ? range.hi : b + 12;
   const fits = k => k + Math.min(...step.pat) >= lo && k + Math.max(...step.pat) <= hi;
-  let k = step.from === 'low' ? Math.min(b + 3, hi - span) : Math.max(lo, b - 2);
+  // переход: верхняя нота фразы проходит через границу грудного голоса (от chestHi-2 до chestHi+3)
+  if (step.from === 'break' && !(range && range.chestHi != null && range.chestHi < range.hi)) return [];
+  let k = step.from === 'low' ? Math.min(hi - span, range ? lo + step.n - 1 : b + 3) : step.from === 'break' ? range.chestHi - 2 - Math.max(...step.pat) : Math.max(lo, b - 2);
   const keys = [];
   for (let i = 0; i < 40 && keys.length < step.n; i++, k += step.dir) { if (fits(k)) keys.push(k); else if (keys.length) break; }
   // шаг за край: только при замеренном диапазоне и если спуск дошёл до самого низа

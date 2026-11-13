@@ -8,6 +8,7 @@ const WU_STEPS = [
   { id: 'trill', title: 'Губная трель', how: 'Губы расслаблены, «бррр» на звук. Если трель не идёт, придержи щёки пальцами.', pat: [0, 2, 4, 5, 7, 5, 4, 2, 0], from: 'mid', dir: 1, n: 6 },
   { id: 'hum', title: 'Мычание', how: '«М» с сомкнутыми губами и свободной челюстью. Почувствуй, как щекочет губы и нос.', pat: [0, 4, 7, 4, 0], from: 'mid', dir: 1, n: 5 },
   { id: 'siren', title: 'Сирена', how: 'На «у» скользи снизу вверх и обратно, как сирена. Без нажима, сколько удобно.', kind: 'timer', sec: 30 },
+  { id: 'break', title: 'Переход в фальцет', how: 'На «у» легко, почти шёпотом голоса. Наверху голос захочет переключиться: не дави и не кричи, дай ему мягко уйти в фальцет и так же мягко вернуться.', pat: [0, 4, 7, 12, 7, 4, 0], from: 'break', dir: 1, n: 6 },
   { id: 'mami', title: 'Ми-мэ-ма-мо-му', how: 'Каждый слог на своей ноте, рот открыт свободно, звук вперёд.', pat: [0, 2, 4, 5, 7, 5, 4, 2, 0], from: 'mid', dir: 1, n: 6 },
   { id: 'low', title: 'Спуск вниз', how: 'Сверху вниз на «а», мягко. Внизу не дави: лучше тише, чем с хрипом.', pat: [7, 5, 4, 2, 0], from: 'low', dir: -1, n: 6, edge: true },
 ];
@@ -16,7 +17,9 @@ function warmupKeys(step, b, range) {
   const span = Math.max(...step.pat) - Math.min(...step.pat);
   const lo = range ? range.lo : b - 2, hi = range ? range.hi : b + 12;
   const fits = k => k + Math.min(...step.pat) >= lo && k + Math.max(...step.pat) <= hi;
-  let k = step.from === 'low' ? Math.min(b + 3, hi - span) : Math.max(lo, b - 2);
+  // переход: верхняя нота фразы проходит через границу грудного голоса (от chestHi-2 до chestHi+3)
+  if (step.from === 'break' && !(range && range.chestHi != null && range.chestHi < range.hi)) return [];
+  let k = step.from === 'low' ? Math.min(hi - span, range ? lo + step.n - 1 : b + 3) : step.from === 'break' ? range.chestHi - 2 - Math.max(...step.pat) : Math.max(lo, b - 2);
   const keys = [];
   for (let i = 0; i < 40 && keys.length < step.n; i++, k += step.dir) { if (fits(k)) keys.push(k); else if (keys.length) break; }
   // шаг за край: только при замеренном диапазоне и если спуск дошёл до самого низа

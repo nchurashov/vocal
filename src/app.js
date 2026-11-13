@@ -133,6 +133,7 @@ function rangeWarn() {
   const r = lastRange(); if (!r) return '';
   const lo = base(), hi = base() + 12;
   if (lo < r.lo) return `<div class="tiny" style="color:var(--bad)">Нижняя нота ниже твоего замеренного диапазона (${noteShort(r.lo)} - ${noteShort(r.hi)}). Не дави, пой мягко.</div>`;
+  if (r.chestHi != null && hi > r.chestHi && hi <= r.hi) return `<div class="tiny" style="color:var(--near)">Верх уровней (до ${noteShort(hi)}) выше твоего грудного голоса (до ${noteShort(r.chestHi)}): эти ноты придётся петь фальцетом.</div>`;
   if (hi > r.hi) return `<div class="tiny" style="color:var(--near)">Верх уровней (до ${noteShort(hi)}) выше твоего замеренного диапазона (${noteShort(r.lo)} - ${noteShort(r.hi)}). На самых высоких нотах можно не дотянуть.</div>`;
   return '';
 }
@@ -140,7 +141,7 @@ function rangeWarn() {
 function registerCard(inSheet) {
   const r = lastRange();
   return `<div class="card ${inSheet ? '' : 'sec'} stack" style="padding:14px;${inSheet ? '' : 'margin-top:10px'}">
-    <div class="row between"><b>Где работаем</b>${r ? `<span class="tiny muted">диапазон ${noteShort(r.lo)} - ${noteShort(r.hi)}</span>` : ''}</div>
+    <div class="row between"><b>Где работаем</b>${r ? `<span class="tiny muted">диапазон ${noteShort(r.lo)} - ${noteShort(r.hi)}${r.chestHi != null ? ', грудной до ' + noteShort(r.chestHi) : ''}</span>` : ''}</div>
     <div class="row"><button class="btn ghost" style="min-width:46px;padding:0" aria-label="Ниже на полутон" onclick="setBase(base()-1)">−</button>
       <div style="flex:1;text-align:center"><div style="font-weight:800">${noteFull(base())}</div><div class="tiny muted">уровни идут от неё вверх до ${noteShort(base() + 12)}</div></div>
       <button class="btn ghost" style="min-width:46px;padding:0" aria-label="Выше на полутон" onclick="setBase(base()+1)">+</button></div>

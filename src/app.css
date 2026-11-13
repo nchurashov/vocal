@@ -131,3 +131,4 @@ details summary{cursor:pointer}
 .pk-lbl{font:700 5px Manrope,system-ui;fill:var(--muted)}
 .pk-oct{font:600 4.2px Manrope,system-ui;fill:var(--muted)}
 .pk-sep{stroke:var(--line);stroke-width:.5}
+.pk-w.pk-in2{fill:color-mix(in srgb,var(--near) 28%,#fff)}.pk-b.pk-in2{fill:color-mix(in srgb,var(--near) 55%,#2B231E)}

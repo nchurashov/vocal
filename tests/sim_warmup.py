@@ -11,7 +11,7 @@ CHECK = """(([b, lo, hi]) => { const r = lo == null ? null : { lo, hi }, bad = [
   for (const s of WU_STEPS.filter(s => s.pat)) { const ks = warmupKeys(s, b, r);
     ks.forEach((k, i) => { const edge = s.edge && r && i === ks.length - 1 && k + Math.min(...s.pat) === L - 1;
       if (!edge && (k + Math.min(...s.pat) < L || k + Math.max(...s.pat) > H)) bad.push(s.id + ' ' + k); });
-    if (ks.length === 0 && (H - L) >= 12) bad.push(s.id + ': пусто'); }
+    if (ks.length === 0 && s.from !== 'break' && (H - L) >= 12) bad.push(s.id + ': пусто'); }
   return bad; })"""
 fails = []
 with sync_playwright() as p:
@@ -24,6 +24,14 @@ with sync_playwright() as p:
     # нижний регистр: спуск доходит до замеренного низа
     low = pg.evaluate("warmupKeys(WU_STEPS.find(s=>s.id==='low'), 43, {lo:43, hi:64})")
     if not low or low[-2] != 43 or low[-1] != 42: fails.append(f'спуск вниз: ждали ...43, 42 (шаг за край), а не {low}')
+    # переход в фальцет: только при отмеченной границе, верх фразы пересекает её
+    brk = pg.evaluate("warmupKeys(WU_STEPS.find(s=>s.id==='break'), 43, {lo:40, hi:79, chestHi:64})")
+    tops = [k + 12 for k in brk]
+    if not brk or min(tops) > 64 or max(tops) <= 64: fails.append(f'переход: верх фразы должен пересекать грудной верх 64, а он {tops}')
+    if pg.evaluate("warmupKeys(WU_STEPS.find(s=>s.id==='break'), 43, {lo:40, hi:79})"): fails.append('переход появился без отметки фальцета')
+    if pg.evaluate("warmupKeys(WU_STEPS.find(s=>s.id==='break'), 48, null)"): fails.append('переход появился без замера')
+    wide = pg.evaluate("warmupKeys(WU_STEPS.find(s=>s.id==='low'), 50, {lo:40, hi:79})")
+    if wide[-2] != 40 or wide[-1] != 39: fails.append(f'спуск при широком диапазоне должен дойти до низа 40 и шагнуть за край: {wide}')
     nolow = pg.evaluate("warmupKeys(WU_STEPS.find(s=>s.id==='low'), 48, null)")
     if min(nolow) < 46: fails.append(f'без замера спуск ушёл ниже базы-2: {nolow}')
     # оценка ответа: чистое пение, октава, чужая тональность
