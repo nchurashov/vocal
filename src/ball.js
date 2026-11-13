@@ -76,10 +76,10 @@ function viewBallLevel(n) {
   if (!lv) return '<div class="empty">Уровень не найден</div>';
   if (!ballUnlocked(n)) return `<button class="back" onclick="go('ball')">${ICON.back} Уровни</button><div class="note">🔒 Сначала пройди уровень ${n - 1} хотя бы на одну звезду.</div>`;
   const best = ballState().best[n];
-  afterHooks.push(() => ballSetup(lv));
+  afterHooks.push(() => ballSetup(lv)); afterHooks.push(() => { if (camOn()) camStart(); });
   return `<button class="back" onclick="go('ball')">${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${BALL_LEVELS.length} · точность ±${ballTol()} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}.</p>${octaveHint()}
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}.</p>${octaveHint()}${camToggleHTML()}
     ${diffSeg()}
     <div id="bbest">${ballBestHTML(lv)}</div>
     <div class="gstage sec"><canvas id="bcv"></canvas></div>
@@ -272,6 +272,7 @@ async function ballLive() {
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const t0 = ballCountIn(); ballSchedule(t0, false);
+  camRecStart('#bcv', `Шарик · уровень ${B.lv.n}`, stream);
   $('#blive').innerHTML = ICON.stop + ' Остановить';
   let last = -9;
   const loop = () => {
@@ -290,6 +291,7 @@ function ballFinish(aborted) {
   if (!B) return;
   cancelAnimationFrame(B.raf); if (B.stream) B.stream.getTracks().forEach(t => t.stop()); B.stream = null; afterMic();
   const mode = B.mode; B.mode = 'idle'; busy = false;
+  if (mode === 'live') camRecStop(aborted ? '' : `${B.walls.filter(w => w.passed).length} из ${B.walls.length} стен`, aborted);
   const btn = $('#blive'); if (btn) btn.innerHTML = ICON.play + ' Играть ещё раз';
   if (aborted) { ballReset(); ballDraw(-2); return; }
   ballResult(mode === 'replay' ? 'take' : 'live');

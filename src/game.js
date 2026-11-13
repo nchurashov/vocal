@@ -57,10 +57,10 @@ function viewGameLevel(n) {
   const best = gameState().best[n];
   let h = `<button class="back" onclick="go('game')">${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${GAME_LEVELS.length} · полоса ±${lv.tol} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="gstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. Первая нота: ${VA.noteName(base() + lv.notes.find(x => x[0] != null)[0])}.</p>${octaveHint()}
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. Первая нота: ${VA.noteName(base() + lv.notes.find(x => x[0] != null)[0])}.</p>${octaveHint()}${camToggleHTML()}
     <div class="gstage sec"><canvas id="gcv"></canvas><div id="gover" class="gover"></div></div>
     <div id="gctl" class="stack" style="margin-top:12px"></div><div id="gres"></div>`;
-  afterHooks.push(() => gameSetup(lv));
+  afterHooks.push(() => gameSetup(lv)); afterHooks.push(() => { if (camOn()) camStart(); });
   return h;
 }
 function gameSetup(lv) {
@@ -165,6 +165,7 @@ async function gameLive() {
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const t0 = gameCountIn(); let last = c.currentTime - t0;
+  camRecStart('#gcv', `Попади в ноту · уровень ${G.lv.n}`, stream);
   $('#glive').innerHTML = ICON.stop + ' Остановить'; $('#glive').onclick = () => gameFinish(true);
   const loop = () => {
     if (!G || G.stopped || G.mode !== 'live') return;
@@ -201,6 +202,7 @@ function gameFinish(aborted) {
   if (!G) return;
   cancelAnimationFrame(G.raf); if (G.stream) G.stream.getTracks().forEach(t => t.stop()); G.stream = null; afterMic();
   const wasLive = G.mode === 'live'; G.mode = 'idle'; busy = false;
+  if (wasLive) { const sc = G.tl.map(n => n.done ? n.score : noteScore(n)); camRecStop(aborted ? '' : Math.round(100 * sc.reduce((a, x) => a + x, 0) / sc.length) + '% нот', aborted); }
   const b = $('#glive'); if (b) { b.innerHTML = ICON.play + ' Играть ещё раз'; b.onclick = () => gameLive(); }
   if (aborted) { gameReset(); gameDraw(-1.5); return; }
   G.tl.forEach(n => { if (!n.done) { n.done = true; n.score = noteScore(n); } });

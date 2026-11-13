@@ -322,6 +322,7 @@ function render() {
   if (typeof rangeStop === 'function') rangeStop();
   if (typeof warmupStop === 'function') warmupStop();
   if (typeof voiceStop === 'function') voiceStop();
+  if (typeof camOff === 'function') camOff();
   stopAll();
   const tabRoute = route.startsWith('ex-') || route.startsWith('voice') ? 'exercises' : /^(game|ball)/.test(route) ? 'ball' : route;
   $('#tabs').innerHTML = '<div class="tabs-in">' + TABS.map(([k, n, ic]) => `<button class="tab ${tabRoute === k ? 'on' : ''}" onclick="go('${k}')">${ic}<span>${n}</span></button>`).join('') + '</div>';
