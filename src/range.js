@@ -67,6 +67,7 @@ function rangeDraw() {
   const box = $('#rgbox'); if (!box || !RG) return;
   if (RG.mode === 'live') {
     box.innerHTML = `<div style="text-align:center"><div class="tiny muted">Сейчас</div><div id="rgcur" style="font:800 34px Lora,serif;min-height:44px">-</div><div id="rgcurru" class="small muted" style="min-height:20px"></div><div id="rgheld" class="small" style="min-height:20px;color:var(--ok)"></div></div>
+      <div class="row" style="gap:8px"><span class="tiny muted" style="flex:none">Микрофон</span><div style="flex:1">${levelBar('rglvl')}</div></div><div id="rgdead" class="small" style="color:var(--bad)"></div>
       <div style="overflow-x:auto">${pianoSVG(36, 83, { id: 'pkrange' })}</div>
       <div class="row" style="justify-content:space-around"><div style="text-align:center"><div class="tiny muted">Низ</div><b id="rglo">-</b></div><div style="text-align:center"><div class="tiny muted">Верх</div><b id="rghi">-</b></div><div style="text-align:center"><div class="tiny muted">Грудной до</div><b id="rgchest">-</b></div></div>
       <button class="btn ghost block" onclick="rangeMarkBreak()">Перешёл в фальцет</button>
@@ -94,24 +95,27 @@ async function rangeStart() {
   let stream;
   try { stream = await openMic(); }
   catch (e) { RG = { mode: 'idle', fr: [], err: '<b>Нет доступа к микрофону.</b> В Safari нажми «аА» слева от адреса → «Настройки веб-сайта» → «Микрофон» → «Разрешить», потом обнови страницу.' }; rangeDraw(); return; }
-  const c = ac(); busy = true;
+  busy = true;
   RG = { mode: 'live', fr: [], stream, lo: null, hi: null };
   rangeDraw();
-  const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
-  const buf = new Float32Array(an.fftSize), hist = [];
+  const T = micTap(stream), hist = [];
   const loop = () => {
     if (!RG || RG.mode !== 'live') return;
-    an.getFloatTimeDomainData(buf);
-    hist.push(VA.livePitch(buf, c.sampleRate)); if (hist.length > 3) hist.shift();
+    RG.raf = requestAnimationFrame(loop);
+    const buf = T.read(), now = performance.now() / 1000;
+    setLevel('rglvl', T.level);
+    const dm = $('#rgdead'); if (dm) dm.textContent = T.dead ? MIC_DEAD : '';
+    hist.push(VA.livePitch(buf, T.c.sampleRate)); if (hist.length > 3) hist.shift();
     const v = hist.filter(x => x != null), m = v.length >= 2 ? VA.median(v) : null;
-    rangeStep(RG, c.currentTime, m);
+    rangeStep(RG, now, m);
+    try {
     const cur = $('#rgcur'); if (cur) cur.textContent = m == null ? '-' : noteShort(m);
     const ru = $('#rgcurru'); if (ru) ru.textContent = m == null ? '' : noteFull(m).split(' (')[0];
     pianoMark('pkrange', m); if (RG.lo != null && RG.bandKey !== RG.lo + ':' + RG.hi + ':' + RG.chestHi) { RG.bandKey = RG.lo + ':' + RG.hi + ':' + RG.chestHi; pianoBand('pkrange', RG.lo, RG.hi, RG.chestHi); }
-    const hd = $('#rgheld'); if (hd) hd.textContent = RG.held != null && c.currentTime - RG.heldT < .4 ? '✓ ' + noteFull(RG.held) : '';
+    const hd = $('#rgheld'); if (hd) hd.textContent = RG.held != null && now - RG.heldT < .4 ? '✓ ' + noteFull(RG.held) : '';
     if ($('#rglo')) $('#rglo').textContent = RG.lo == null ? '-' : noteShort(RG.lo);
     if ($('#rghi')) $('#rghi').textContent = RG.hi == null ? '-' : noteShort(RG.hi);
-    RG.raf = requestAnimationFrame(loop);
+    } catch (e) { }
   };
   loop();
 }

@@ -63,10 +63,32 @@ async function openMic() {
   const c = ac();
   try {
     const s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-    if (c.state !== 'running') { const r = c.resume(); if (r && r.catch) r.catch(() => { }); }
+    // наушники (AirPods) переключают микрофон на другую частоту: движок с прежней частотой получает от Safari тишину
+    let sr = 0; try { sr = s.getAudioTracks()[0].getSettings().sampleRate || 0; } catch (e) { }
+    if (sr && AC && Math.abs(AC.sampleRate - sr) > 1) { resetAudio(); ac(); }
+    const c2 = AC || c; if (c2.state !== 'running') { const r = c2.resume(); if (r && r.catch) r.catch(() => { }); }
     return s;
   } catch (e) { afterMic(); throw e; }
 }
+// микрофон для замеров без пианино (диапазон, длинный звук): уровень громкости и сторож тишины.
+// Если 1.5 с подряд ровный ноль - один раз пересоздаём движок; если и после этого ноль - dead (показываем подсказку).
+function micTap(stream, fft = 4096) {
+  const T = { zero: 0, rebuilt: false, dead: false, level: 0 };
+  T.build = () => { T.c = ac(); T.an = T.c.createAnalyser(); T.an.fftSize = fft; T.c.createMediaStreamSource(stream).connect(T.an); T.buf = new Float32Array(fft); };
+  T.build();
+  T.read = () => {
+    T.an.getFloatTimeDomainData(T.buf);
+    let mx = 0, e = 0; for (let i = 0; i < T.buf.length; i++) { const v = T.buf[i]; e += v * v; if (v > mx) mx = v; else if (-v > mx) mx = -v; }
+    T.level = Math.sqrt(e / T.buf.length);
+    if (mx === 0) { if (++T.zero > 90) { if (!T.rebuilt) { T.rebuilt = true; T.zero = 0; resetAudio(); T.build(); const r = T.c.resume(); if (r && r.catch) r.catch(() => { }); } else T.dead = true; } }
+    else { T.zero = 0; T.dead = false; }
+    return T.buf;
+  };
+  return T;
+}
+const MIC_DEAD = 'Микрофон включён, но звук не приходит. Если подключены AirPods или другие наушники, отключи их или выбери микрофон телефона. Потом нажми «Готово» и начни заново.';
+function levelBar(id) { return `<div style="height:6px;background:var(--line);border-radius:3px;overflow:hidden" title="Громкость микрофона"><i id="${id}" style="display:block;height:100%;width:0;background:var(--ok);transition:width .08s"></i></div>`; }
+function setLevel(id, lv) { const el = document.getElementById(id); if (el) el.style.width = Math.min(100, Math.round(Math.sqrt(lv) * 260)) + '%'; }
 function resetAudio() { try { if (AC) AC.close(); } catch (e) { } AC = null; master = null; wave = null; noiseBuf = null; iosUnlocked = false; }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && !busy && !micOn) resetAudio(); });
 window.addEventListener('pageshow', e => { if (e.persisted) resetAudio(); });

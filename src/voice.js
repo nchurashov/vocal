@@ -138,7 +138,7 @@ function voiceDraw() {
   const s = set.steps[VS.i];
   let body = '';
   if (s.kind === 'text') { const tw = vsList(s); body = `<div style="font:700 21px Lora,serif;text-align:center;padding:8px 0">«${esc(tw.items[tw.k])}»</div><div class="tiny muted" style="text-align:center">${tw.k + 1} из ${tw.items.length}</div>`; }
-  else if (s.kind === 'mpt' || s.kind === 'exhale') { const b = recBest(s.kind); body = `<div id="vsnow" style="text-align:center;font:800 40px Lora,serif">${VS.result != null ? VS.result.toFixed(1) + ' с' : '0.0 с'}</div><div id="vssub" class="small muted" style="text-align:center;min-height:20px">${VS.resultText || (b ? 'Лучший: ' + b.sec.toFixed(1) + ' с' : 'Первый замер')}</div>`; }
+  else if (s.kind === 'mpt' || s.kind === 'exhale') { const b = recBest(s.kind); body = `<div id="vsnow" style="text-align:center;font:800 40px Lora,serif">${VS.result != null ? VS.result.toFixed(1) + ' с' : '0.0 с'}</div>${VS.playing ? levelBar('vslvl') : ''}<div id="vssub" class="small muted" style="text-align:center;min-height:20px">${VS.resultText || (b ? 'Лучший: ' + b.sec.toFixed(1) + ' с' : 'Первый замер')}</div>`; }
   else body = `<div id="vsnow" style="text-align:center;font:800 26px Lora,serif;min-height:36px">${VS.playing ? '' : stepSec(s) + ' с'}</div><div id="vssub" class="small muted" style="text-align:center;min-height:20px"></div>`;
   const meas = (s.kind === 'mpt' || s.kind === 'exhale');
   const startLbl = meas ? (VS.playing ? ICON.stop + ' Стоп' : ICON.mic + (VS.result != null ? ' Ещё раз' : ' Начать замер')) : s.kind === 'text' ? 'Следующая' : VS.playing ? ICON.stop + ' Пауза' : ICON.play + ' Начать';
@@ -181,21 +181,21 @@ async function voicePlay() {
 // замер: длинный звук (голос, по высоте тона) или выдох на «с» (шум выше фона)
 async function voiceMeasure(s) {
   let stream; try { stream = await openMic(); } catch (e) { toast('Нет доступа к микрофону'); return; }
-  const c = ac(); VS.stream = stream; VS.playing = true; busy = true; VS.result = null; VS.resultText = ''; voiceDraw();
-  const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
-  const buf = new Float32Array(an.fftSize), t0 = c.currentTime, floor = [], P = VS.P = { start: null, last: 0, sec: 0, done: false };
+  VS.stream = stream; VS.playing = true; busy = true; VS.result = null; VS.resultText = ''; voiceDraw();
+  const T = micTap(stream), t0 = performance.now() / 1000, floor = [], P = VS.P = { start: null, last: 0, sec: 0, done: false };
   const say = (a, b) => { if ($('#vsnow')) $('#vsnow').textContent = a; if ($('#vssub')) $('#vssub').textContent = b; };
   const loop = () => {
     if (!VS || !VS.stream) return;
-    an.getFloatTimeDomainData(buf);
-    let e = 0; for (let i = 0; i < buf.length; i++) e += buf[i] * buf[i]; const rms = Math.sqrt(e / buf.length), now = c.currentTime - t0;
-    if (now < 1) { floor.push(rms); say('Тишина...', 'слушаю фон, не звучи'); VS.raf = requestAnimationFrame(loop); return; }
+    VS.raf = requestAnimationFrame(loop);
+    const buf = T.read(), rms = T.level, now = performance.now() / 1000 - t0;
+    setLevel('vslvl', rms);
+    if (T.dead) { say('-', MIC_DEAD); return; }
+    if (now < 1) { floor.push(rms); say('Тишина...', 'слушаю фон, не звучи'); return; }
     const fl = VA.median(floor.slice()), thr = Math.max(.006, fl * 4);
-    const active = s.kind === 'mpt' ? VA.livePitch(buf, c.sampleRate) != null : rms > thr;
+    const active = s.kind === 'mpt' ? VA.livePitch(buf, T.c.sampleRate) != null : rms > thr;
     phonStep(P, now, active);
     say(P.sec.toFixed(1) + ' с', P.start == null ? (s.kind === 'mpt' ? 'Вдох и тяни «а-а-а»' : 'Вдох и выдыхай «с-с-с»') : 'Держи ровно...');
-    if (P.done || now > 120) return voiceMeasureDone(s, P.sec);
-    VS.raf = requestAnimationFrame(loop);
+    if (P.done || now > 120) { cancelAnimationFrame(VS.raf); voiceMeasureDone(s, P.sec); }
   };
   loop();
 }

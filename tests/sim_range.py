@@ -30,6 +30,11 @@ with sync_playwright() as p:
     if nf != [54, 40, 67]: fails.append(f'выбор без фальцета: {nf}')
     mk = pg.evaluate("(() => { RG = { mode: 'live', fr: [], lo: 40, hi: 64 }; rangeMarkBreak(); const a = RG.chestHi; RG.hi = 79; RG.mode = 'result'; state.range = [{ date: '2026-11-13T10:00:00', lo: 40, hi: 79 }]; rangeSetBreak(62); const b = [RG.chestHi, state.range[0].chestHi]; rangeSetBreak(79); return [a, ...b, RG.chestHi, 'chestHi' in state.range[0]]; })()")
     if mk != [64, 62, 62, None, False]: fails.append(f'отметка перехода: {mk}')
+    # сторож тишины: микрофон отдаёт ровный ноль -> один раз пересоздаём движок, потом честно говорим «звук не приходит»
+    w = pg.evaluate("""(() => { const x = new AudioContext(), st = x.createMediaStreamDestination().stream, T = micTap(st);
+      const c1 = T.c; for (let i = 0; i < 95; i++) T.read(); const a = [T.rebuilt, T.c !== c1, T.dead];
+      for (let i = 0; i < 95; i++) T.read(); return [...a, T.dead]; })()""")
+    if w != [True, True, False, True]: fails.append(f'сторож тишины: {w}, ждали [пересоздал, новый движок, не сразу dead, потом dead]')
     # клавиатура и страница «Как устроены ноты»
     keys = pg.evaluate("(() => { const d = document.createElement('div'); d.innerHTML = pianoSVG(36, 83, {band:[40,52]}); return [d.querySelectorAll('[data-m]').length, d.querySelectorAll('.pk-b').length, d.querySelectorAll('.pk-in').length]; })()")
     if keys != [48, 20, 13]: fails.append(f'клавиатура C2-B5: ждали 48 клавиш, 20 чёрных, 13 в диапазоне, а не {keys}')
