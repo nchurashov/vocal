@@ -121,6 +121,56 @@ check(`честность игры: ${units.length} кусков, по ${Object.
 { const notes = BUILTIN_SONGS[0].notes, r = L.songGameFrames(notes, sing(notes, { lat: .1, glide: .07, vib: .1, shift: 0 }), {});
   check('чисто всю песню: 3 звезды и серия на все ноты', r.stars === 3 && r.best === notes.length, `${r.stars}★ серия ${r.best}`); }
 
+// --- режим «Пианино» (songkeys.js), проверка по порядку нот scoreSung - честность: имитация живого голоса по каждой фразе встроенных песен
+// singer: опоздание, скольжение, вибрато, сдвиг, темп певца, ошибки
+function singK(notes, o) {
+  const fr = [], s0 = notes[0].t; let prev = null;
+  const ons = notes.map((n, i) => ({ m: (o.wrong && o.wrong.includes(i) ? n.m + 6 : n.m), t0: (n.t - s0) / o.speed, t1: (n.t - s0 + n.d) / o.speed }));
+  const end = ons[ons.length - 1].t1 + .5;
+  for (let t = -.3; t < end; t += 1 / 60) {
+    let m = null;
+    for (const n of ons) if (t >= n.t0 + o.lat && t < n.t1 + o.lat - .05) {
+      const k = Math.min(1, (t - n.t0 - o.lat) / o.glide); const from = prev == null ? n.m : prev;
+      m = from + (n.m - from) * k + o.vib * Math.sin(t * 2 * Math.PI * 5.5) + o.shift;
+      if (t >= n.t1 + o.lat - .06) prev = n.m;
+      break;
+    }
+    if (o.drone != null) m = o.drone;
+    fr.push({ t: t + 100, m });
+  }
+  return fr;
+}
+const FAIRK = { 'вовремя': {}, 'опоздание 0.3 с': { lat: .3 }, 'медленнее в 1.3 раза': { speed: .77 }, 'быстрее в 1.25 раза': { speed: 1.25 }, 'октавой ниже': { shift: -12 }, 'октавой выше': { shift: 12 }, 'вибрато ±25 ц': { vib: .25 } };
+const UNFAIRK = { 'фальшь +0.7 полутона': { shift: .7 }, 'тишина': { drone: null, silent: true }, 'одна нота на всю фразу': { droneFirst: true }, 'две ноты из каждых трёх мимо': { wrongMost: true } };
+for (const s of BUILTIN_SONGS) for (let k = 0; k < s.ph.length; k++) {
+  const notes = L.phraseNotes(s, k);
+  for (const [name, o0] of Object.entries(FAIRK)) {
+    const o = { lat: .12, glide: .07, vib: .12, shift: 0, speed: 1, ...o0 };
+    const r = L.scoreSung(notes, singK(notes, o), false, 0, 1);
+    if (!r.ok) check(`${s.title}, фраза ${k + 1}, ${name}: должен пройти`, false, `${r.n}/${r.total}`);
+  }
+  for (const [name, o0] of Object.entries(UNFAIRK)) {
+    const o = { lat: .12, glide: .07, vib: .1, shift: 0, speed: 1, ...o0 };
+    if (o0.droneFirst) o.drone = notes[0].m;
+    if (o0.wrongMost) o.wrong = notes.map((_, i) => i).filter(i => i % 3 !== 0);
+    let fr = singK(notes, o); if (o0.silent) fr = fr.map(f => ({ t: f.t, m: null }));
+    const r = L.scoreSung(notes, fr, false, 0, 1);
+    if (r.ok) check(`${s.title}, фраза ${k + 1}, ${name}: не должен пройти`, false, `${r.n}/${r.total}`);
+  }
+  // строгий режим: октавой ниже не засчитывается
+  const r = L.scoreSung(notes, singK(notes, { lat: .12, glide: .07, vib: .1, shift: -12, speed: 1 }), true, 0, 1);
+  if (r.n) check(`${s.title}, фраза ${k + 1}: строго в октаве, октавой ниже не засчитывается`, false, `${r.n}/${r.total}`);
+}
+check('честность проверки на всех фразах встроенных песен', true);
+// сдвиг тональности: поёшь сдвинутую песню - засчитывается именно в ней
+{ const notes = L.phraseNotes(BUILTIN_SONGS[1], 0), fr = singK(notes, { lat: .1, glide: .07, vib: .1, shift: 3, speed: 1 });
+  check('сдвиг +3: спетое в новой тональности засчитано', L.scoreSung(notes, fr, false, 3, 1).ok);
+  check('сдвиг +3: спетое в старой тональности - нет', !L.scoreSung(notes, singK(notes, { lat: .1, glide: .07, vib: .1, shift: 0, speed: 1 }), false, 3, 1).ok); }
+// хвост ноты не перескакивает через следующую: «ля-си-ля», тянешь первую «ля» - засчитана только она
+{ const notes = [{ m: 69, t: 0, d: .5 }, { m: 71, t: .5, d: .5 }, { m: 69, t: 1, d: .5 }];
+  const fr = []; for (let t = 0; t < 1.6; t += 1 / 60) fr.push({ t, m: 69 });
+  const r = L.scoreSung(notes, fr, false, 0, 1); check('тянешь одну ноту - соседние не засчитаны', r.n === 1, `${r.n}/${r.total}`); }
+
 // --- чужой файл песни: без разметки и кода
 const bad = L.normalizeSong({ id: '<img>', title: 'x', notes: [] });
 check('песня с плохим id отброшена', bad === null);

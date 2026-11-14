@@ -66,6 +66,7 @@ export function viewSongLevels(id) {
         <button class="iconbtn" ${act('sbShift', id, -1)} title="Ниже">−</button><button class="iconbtn" ${act('sbShift', id, 1)} title="Выше">+</button></div>
       <div class="tiny muted" style="margin-top:-6px">Подобрал под твой голос (${noteShort(songWin()[0])} - ${noteShort(songWin()[1])}). Неудобно - сдвинь на полутон.</div></div>
     <button class="item sec" ${act('go', `karaoke-${id}`)}><div class="dot rhythm">🎤</div><div class="t"><b>Караоке${s.notes.some(n => n.w) ? ' со словами' : ''}</b><span class="small muted">Спеть вместе с пианино, повторять по фразам или целиком, ноты-полоски едут под слова</span></div><span class="muted">›</span></button>
+    <button class="item" ${act('go', `keys-${id}`)}><div class="dot ear">🎹</div><div class="t"><b>Пианино</b><span class="small muted">Фраза на клавишах с линией твоего голоса и подсказкой, где мимо; целиком; игра - ноты падают на клавиши</span></div><span class="muted">›</span></button>
     ${s.src !== 'builtin' ? `<button class="btn ghost block sec" style="color:var(--bad)" ${act('songAskDel', s.id)}>Удалить песню</button>` : ''}`;
   return h;
 }

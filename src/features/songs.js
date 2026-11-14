@@ -28,7 +28,12 @@ export const songById = id => songsAll().find(s => s.id === id) || null;
 const prog = id => ((state.songs ||= {})[id] ||= { ph: {}, whole: 0, plays: 0 });
 export const songTempo = () => state.settings.songTempo || 1;
 // окно голоса: замеренный грудной диапазон или рядом с базой
-export function songWin() { const r = lastRange(); return r ? [r.lo, r.chestHi ?? r.hi] : [base() - 5, base() + 12]; }
+// замер уже меньше квинты (случайно нажал «фальцет» в самом низу) - берём весь замер, иначе окно у базы
+export function songWin() {
+  const r = lastRange();
+  if (r) for (const hi of [r.chestHi, r.hi]) if (hi != null && hi - r.lo >= 7) return [r.lo, hi];
+  return [base() - 5, base() + 12];
+}
 export function songShiftOf(s) { const p = (state.songs || {})[s.id]; return p && Number.isInteger(p.shift) ? p.shift : songShift(s.notes, songWin()); }
 const learned = s => { const p = (state.songs || {})[s.id]; return p ? s.ph.filter((_, k) => (p.ph[k] || 0) >= 80).length : 0; };
 const nm = m => VA.noteName(m);

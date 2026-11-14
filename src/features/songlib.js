@@ -172,6 +172,41 @@ export function songShift(notes, win) {
   return Math.round(mid - (lo + hi) / 2);
 }
 
+// --- проверка пения по порядку нот (живой голос: кадры { t, m } раз в ~1/60 с)
+// Одинаковые ноты подряд сливаются в одну цель (живьём их не разделить). Нота засчитана, если
+// голос в пределах ±50 центов (без строгого режима - в любой октаве) набрал нужное время.
+// Пропустил ноту - можно петь следующую: смотрим на 2 ноты вперёд, пропущенная не засчитывается.
+export function songTargets(notes, tempo = 1) {
+  const T = [];
+  notes.forEach((n, i) => { const l = T[T.length - 1]; if (l && l.m === n.m) { l.d += n.d / tempo; l.idx.push(i); } else T.push({ m: n.m, d: n.d / tempo, idx: [i] }); });
+  for (const x of T) x.need = Math.min(.3, Math.max(.12, x.d * .35));
+  return T;
+}
+export function songScorer(targets, strict, shift = 0) {
+  const S = { j: 0, hit: targets.map(() => false), acc: targets.map(() => 0), lastT: null };
+  S.push = (t, m) => {
+    const dt = S.lastT == null ? 0 : Math.min(.1, Math.max(0, t - S.lastT)); S.lastT = t;
+    if (m == null || S.j >= targets.length) return S;
+    const near = k => { let d = m - (targets[k].m + shift); if (!strict) d -= 12 * Math.round(d / 12); return Math.abs(d) <= .5; };
+    // ещё тянешь только что засчитанную ноту: это не шаг вперёд (иначе в «ля-си-ля» хвост первой «ля» засчитал бы третью)
+    const tail = S.j > 0 && near(S.j - 1);
+    for (let k = S.j; k < Math.min(targets.length, tail ? S.j + 1 : S.j + 3); k++) {
+      if (!near(k)) continue;
+      S.acc[k] += dt;
+      if (S.acc[k] >= targets[k].need) { S.hit[k] = true; S.j = k + 1; for (let q = k + 1; q < targets.length; q++) S.acc[q] = 0; }
+      break;
+    }
+    return S;
+  };
+  S.result = () => { const n = S.hit.filter(Boolean).length; return { hit: S.hit, n, total: targets.length, ok: n >= Math.ceil(targets.length * .8), pct: Math.round(100 * n / targets.length) }; };
+  return S;
+}
+export function scoreSung(notes, frames, strict, shift = 0, tempo = 1) {
+  const S = songScorer(songTargets(notes, tempo), strict, shift);
+  for (const f of frames) S.push(f.t, f.m);
+  return S.result();
+}
+
 // --- караоке-игра: ноты едут по экрану, поёшь в такт. Время - секунды от первой ноты (с учётом темпа).
 // Нота засчитана, если голос в пределах ±50 центов (без строгого режима - в любой октаве) набрал 40% её длины
 // внутри окна [начало + атака - 0.05 с; конец + 0.3 с]: опоздание до 0.3 с не штрафуется, начало ноты (атака) не нужно.
