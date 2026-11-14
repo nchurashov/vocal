@@ -60,6 +60,8 @@ h1{font-size:28px}h2{font-size:21px}h3{font-size:17px;font-family:'Manrope',sans
 .dot.rhythm{background:color-mix(in srgb,var(--rhythm) 15%,transparent);color:var(--rhythm)}
 .item .t{flex:1;min-width:0}.item .t b{display:block}
 .item.locked{opacity:.55}
+.dot.done{background:var(--ok-soft);color:var(--ok);font-size:18px}
+.okt{color:var(--ok);font-weight:700}
 .seg{display:flex;background:var(--line);border-radius:12px;padding:3px;gap:3px}
 .seg button{flex:1;border:0;background:none;border-radius:9px;padding:8px 6px;font-weight:700;font-size:14px;color:var(--muted)}
 .seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}

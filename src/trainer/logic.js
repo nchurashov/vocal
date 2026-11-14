@@ -17,6 +17,18 @@ export function levelInfo(cat) {
   return { open, passed, prog: prog[open] || { conf: 0, days: 0 }, any, done3: passed === 3 };
 }
 export function isUnlocked(ex) { return ex.level <= levelInfo(ex.cat).open; }
+// «Пройдено» = хоть раз отмечено «Уверенно» (только по отметкам пользователя)
+export function exPassed(id) { return state.sessions.some(s => s.ex === id && s.rating === 3); }
+// следующее упражнение: сначала в том же разделе, потом в других; открытое и ещё не пройденное
+export function nextExercise(ex) {
+  const i = EXERCISES.indexOf(ex), order = EXERCISES.slice(i + 1).concat(EXERCISES.slice(0, i));
+  const ok = e => isUnlocked(e) && !exPassed(e.id);
+  return order.find(e => e.cat === ex.cat && ok(e)) || order.find(ok) || null;
+}
+export function catProgress(cat) {
+  const list = EXERCISES.filter(e => !cat || e.cat === cat);
+  return { done: list.filter(e => exPassed(e.id)).length, total: list.length };
+}
 export function srsUpdate(exId, rating) {
   const today = ymd(), cur = state.srs[exId] || { box: 0 };
   let box = cur.box, interval;

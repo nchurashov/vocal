@@ -9,7 +9,7 @@ import { lastRange } from '../features/register.js';
 import { songsAll } from '../features/songs.js';
 import { setMin, voiceDoneToday, voiceNext } from '../features/voice.js';
 import { doneToday, warmupMin } from '../features/warmup.js';
-import { NEED_CONF, NEED_DAYS, dueList, freshList, isUnlocked, levelInfo, pitchAssessment, streak } from '../trainer/logic.js';
+import { NEED_CONF, NEED_DAYS, dueList, exPassed, freshList, isUnlocked, levelInfo, pitchAssessment, streak } from '../trainer/logic.js';
 
 // ===== Экран: Сегодня =====
 export function levelCard(cat) {
@@ -24,10 +24,10 @@ export function levelCard(cat) {
     <div class="tiny muted">${next}</div></div>`;
 }
 export function exItem(e, sub) {
-  const locked = !isUnlocked(e);
-  return `<button class="item ${locked ? 'locked' : ''}" ${act('go', `ex-${e.id}`)}>
-    <div class="dot ${e.cat}">${e.level}</div>
-    <div class="t"><b>${esc(e.title)}</b><span class="small muted">${sub || esc(CATS[e.cat].name + ' · ' + e.min + ' мин')}</span>
+  const locked = !isUnlocked(e), done = exPassed(e.id);
+  return `<button class="item ${locked ? 'locked' : ''}${done ? ' passed' : ''}" ${act('go', `ex-${e.id}`)}>
+    <div class="dot ${done ? 'done' : e.cat}">${done ? '✓' : e.level}</div>
+    <div class="t"><b>${esc(e.title)}</b><span class="small muted">${done ? '<span class="okt">Пройдено</span> · ' : ''}${sub || esc(CATS[e.cat].name + ' · ' + e.min + ' мин')}</span>
     ${locked ? `<div class="lockline">🔒 Откроется после ${NEED_CONF} уверенных занятий уровня ${e.level - 1} за ${NEED_DAYS}+ дня</div>` : ''}</div>
     <span class="muted">›</span></button>`;
 }

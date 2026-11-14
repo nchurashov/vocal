@@ -1,13 +1,13 @@
 import { act, onChange } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
 import { ac, base, playNotes, playRhythm, stopAll, tone } from '../core/audio.js';
-import { afterHooks, go } from '../core/router.js';
+import { afterHooks, go, render } from '../core/router.js';
 import { save, state } from '../core/store.js';
-import { toast } from '../core/ui.js';
+import { closeSheet, sheet, toast } from '../core/ui.js';
 import { $, ICON, esc, nowLocal, plural, uid } from '../core/util.js';
 import { CATS, RATINGS, exById } from '../data/exercises.js';
 import { sessionRow } from '../screens/history.js';
-import { NEED_CONF, NEED_DAYS, isUnlocked, levelInfo, srsUpdate, suggestRating } from './logic.js';
+import { NEED_CONF, NEED_DAYS, catProgress, isUnlocked, levelInfo, nextExercise, srsUpdate, suggestRating } from './logic.js';
 import { recorderUI } from './recorder.js';
 import { tapUI } from './tap.js';
 
@@ -115,9 +115,27 @@ export function saveSession() {
   const days = run.ex.kind ? srsUpdate(ex.id, run.rating) : null;
   save();
   const after = levelInfo(s.cat).open;
-  if (after > before) toast(`Открыт уровень ${after} в разделе «${CATS[s.cat].name}». Прогресс зафиксирован!`);
-  else toast(days ? `Сохранено. Повторим ${days === 1 ? 'завтра' : 'через ' + days + ' ' + plural(days, 'день', 'дня', 'дней')}.` : 'Сохранено в историю.');
-  go(run.ex.kind ? 'today' : 'history');
+  if (!ex.kind) { toast('Сохранено в историю.'); go('history'); return; }
+  savedSheet(ex, s.rating, days, after > before ? after : 0);
+}
+// после сохранения: не выкидываем на «Сегодня», а предлагаем следующее упражнение
+export function savedSheet(ex, rating, days, newLevel) {
+  const passed = rating === 3, next = nextExercise(ex), li = levelInfo(ex.cat), pr = li.prog, cp = catProgress(ex.cat);
+  const rep = days ? `Повторим ${days === 1 ? 'завтра' : 'через ' + days + ' ' + plural(days, 'день', 'дня', 'дней')}.` : '';
+  let h = `<div class="row between"><h2>${passed ? '✓ Пройдено!' : 'Сохранено'}</h2><button class="iconbtn" ${act('closeSheet')}>×</button></div>`;
+  h += `<p style="margin:0">${passed ? `«${esc(ex.title)}» отмечено как пройденное.` : `Отметка «${RATINGS[rating].label}». Упражнение засчитается, когда получится уверенно.`} ${rep}</p>`;
+  if (newLevel) h += `<div class="info"><b>🎉 Открыт уровень ${newLevel} в разделе «${CATS[ex.cat].name}»!</b></div>`;
+  h += `<div class="small muted">«${CATS[ex.cat].name}»: пройдено ${cp.done} из ${cp.total}.${!li.done3 && li.open < 3 ? ` До уровня ${li.open + 1}: уверенно ${Math.min(pr.conf, NEED_CONF)} из ${NEED_CONF}, дней ${Math.min(pr.days, NEED_DAYS)} из ${NEED_DAYS}.` : ''}</div>`;
+  const nextBtn = next ? `<button class="btn block" ${act('afterSave', 'ex-' + next.id)}>${ICON.play} Дальше: ${esc(next.title)}</button>` : '';
+  const againBtn = `<button class="btn ${passed && next ? 'ghost ' : ''}block" ${act('afterSave', 'ex-' + ex.id)}>Ещё раз</button>`;
+  h += passed ? nextBtn + againBtn : againBtn + (next ? nextBtn.replace('class="btn block"', 'class="btn ghost block"') : '');
+  if (!next) h += `<div class="small muted">Все открытые упражнения пройдены. Новые откроются со следующим уровнем, а пройденные вернутся на повторение в «Сегодня».</div>`;
+  h += `<button class="btn ghost block" ${act('afterSave', 'today')}>На «Сегодня»</button>`;
+  sheet(h);
+}
+export function afterSave(r) {
+  closeSheet();
+  if (location.hash.slice(1) === r) { render(); scrollTo(0, 0); } else go(r);
 }
 
 // ===== Слух: квиз =====

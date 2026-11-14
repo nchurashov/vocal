@@ -124,6 +124,7 @@ registerActions({
   saveMelody: trainer_check.saveMelody,
   saveNote: screens_notes.saveNote,
   saveSession: trainer_exercise.saveSession,
+  afterSave: trainer_exercise.afterSave,
   selectMelody: trainer_check.selectMelody,
   setExFilter: trainer_exercises.setExFilter,
   setRating: trainer_exercise.setRating,

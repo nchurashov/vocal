@@ -30,7 +30,8 @@ export function readHash() {
   return ROUTES[h] || findPrefix(h) ? h : 'today';
 }
 export function go(r) { if (busy && leaveHook) leaveHook(); location.hash = r; }
-window.addEventListener('hashchange', () => { route = readHash(); render(); window.scrollTo(0, 0); });
+// при смене экрана окошко (sheet) закрывается: иначе оно висит поверх новой вкладки
+window.addEventListener('hashchange', () => { $('#sheet')?.remove(); route = readHash(); render(); window.scrollTo(0, 0); });
 // Кнопка «Назад» в Android-приложении (вызывает MainActivity.java): закрыть окошко, иначе прошлый экран.
 // false = мы на главном экране, приложение сворачивается как обычно.
 window.androidBack = () => {

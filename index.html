@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-fTAfpMqTB9VCs1Tb8UxoK0U7RA9Fu5HecGgjiPZzUZk='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-ipPl+JEYXW4MzcNWIqpI1q1FExOVBltpERQ82N1h8a4='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Вокал под бокал</title>
 <meta name="apple-mobile-web-app-title" content="Вокал под бокал"><meta name="description" content="Вокал под бокал: налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -68,6 +68,8 @@ h1{font-size:28px}h2{font-size:21px}h3{font-size:17px;font-family:'Manrope',sans
 .dot.rhythm{background:color-mix(in srgb,var(--rhythm) 15%,transparent);color:var(--rhythm)}
 .item .t{flex:1;min-width:0}.item .t b{display:block}
 .item.locked{opacity:.55}
+.dot.done{background:var(--ok-soft);color:var(--ok);font-size:18px}
+.okt{color:var(--ok);font-weight:700}
 .seg{display:flex;background:var(--line);border-radius:12px;padding:3px;gap:3px}
 .seg button{flex:1;border:0;background:none;border-radius:9px;padding:8px 6px;font-weight:700;font-size:14px;color:var(--muted)}
 .seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
@@ -748,6 +750,7 @@ details summary{cursor:pointer}
     location.hash = r;
   }
   window.addEventListener("hashchange", () => {
+    $("#sheet")?.remove();
     route = readHash();
     render();
     window.scrollTo(0, 0);
@@ -1695,6 +1698,7 @@ details summary{cursor:pointer}
     QUIZ_OPTS: () => QUIZ_OPTS,
     __set_quiz: () => __set_quiz,
     __set_run: () => __set_run,
+    afterSave: () => afterSave,
     answerQuiz: () => answerQuiz,
     drawQuiz: () => drawQuiz,
     intervalRefs: () => intervalRefs,
@@ -1713,6 +1717,7 @@ details summary{cursor:pointer}
     rollSVG: () => rollSVG,
     run: () => run,
     saveSession: () => saveSession,
+    savedSheet: () => savedSheet,
     setRating: () => setRating,
     setRun: () => setRun,
     startQuiz: () => startQuiz,
@@ -1728,10 +1733,13 @@ details summary{cursor:pointer}
   __export(logic_exports, {
     NEED_CONF: () => NEED_CONF,
     NEED_DAYS: () => NEED_DAYS,
+    catProgress: () => catProgress,
     dueList: () => dueList,
+    exPassed: () => exPassed,
     freshList: () => freshList,
     isUnlocked: () => isUnlocked,
     levelInfo: () => levelInfo,
+    nextExercise: () => nextExercise,
     pitchAssessment: () => pitchAssessment,
     srsUpdate: () => srsUpdate,
     streak: () => streak,
@@ -1756,6 +1764,18 @@ details summary{cursor:pointer}
   }
   function isUnlocked(ex) {
     return ex.level <= levelInfo(ex.cat).open;
+  }
+  function exPassed(id) {
+    return state.sessions.some((s) => s.ex === id && s.rating === 3);
+  }
+  function nextExercise(ex) {
+    const i = EXERCISES.indexOf(ex), order = EXERCISES.slice(i + 1).concat(EXERCISES.slice(0, i));
+    const ok = (e) => isUnlocked(e) && !exPassed(e.id);
+    return order.find((e) => e.cat === ex.cat && ok(e)) || order.find(ok) || null;
+  }
+  function catProgress(cat) {
+    const list = EXERCISES.filter((e) => !cat || e.cat === cat);
+    return { done: list.filter((e) => exPassed(e.id)).length, total: list.length };
   }
   function srsUpdate(exId, rating) {
     const today = ymd(), cur = state.srs[exId] || { box: 0 };
@@ -2771,9 +2791,33 @@ details summary{cursor:pointer}
     const days = run.ex.kind ? srsUpdate(ex.id, run.rating) : null;
     save();
     const after = levelInfo(s.cat).open;
-    if (after > before) toast(`Открыт уровень ${after} в разделе «${CATS[s.cat].name}». Прогресс зафиксирован!`);
-    else toast(days ? `Сохранено. Повторим ${days === 1 ? "завтра" : "через " + days + " " + plural(days, "день", "дня", "дней")}.` : "Сохранено в историю.");
-    go(run.ex.kind ? "today" : "history");
+    if (!ex.kind) {
+      toast("Сохранено в историю.");
+      go("history");
+      return;
+    }
+    savedSheet(ex, s.rating, days, after > before ? after : 0);
+  }
+  function savedSheet(ex, rating, days, newLevel) {
+    const passed = rating === 3, next = nextExercise(ex), li = levelInfo(ex.cat), pr = li.prog, cp = catProgress(ex.cat);
+    const rep = days ? `Повторим ${days === 1 ? "завтра" : "через " + days + " " + plural(days, "день", "дня", "дней")}.` : "";
+    let h = `<div class="row between"><h2>${passed ? "✓ Пройдено!" : "Сохранено"}</h2><button class="iconbtn" ${act("closeSheet")}>×</button></div>`;
+    h += `<p style="margin:0">${passed ? `«${esc(ex.title)}» отмечено как пройденное.` : `Отметка «${RATINGS[rating].label}». Упражнение засчитается, когда получится уверенно.`} ${rep}</p>`;
+    if (newLevel) h += `<div class="info"><b>🎉 Открыт уровень ${newLevel} в разделе «${CATS[ex.cat].name}»!</b></div>`;
+    h += `<div class="small muted">«${CATS[ex.cat].name}»: пройдено ${cp.done} из ${cp.total}.${!li.done3 && li.open < 3 ? ` До уровня ${li.open + 1}: уверенно ${Math.min(pr.conf, NEED_CONF)} из ${NEED_CONF}, дней ${Math.min(pr.days, NEED_DAYS)} из ${NEED_DAYS}.` : ""}</div>`;
+    const nextBtn = next ? `<button class="btn block" ${act("afterSave", "ex-" + next.id)}>${ICON.play} Дальше: ${esc(next.title)}</button>` : "";
+    const againBtn = `<button class="btn ${passed && next ? "ghost " : ""}block" ${act("afterSave", "ex-" + ex.id)}>Ещё раз</button>`;
+    h += passed ? nextBtn + againBtn : againBtn + (next ? nextBtn.replace('class="btn block"', 'class="btn ghost block"') : "");
+    if (!next) h += `<div class="small muted">Все открытые упражнения пройдены. Новые откроются со следующим уровнем, а пройденные вернутся на повторение в «Сегодня».</div>`;
+    h += `<button class="btn ghost block" ${act("afterSave", "today")}>На «Сегодня»</button>`;
+    sheet(h);
+  }
+  function afterSave(r) {
+    closeSheet();
+    if (location.hash.slice(1) === r) {
+      render();
+      scrollTo(0, 0);
+    } else go(r);
   }
   var rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
   var QUIZ_OPTS = {
@@ -6667,10 +6711,10 @@ details summary{cursor:pointer}
     <div class="tiny muted">${next}</div></div>`;
   }
   function exItem(e, sub) {
-    const locked = !isUnlocked(e);
-    return `<button class="item ${locked ? "locked" : ""}" ${act("go", `ex-${e.id}`)}>
-    <div class="dot ${e.cat}">${e.level}</div>
-    <div class="t"><b>${esc(e.title)}</b><span class="small muted">${sub || esc(CATS[e.cat].name + " · " + e.min + " мин")}</span>
+    const locked = !isUnlocked(e), done = exPassed(e.id);
+    return `<button class="item ${locked ? "locked" : ""}${done ? " passed" : ""}" ${act("go", `ex-${e.id}`)}>
+    <div class="dot ${done ? "done" : e.cat}">${done ? "✓" : e.level}</div>
+    <div class="t"><b>${esc(e.title)}</b><span class="small muted">${done ? '<span class="okt">Пройдено</span> · ' : ""}${sub || esc(CATS[e.cat].name + " · " + e.min + " мин")}</span>
     ${locked ? `<div class="lockline">🔒 Откроется после ${NEED_CONF} уверенных занятий уровня ${e.level - 1} за ${NEED_DAYS}+ дня</div>` : ""}</div>
     <span class="muted">›</span></button>`;
   }
@@ -6724,10 +6768,18 @@ details summary{cursor:pointer}
   var exFilter = "all";
   function viewExercises() {
     let h = `<h1>Упражнения</h1><button class="item sec" style="margin-top:14px" ${act("go", "voice")}><div class="dot ear">🗣️</div><div class="t"><b>Голос и речь</b><span class="small muted">${VOICE_SETS.length} комплексов: зажимы, дыхание, резонанс, дикция, карандаш, плавная речь, низкий голос, диапазон</span></div><span class="muted">›</span></button><div class="sec" style="margin-top:14px"><div class="seg">` + [["all", "Все"], ...Object.entries(CATS).map(([k, v]) => [k, v.name])].map(([k, n]) => `<button class="${exFilter === k ? "on" : ""}" ${act("setExFilter", k)}>${n}</button>`).join("") + `</div></div>`;
+    const cats = exFilter === "all" ? Object.keys(CATS) : [exFilter], all = catProgress(exFilter === "all" ? null : exFilter);
+    h += `<div class="card sec stack" style="gap:10px"><div class="row between"><b>Пройдено ${all.done} из ${all.total}</b><span class="small muted">${Math.round(100 * all.done / all.total)}%</span></div><div class="bar"><i style="width:${100 * all.done / all.total}%"></i></div>
+    ${cats.map((c) => {
+      const p = catProgress(c), li = levelInfo(c), pr = li.prog;
+      const lv = li.done3 ? "все уровни подтверждены" : `открыт уровень ${li.open}${li.open < 3 ? `, до ${li.open + 1}: уверенно ${Math.min(pr.conf, NEED_CONF)}/${NEED_CONF}, дней ${Math.min(pr.days, NEED_DAYS)}/${NEED_DAYS}` : ""}`;
+      return `<div class="small"><span class="chip ${c}">${CATS[c].name}</span> ${p.done} из ${p.total} <span class="muted">· ${lv}</span></div>`;
+    }).join("")}</div>`;
     for (const L of [1, 2, 3]) {
       const list = EXERCISES.filter((e) => e.level === L && (exFilter === "all" || e.cat === exFilter));
       if (!list.length) continue;
-      h += `<div class="sec"><h2>Уровень ${L}</h2>${list.map((e) => {
+      const dn = list.filter((e) => exPassed(e.id)).length;
+      h += `<div class="sec"><h2>Уровень ${L} <span class="small muted" style="font-weight:600">${dn ? `✓ ${dn} из ${list.length}` : ""}</span></h2>${list.map((e) => {
         const s = state.srs[e.id];
         return exItem(e, s ? `${CATS[e.cat].name} · последний раз: ${RATINGS[s.lastRating].label.toLowerCase()}` : null);
       }).join("")}</div>`;
@@ -7003,6 +7055,7 @@ details summary{cursor:pointer}
     saveMelody,
     saveNote,
     saveSession,
+    afterSave,
     selectMelody,
     setExFilter,
     setRating,
