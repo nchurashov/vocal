@@ -8,6 +8,7 @@ import { $, ICON, esc, nowLocal, plural, setBusy, uid } from '../core/util.js';
 import { BUILTIN_SONGS } from '../data/songs.js';
 import { camOn, camRecStop, camRecording, camSession, camStart, camToggleHTML } from './cam.js';
 import { lastRange } from './register.js';
+import { sgamePlay, sgamePreview, sgameSetup, sgameStop } from './songgame.js';
 import { midiCandidates, normalizeSong, parseMidi, phraseNotes, phraseWords, songFromMidi, songFromSegs, songScorer, songShift, songTargets } from './songlib.js';
 
 // ===== Песни: маршруты #songs (список, добавить свою) и #song-<id> (разучивание) =====
@@ -44,6 +45,7 @@ export function shiftText(sh) {
 
 export let SG = null;
 export function songStop() {
+  sgameStop();
   if (!SG) return;
   (SG.timers || []).forEach(clearTimeout); SG.timers = []; stopAll(); SG.playing = false; SG.win = null; cancelAnimationFrame(SG.raf);
   if (SG.stream) { SG.stream.getTracks().forEach(t => t.stop()); SG.stream = null; afterMic(); }
@@ -232,7 +234,7 @@ function playNotes(notes, shift, tempo, when) {
 export function viewSong(id) {
   songStop();
   const s = songById(id);
-  SG = { s, k: 0, mode: MIC_DIRECT && state.settings.songMode === 'whole' ? 'whole' : 'phrase', res: {}, timers: [], tries: 0 };
+  SG = { s, k: 0, mode: MIC_DIRECT && ['whole', 'game'].includes(state.settings.songMode) ? state.settings.songMode : 'phrase', res: {}, timers: [], tries: 0 };
   const p = (state.songs || {})[s.id]; if (p) { const k = s.ph.findIndex((_, i) => (p.ph[i] || 0) < 80); SG.k = k < 0 ? 0 : k; }
   afterHooks.push(songDraw); afterHooks.push(() => { if (camOn()) camStart(); });
   const sh = songShiftOf(s), ms = s.notes.map(n => n.m), r = lastRange(), tp = songTempo();
@@ -243,8 +245,8 @@ export function viewSong(id) {
         <button class="iconbtn" ${act('songShiftBy', -1)} title="Ниже">−</button><button class="iconbtn" ${act('songShiftBy', 1)} title="Выше">+</button></div>
       <div class="tiny muted" style="margin-top:-6px">${r ? `Подобрал под твой диапазон ${noteShort(songWin()[0])} - ${noteShort(songWin()[1])}.` : `Подобрал рядом с ${noteShort(base())}. <a href="#range">Замерь диапазон</a>, чтобы песня встала точно под голос.`} Неудобно - сдвинь на полутон.</div>
       <div class="seg"><button class="${tp < 1 ? 'on' : ''}" ${act('songSetTempo', .75)}>Медленно</button><button class="${tp >= 1 ? 'on' : ''}" ${act('songSetTempo', 1)}>Как в песне</button></div>
-      ${MIC_DIRECT ? `<div class="seg"><button class="${SG.mode === 'phrase' ? 'on' : ''}" ${act('songSetMode', 'phrase')}>По фразам</button><button class="${SG.mode === 'whole' ? 'on' : ''}" ${act('songSetMode', 'whole')}>Целиком</button></div>
-      <div class="tiny muted" style="margin-top:-6px">${SG.mode === 'phrase' ? 'Пианино играет фразу, потом тишина: повтори. Чисто - идём дальше, нет - ещё раз.' : 'Пианино даёт первую ноту, дальше поёшь всю песню сам, без подсказки. Микрофон идёт за тобой по нотам.'}</div>` : '<div class="tiny muted">Здесь микрофон закрыт: можно слушать фразы и подпевать. Проверка нот - на сайте или в приложении.</div>'}
+      ${MIC_DIRECT ? `<div class="seg"><button class="${SG.mode === 'phrase' ? 'on' : ''}" ${act('songSetMode', 'phrase')}>По фразам</button><button class="${SG.mode === 'whole' ? 'on' : ''}" ${act('songSetMode', 'whole')}>Целиком</button><button class="${SG.mode === 'game' ? 'on' : ''}" ${act('songSetMode', 'game')}>Игра</button></div>
+      <div class="tiny muted" style="margin-top:-6px">${SG.mode === 'phrase' ? 'Пианино играет фразу, потом тишина: повтори. Чисто - идём дальше, нет - ещё раз.' : SG.mode === 'game' ? 'Ноты падают на клавиши пианино. Нота коснулась клавиш - пой её. Голос зажигает клавишу: зелёная - попал.' : 'Пианино даёт первую ноту, дальше поёшь всю песню сам, без подсказки. Микрофон идёт за тобой по нотам.'}</div>` : '<div class="tiny muted">Здесь микрофон закрыт: можно слушать фразы и подпевать. Проверка нот - на сайте или в приложении.</div>'}
     </div>
     ${camToggleHTML()}
     <div id="sgbox" class="sec"></div>
@@ -272,6 +274,17 @@ function songKeysDraw() { const el = $('#sgkeys'); if (el && SG && SG.mode === '
 export function songDraw() {
   const box = $('#sgbox'); if (!box || !SG || !SG.s) return;
   const s = SG.s, sh = songShiftOf(s);
+  if (SG.mode === 'game') {
+    const p = (state.songs || {})[s.id];
+    box.innerHTML = `<div class="card stack" style="padding:10px"><div class="tiny muted">Вся песня, ноты падают сверху${p && p.game ? ` · лучший результат ${p.game}%` : ''}</div>
+      <div class="gstage"><canvas id="sgcv"></canvas></div>
+      <div class="row"><button class="btn" style="flex:1" id="sgplay" ${act('songGamePlay')}>${ICON.play} Играть</button><button class="btn ghost" id="sgprev" ${act('songGamePreview')}>Послушать</button></div>
+      <div class="tiny muted">Пока играешь, пианино молчит: прозвучит только первая нота и отсчёт. Точка над клавишами - твой голос: левее центра клавиши - ниже, правее - выше. Лучше в наушниках.</div>
+      <div id="sgres"></div></div>
+      <div class="sec">${phraseChips()}</div>`;
+    sgameSetup(s, sh, songTempo(), songGameDone);
+    return;
+  }
   if (SG.mode === 'whole') {
     const p = (state.songs || {})[s.id], r = SG.res.whole;
     box.innerHTML = `<div class="card stack"><div class="tiny muted">Вся песня${p && p.whole ? ` · лучший результат ${p.whole}%` : ''}</div>
@@ -292,6 +305,20 @@ export function songDraw() {
     <div id="sgnow" class="small" style="min-height:20px">${r ? (r.ok ? `<b style="color:var(--ok)">Чисто: ${r.nn} из ${r.nt} нот</b>` : `<b style="color:var(--near)">${r.nn} из ${r.nt} нот.</b> ${esc(r.miss || '')}`) : ''}</div>
     <div class="row"><button class="btn" style="flex:1" id="sgplay" ${act('songPlay')}>${SG.playing ? ICON.stop + ' Пауза' : ICON.play + (MIC_DIRECT ? (r ? ' Ещё раз' : ' Начать') : ' Послушать')}</button><button class="btn ghost" ${act('songNext')}>Дальше ›</button></div></div>
     <div class="sec">${phraseChips()}</div>`;
+}
+// итог песни-игры: лучший результат, фразы засчитываются как в «Целиком» (спета в игре - выучена)
+function songGameDone(r) {
+  if (!SG || !SG.s) return;
+  const s = SG.s, p = prog(s.id); p.plays = (p.plays || 0) + 1; p.last = nowLocal();
+  const rec = r.pct > (p.game || 0); p.game = Math.max(p.game || 0, r.pct);
+  s.ph.forEach((a, k) => { const b = k + 1 < s.ph.length ? s.ph[k + 1] : s.notes.length; let n = 0; for (let i = a; i < b; i++) if (r.hit[i]) n++; p.ph[k] = Math.max(p.ph[k] || 0, Math.round(100 * n / (b - a))); });
+  save();
+  const el = $('#sgres'); if (!el) return;
+  el.innerHTML = `<div class="stack" style="text-align:center;margin-top:6px"><div style="font:600 34px Lora,serif">${r.pct}%</div>
+    <div class="small muted">нот попал: ${r.hits} из ${r.total} · лучшая серия ${r.maxCombo}${rec && r.pct ? ' · новый рекорд!' : ''}</div>
+    ${r.miss.length ? `<div class="small">Чаще мимо: ${r.miss.map(([n, k]) => `${n}${k > 1 ? ' ×' + k : ''}`).join(', ')}</div>` : '<div class="small" style="color:var(--ok)"><b>Все ноты чисто!</b></div>'}
+    ${r.pct < 50 ? `<div class="note small">Сложно с ходу - включи «Медленно» или разучи трудные места «По фразам».</div>` : ''}</div>`;
+  const ch = $('#sgbox .sec'); if (ch) ch.innerHTML = phraseChips();
 }
 // микрофон: открывается один раз на всё занятие
 export async function songEnsureMic() {
@@ -400,6 +427,9 @@ export function songFinish() {
     if (camRecording()) camRecStop(`${learned(s)} из ${s.ph.length} фраз`);
   }
 }
+
+export const songGamePlay = () => sgamePlay();
+export const songGamePreview = () => sgamePreview();
 
 // установщики для моста window (переходный период, см. main.js)
 export function __set_SG(v) { SG = v; }

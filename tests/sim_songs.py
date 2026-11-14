@@ -20,6 +20,21 @@ SINGER = """window.__sing = 'good'; (function loop() {
     for (const x of w.T) { if (rel < x.d * .95) { m = rel >= 0 ? x.m + sh + .12 * Math.sin(now * 35) + (window.__sing === 'bad' ? .7 : 0) : null; break; } rel -= x.d; }
     songFrame(now, m); }
   requestAnimationFrame(loop); })()"""
+# песня-игра (ноты падают на клавиши): шаг игры sgameStep на имитации живого голоса, как в sim_game.py
+# [опоздание с, скольжение с, вибрато, сдвиг всей мелодии, каждая 4-я нота мимо на, пианино из динамика перед стартом]
+GSIM = """(([lat, glide, vib, shift, wrong, leak]) => {
+  sgameReset(); GS.mode = 'live';
+  const ons = GS.tl.map(n => ({ s: n.m + (n.i % 4 === 1 ? wrong : 0), t0: n.start, t1: n.end }));
+  let now = -2; const dt = 1/60, h = [];
+  while (now < GS.D + .4) { let v = null;
+    for (let i = 0; i < ons.length; i++) { const o = ons[i], n = ons[i+1], end = n && n.t0 - o.t1 < .1 ? n.t0 : o.t1;
+      if (now >= o.t0 + lat && now < end + lat) { const p = i > 0 && o.t0 - ons[i-1].t1 < .1 ? ons[i-1].s : o.s, k = Math.min(1, Math.max(0, (now - (o.t0 + lat)) / glide));
+        v = p + (o.s - p) * k + vib * Math.sin(now * 2 * Math.PI * 5.5) + shift; break; } }
+    if (v == null && leak && now < 0 && now > -1.8) v = ons[0].s;
+    h.push(v); sgameStep(now, dt, h.length > 6 ? h[h.length - 6] : null); now += dt; }
+  sgameFinish(false); return GS.res.pct; })"""
+GFAIR = {'вовремя': [.08, .06, .15, 0, 0, 0], 'опоздание 0.15с': [.15, .1, .2, 0, 0, 0], 'раньше 0.1с': [-.1, .06, .15, 0, 0, 0],
+         'октавой выше, динамик слышен': [.08, .06, .15, 12, 0, 1], 'октавой ниже': [.08, .06, .15, -12, 0, 0]}
 fails = []
 with sync_playwright() as p:
     br = p.chromium.launch(executable_path=CHROME, args=['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', f'--use-file-for-fake-audio-capture={SIL}', '--autoplay-policy=no-user-gesture-required'])
@@ -69,6 +84,35 @@ with sync_playwright() as p:
     pg.click('#sgbox button:has-text("Готово")'); pg.wait_for_timeout(300)
     if pg.evaluate("state.songs['b-ode'].whole") > 20: fails.append('целиком: фальшь дала высокий результат %s%%' % pg.evaluate("state.songs['b-ode'].whole"))
     pg.evaluate("window.__sing = 'off'; state.settings.songMode = 'phrase'; save()")
+    # --- игра: ноты падают на клавиши; честность на всех встроенных песнях и в медленном темпе
+    for tp in (1, .75):
+        pg.evaluate(f"state.settings.songMode = 'game'; state.settings.songTempo = {tp}; save()")
+        for sid in pg.evaluate("BUILTIN_SONGS.map(s => s.id)"):
+            pg.goto(URL + '#song-' + sid); pg.wait_for_timeout(250)
+            if not pg.evaluate("!!document.querySelector('#sgcv') && GS && GS.tl.length === SG.s.notes.length"): fails.append(f'игра {sid}: нет поля с падающими нотами'); continue
+            for name, a in GFAIR.items():
+                acc = pg.evaluate(GSIM, a)
+                if acc < 85: fails.append(f'игра {sid} темп {tp} {name}: {acc}% (честный певец не прошёл)')
+            acc = pg.evaluate(GSIM, [.08, .06, .1, 1, 0, 0])
+            if acc >= 20: fails.append(f'игра {sid}: на полутон мимо дало {acc}%')
+            acc = pg.evaluate(GSIM, [.08, .06, .15, 0, 2, 0])
+            if not 60 <= acc <= 85: fails.append(f'игра {sid}: каждая 4-я нота мимо дала {acc}% (ждали около 75%)')
+    pg.evaluate("state.settings.songTempo = 1; save()"); pg.goto(URL + '#song-b-twinkle'); pg.wait_for_timeout(300)
+    pg.evaluate(GSIM, GFAIR['вовремя'])
+    if pg.evaluate("(state.songs['b-twinkle'] || {}).game") != 100: fails.append('игра: лучший результат не сохранился')
+    if 'нот попал' not in pg.inner_text('#sgres'): fails.append('игра: нет итога под полем')
+    pg.evaluate(GSIM, [.08, .06, .15, 0, 2, 0])
+    if 'Чаще мимо' not in pg.inner_text('#sgres'): fails.append('игра: не показано, какие ноты мимо')
+    # живой запуск с микрофоном и остановка: микрофон закрывается, игра сбрасывается
+    pg.click('#sgplay'); pg.wait_for_timeout(1500)
+    if pg.evaluate("GS.mode") != 'live': fails.append('игра: «Играть» не запустило живую игру')
+    pg.click('#sgplay'); pg.wait_for_timeout(300)
+    if pg.evaluate("GS.mode !== 'idle' || !!GS.stream || busy"): fails.append('игра: «Стоп» не закрыл микрофон')
+    pg.click('#sgprev'); pg.wait_for_timeout(800)
+    if pg.evaluate("GS.mode") != 'preview': fails.append('игра: «Послушать» не запустилось')
+    pg.goto(URL + '#songs'); pg.wait_for_timeout(300)
+    if pg.evaluate("!!GS"): fails.append('игра не остановилась при уходе с экрана')
+    pg.evaluate("state.settings.songMode = 'phrase'; save()")
     # --- тональность: под низкий голос октавой ниже, кнопки сдвигают
     pg.evaluate("state.range = [{date: '2026-11-01T10:00:00', lo: 40, hi: 64}]; save()")
     pg.goto(URL + '#song-b-twinkle'); pg.wait_for_timeout(300)
