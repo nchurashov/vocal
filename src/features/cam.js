@@ -2,7 +2,7 @@ import { act, onChange } from '../core/actions.js';
 import { MIC_DIRECT, afterMic, openMic } from '../core/audio.js';
 import { profName, save, state } from '../core/store.js';
 import { sheet, toast } from '../core/ui.js';
-import { $, busy, nowLocal } from '../core/util.js';
+import { $, busy, esc, nowLocal } from '../core/util.js';
 
 // ===== Камера: снять себя во время уровня и поделиться видео =====
 // Видео 9:16 (720x1280): сверху фронтальная камера (зеркально) на 2/3, снизу игра на 1/3, внизу плашка с адресом сайта.
@@ -47,29 +47,27 @@ export async function camStart(force) {
   let v = $('#campv');
   if (!v) { v = document.createElement('video'); v.id = 'campv'; v.className = 'campv'; v.muted = true; v.setAttribute('playsinline', ''); v.setAttribute('autoplay', ''); document.body.appendChild(v); }
   v.srcObject = CAM.stream; try { await v.play(); } catch (e) { }
-  CAM.video = v; CAM.frameAt = performance.now();
+  CAM.video = v; CAM.frameAt = performance.now(); camTrackLog(CAM.stream);
   // отметка каждого нового кадра камеры - по ней сторож видит, что картинка замерла
-  if (v.requestVideoFrameCallback && !v._rvfc) { v._rvfc = true; const tick = () => { CAM.frameAt = performance.now(); if (v.isConnected) v.requestVideoFrameCallback(tick); }; v.requestVideoFrameCallback(tick); }
+  if (v.requestVideoFrameCallback && !v._rvfc) { v._rvfc = true; const tick = () => { CAM.frameAt = performance.now(); CAM.frames = (CAM.frames || 0) + 1; if (v.isConnected) v.requestVideoFrameCallback(tick); }; v.requestVideoFrameCallback(tick); }
   return true;
 }
-// сторож камеры во время записи: iOS бывает останавливает поток камеры (картинка замирает, звук идёт).
-// Нет новых кадров 1.5 с - пинаем превью, 3 с - заново открываем камеру; запись при этом не прерывается.
+// диагностика записи (временно, пока ищем, почему на iPhone видео замирает на ~20 с): события с секундой от начала записи
+export function camLog(msg) {
+  const R = CAM.rec; if (!R || R.state === 'finished' || !R.d) return;
+  if (R.d.ev.length < 14) R.d.ev.push(((performance.now() - R.t0) / 1000).toFixed(1) + ' ' + msg);
+}
+function camTrackLog(stream) {
+  (stream ? stream.getVideoTracks() : []).forEach(t => { t.onmute = () => camLog('камера mute'); t.onunmute = () => camLog('камера unmute'); t.onended = () => camLog('камера ended'); });
+}
+// наблюдатель камеры во время записи: только отмечает, что кадры камеры не приходят 3 с, и пинает остановленное превью.
+// Камеру НЕ переоткрываем: на iPhone повторный getUserMedia во время игры сбивал микрофон и игра не запускалась.
 export function camWatch(now) {
-  const v = CAM.video; if (!v || !CAM.stream || CAM.fixing) return;
+  const v = CAM.video, R = CAM.rec; if (!v || !CAM.stream || !R || !R.d) return;
   if (!v.requestVideoFrameCallback && v.currentTime !== CAM.vt) { CAM.vt = v.currentTime; CAM.frameAt = now; }
   const idle = now - (CAM.frameAt || now);
   if (idle > 1500 && v.paused) { const r = v.play(); if (r && r.catch) r.catch(() => { }); }
-  if (idle > 3000) camRestart();
-}
-export async function camRestart() {
-  if (CAM.fixing || !CAM.stream) return; CAM.fixing = true;
-  CAM.stream.getTracks().forEach(t => t.stop());
-  try {
-    const s = await navigator.mediaDevices.getUserMedia(CAM_VIDEO);
-    if (!CAM.video) { s.getTracks().forEach(t => t.stop()); return; } // камеру уже выключили
-    CAM.stream = s; CAM.video.srcObject = s; try { await CAM.video.play(); } catch (e) { }
-    CAM.restarts = (CAM.restarts || 0) + 1;
-  } catch (e) { } finally { CAM.fixing = false; CAM.frameAt = performance.now(); }
+  if (idle > 3000 && !R.d.stall) { R.d.stall = true; camLog('кадров камеры нет 3 с'); } else if (idle < 500 && R.d.stall) { R.d.stall = false; camLog('кадры камеры снова идут'); }
 }
 // камеру выключаем при уходе с экрана (render) и по переключателю; идущая запись сначала дописывается
 export function camOff() {
@@ -81,7 +79,12 @@ export function camOff() {
 export const camRecording = () => !!(CAM.rec && CAM.rec.state === 'rec');
 // запись: canvasSel - селектор холста игры ИЛИ функция-карточка () => ({ top, big, sub }) для упражнений;
 // title - подпись сверху, micStream - поток микрофона
+// запись никогда не должна мешать игре: любая ошибка камеры - без видео, но игра идёт
 export function camRecStart(canvasSel, title, micStream) {
+  try { camRecStart0(canvasSel, title, micStream); }
+  catch (e) { try { CAM.rec && CAM.rec.mr && CAM.rec.mr.stop(); } catch (e2) { } CAM.rec = null; }
+}
+function camRecStart0(canvasSel, title, micStream) {
   if (!camOn() || !CAM.stream || !CAM.video || (CAM.rec && CAM.rec.state === 'rec')) return;
   const W = 720, H = 1280, out = document.createElement('canvas'); out.width = W; out.height = H;
   const g = out.getContext('2d'), vs = out.captureStream(30);
@@ -89,21 +92,29 @@ export function camRecStart(canvasSel, title, micStream) {
   const au = camAudio(micStream); tracks.push(...au.tracks);
   const ms = new MediaStream(tracks), mime = camMime(), chunks = [];
   let mr; try { mr = new MediaRecorder(ms, mime ? { mimeType: mime, videoBitsPerSecond: 1600000 } : undefined); } catch (e) { return; }
-  const R = CAM.rec = { state: 'rec', mr, out, g, tracks, title, canvasSel, outro: null, t0: performance.now(), mime: mr.mimeType || mime || 'video/webm' };
+  const R = CAM.rec = { state: 'rec', mr, out, g, tracks, title, canvasSel, outro: null, t0: performance.now(), mime: mr.mimeType || mime || 'video/webm',
+    d: { ev: [], draws: 0, gap: 0, gapAt: 0, cam0: CAM.frames || 0, sampAt: 0, sig: null, same: 0 } };
+  const vt = vs.getVideoTracks()[0]; if (vt) { vt.onmute = () => camLog('холст mute'); vt.onended = () => camLog('холст ended'); }
+  mr.onerror = e => camLog('запись: ошибка ' + (e && e.error && e.error.name));
+  R.vis = () => camLog('страница ' + document.visibilityState); document.addEventListener('visibilitychange', R.vis);
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.onstop = () => {
-    R.state = 'finished'; cancelAnimationFrame(R.raf); clearInterval(R.iv); try { R.wake?.release(); } catch (e) { } tracks.forEach(t => t.stop()); au.close();
+    R.diag = camDiag(R); document.removeEventListener('visibilitychange', R.vis);
+    R.state = 'finished'; cancelAnimationFrame(R.raf); clearInterval(R.iv); tracks.forEach(t => t.stop()); au.close();
     if (CAM.mic && !busy) { CAM.mic.getTracks().forEach(t => t.stop()); CAM.mic = null; afterMic(); }
     if (!chunks.length || R.discard) return;
     const blob = new Blob(chunks, { type: R.mime.split(';')[0] });
-    const clip = { blob, url: URL.createObjectURL(blob), title: R.title, outro: R.outro, date: nowLocal(), ext: R.mime.includes('mp4') ? 'mp4' : 'webm' };
+    const clip = { blob, url: URL.createObjectURL(blob), title: R.title, outro: R.outro, date: nowLocal(), ext: R.mime.includes('mp4') ? 'mp4' : 'webm', diag: R.diag };
     CAM.clips.push(clip); if (CAM.clips.length > 5) URL.revokeObjectURL(CAM.clips.shift().url);
     camShow(clip);
   };
   const draw = () => {
     if (R.state === 'finished') return;
     cancelAnimationFrame(R.raf); R.raf = requestAnimationFrame(draw);
-    const now = performance.now(); R.drawAt = now; camWatch(now);
+    const now = performance.now(), D = R.d;
+    if (R.drawAt && now - R.drawAt > D.gap) { D.gap = now - R.drawAt; D.gapAt = R.drawAt - R.t0; }
+    R.drawAt = now; D.draws++; camWatch(now);
+    if (now - D.sampAt > 1000) { D.sampAt = now; camSample(D); }
     // камера сверху на 2/3, игра снизу на 1/3 (над плашкой бренда)
     const area = H - 96, camH = Math.round(area * .67);
     camFrame(g, W, H, R.title, R.outro, camH);
@@ -118,8 +129,23 @@ export function camRecStart(canvasSel, title, micStream) {
   draw();
   // страховка: если кадры анимации перестали приходить, рисуем по таймеру - видео не замирает
   R.iv = setInterval(() => { if (R.state === 'finished') return clearInterval(R.iv); if (performance.now() - R.drawAt > 150) draw(); }, 100);
-  try { navigator.wakeLock?.request('screen').then(l => { if (R.state === 'finished') l.release(); else R.wake = l; }).catch(() => { }); } catch (e) { }
   mr.start(); // одним куском: так Safari правильно пишет длительность mp4
+}
+// раз в секунду: меняется ли картинка камеры на самом деле (крошечный снимок 8x8)
+function camSample(D) {
+  const v = CAM.video; if (!v || !v.videoWidth) return;
+  try {
+    const c = D.sc || (D.sc = Object.assign(document.createElement('canvas'), { width: 8, height: 8 })), x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(v, 0, 0, 8, 8); const px = x.getImageData(0, 0, 8, 8).data; let sig = '';
+    for (let i = 0; i < px.length; i += 4) sig += px[i] + ',' + px[i + 1] + ',';
+    if (sig === D.sig) { if (++D.same === 2) camLog('картинка камеры не меняется'); }
+    else { if (D.same >= 2) camLog('картинка камеры снова живая'); D.same = 0; }
+    D.sig = sig;
+  } catch (e) { }
+}
+function camDiag(R) {
+  const D = R.d, t = ms => (ms / 1000).toFixed(1), dur = performance.now() - R.t0;
+  return `${t(dur)} с, ${R.mime.split(';')[0]} · холст: ${D.draws} кадров (${(D.draws / dur * 1000).toFixed(0)}/с), самая длинная пауза ${t(D.gap)} с на ${t(D.gapAt)} с · камера: ${(CAM.frames || 0) - D.cam0} кадров${CAM.video && CAM.video.requestVideoFrameCallback ? '' : ' (счёт недоступен)'}, последний на ${t((CAM.frameAt || 0) - R.t0)} с · ${D.ev.join(' · ') || 'событий нет'}`;
 }
 // стоп: outro - крупный итог на 2.5 с перед концом видео
 export function camRecStop(outro, now) {
@@ -242,7 +268,8 @@ export function camShow(clip) {
       <div class="row"><button class="btn" style="flex:1" ${act('camShare', i)}>Отправить</button></div>`
     : `<div class="row"><button class="btn" style="flex:1" ${act('camShare', i)}>📥 В Фото</button><button class="btn ghost" style="flex:1" ${act('camShare', i)}>Отправить</button></div>
       <div class="tiny muted">На iPhone откроется меню: выбери «Сохранить видео», и оно окажется в Фото. Сразу без меню сохраняет только приложение «Вокал под бокал».</div>`}
-    <div class="tiny muted">Видео есть только у тебя в телефоне. Если не сохранить, после закрытия страницы оно пропадёт.</div>`);
+    <div class="tiny muted">Видео есть только у тебя в телефоне. Если не сохранить, после закрытия страницы оно пропадёт.</div>
+    ${clip.diag ? `<div class="tiny muted" style="user-select:text;-webkit-user-select:text">🔧 Для отладки: ${esc(clip.diag)}</div>` : ''}`);
   if (nat && !clip.saved && clip.autoSave !== false) camSaveNative(clip);
 }
 export async function camShare(i) {
