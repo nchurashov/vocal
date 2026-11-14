@@ -34,10 +34,11 @@ export function camToggleHTML() {
     <div id="camerr" class="small" style="color:var(--bad)"></div>`;
 }
 export async function camSet(on) { state.settings.cam = !!on; save(); if (on) await camStart(); else camOff(); }
+const CAM_VIDEO = { video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } }, audio: false };
 export async function camStart(force) {
   if ((!camOn() && !force) || CAM.stream) return !!CAM.stream;
   try {
-    CAM.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } }, audio: false });
+    CAM.stream = await navigator.mediaDevices.getUserMedia(CAM_VIDEO);
   } catch (e) {
     const el = $('#camerr'); if (el) el.textContent = 'Нет доступа к камере. В Safari: «аА» слева от адреса → «Настройки веб-сайта» → «Камера» → «Разрешить».';
     return false;
@@ -46,8 +47,29 @@ export async function camStart(force) {
   let v = $('#campv');
   if (!v) { v = document.createElement('video'); v.id = 'campv'; v.className = 'campv'; v.muted = true; v.setAttribute('playsinline', ''); v.setAttribute('autoplay', ''); document.body.appendChild(v); }
   v.srcObject = CAM.stream; try { await v.play(); } catch (e) { }
-  CAM.video = v;
+  CAM.video = v; CAM.frameAt = performance.now();
+  // отметка каждого нового кадра камеры - по ней сторож видит, что картинка замерла
+  if (v.requestVideoFrameCallback && !v._rvfc) { v._rvfc = true; const tick = () => { CAM.frameAt = performance.now(); if (v.isConnected) v.requestVideoFrameCallback(tick); }; v.requestVideoFrameCallback(tick); }
   return true;
+}
+// сторож камеры во время записи: iOS бывает останавливает поток камеры (картинка замирает, звук идёт).
+// Нет новых кадров 1.5 с - пинаем превью, 3 с - заново открываем камеру; запись при этом не прерывается.
+export function camWatch(now) {
+  const v = CAM.video; if (!v || !CAM.stream || CAM.fixing) return;
+  if (!v.requestVideoFrameCallback && v.currentTime !== CAM.vt) { CAM.vt = v.currentTime; CAM.frameAt = now; }
+  const idle = now - (CAM.frameAt || now);
+  if (idle > 1500 && v.paused) { const r = v.play(); if (r && r.catch) r.catch(() => { }); }
+  if (idle > 3000) camRestart();
+}
+export async function camRestart() {
+  if (CAM.fixing || !CAM.stream) return; CAM.fixing = true;
+  CAM.stream.getTracks().forEach(t => t.stop());
+  try {
+    const s = await navigator.mediaDevices.getUserMedia(CAM_VIDEO);
+    if (!CAM.video) { s.getTracks().forEach(t => t.stop()); return; } // камеру уже выключили
+    CAM.stream = s; CAM.video.srcObject = s; try { await CAM.video.play(); } catch (e) { }
+    CAM.restarts = (CAM.restarts || 0) + 1;
+  } catch (e) { } finally { CAM.fixing = false; CAM.frameAt = performance.now(); }
 }
 // камеру выключаем при уходе с экрана (render) и по переключателю; идущая запись сначала дописывается
 export function camOff() {
@@ -70,7 +92,7 @@ export function camRecStart(canvasSel, title, micStream) {
   const R = CAM.rec = { state: 'rec', mr, out, g, tracks, title, canvasSel, outro: null, t0: performance.now(), mime: mr.mimeType || mime || 'video/webm' };
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.onstop = () => {
-    R.state = 'finished'; cancelAnimationFrame(R.raf); tracks.forEach(t => t.stop()); au.close();
+    R.state = 'finished'; cancelAnimationFrame(R.raf); clearInterval(R.iv); try { R.wake?.release(); } catch (e) { } tracks.forEach(t => t.stop()); au.close();
     if (CAM.mic && !busy) { CAM.mic.getTracks().forEach(t => t.stop()); CAM.mic = null; afterMic(); }
     if (!chunks.length || R.discard) return;
     const blob = new Blob(chunks, { type: R.mime.split(';')[0] });
@@ -80,7 +102,8 @@ export function camRecStart(canvasSel, title, micStream) {
   };
   const draw = () => {
     if (R.state === 'finished') return;
-    R.raf = requestAnimationFrame(draw);
+    cancelAnimationFrame(R.raf); R.raf = requestAnimationFrame(draw);
+    const now = performance.now(); R.drawAt = now; camWatch(now);
     // камера сверху на 2/3, игра снизу на 1/3 (над плашкой бренда)
     const area = H - 96, camH = Math.round(area * .67);
     camFrame(g, W, H, R.title, R.outro, camH);
@@ -93,6 +116,9 @@ export function camRecStart(canvasSel, title, micStream) {
     g.textAlign = 'left';
   };
   draw();
+  // страховка: если кадры анимации перестали приходить, рисуем по таймеру - видео не замирает
+  R.iv = setInterval(() => { if (R.state === 'finished') return clearInterval(R.iv); if (performance.now() - R.drawAt > 150) draw(); }, 100);
+  try { navigator.wakeLock?.request('screen').then(l => { if (R.state === 'finished') l.release(); else R.wake = l; }).catch(() => { }); } catch (e) { }
   mr.start(); // одним куском: так Safari правильно пишет длительность mp4
 }
 // стоп: outro - крупный итог на 2.5 с перед концом видео
