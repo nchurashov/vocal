@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-FDaYD/5LBMeaL+OlDuq78b7ib2+R3p91YiV2CPXMops='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-tFq8llrJyIxMqtqLzFbVqP/+88flyQ73ubQzC36cKIw='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Вокал под бокал</title>
 <meta name="apple-mobile-web-app-title" content="Вокал под бокал"><meta name="description" content="Вокал под бокал: налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2750,14 +2750,14 @@ details summary{cursor:pointer}
     majmin: ["Мажор", "Минор"]
   };
   function makeQ(ex) {
-    const b = base() + rnd(0, 7), sp = ex.spread || [2, 4];
+    const b = base() + rnd(0, 7), sp2 = ex.spread || [2, 4];
     switch (ex.quiz) {
       case "updown": {
-        const up = Math.random() < 0.5, d = rnd(sp[0], sp[1]);
+        const up = Math.random() < 0.5, d = rnd(sp2[0], sp2[1]);
         return { seq: [[b, 1], [b + (up ? d : -d), 1]], ans: up ? 0 : 1 };
       }
       case "samediff": {
-        const same = Math.random() < 0.5, d = rnd(sp[0], sp[1]) * (Math.random() < 0.5 ? 1 : -1);
+        const same = Math.random() < 0.5, d = rnd(sp2[0], sp2[1]) * (Math.random() < 0.5 ? 1 : -1);
         return { seq: [[b, 1], [same ? b : b + d, 1]], ans: same ? 0 : 1 };
       }
       case "contour": {
@@ -3644,7 +3644,7 @@ details summary{cursor:pointer}
     if (camOn() && !camRecording()) {
       if (await wuEnsureMic(true)) await camSession("Распевка дня", wuPanel, WU.stream);
     }
-    const s = WU.plan[WU.i], sp = window.WU_SPEED || 1;
+    const s = WU.plan[WU.i], sp2 = window.WU_SPEED || 1;
     if (s.pat && wuMode() === "echo") await wuEnsureMic();
     const echo = !!(s.pat && wuMode() === "echo" && WU.stream);
     const c = ac(), b = 60 / WU_BPM, t0 = c.currentTime + 0.15;
@@ -3656,7 +3656,7 @@ details summary{cursor:pointer}
     };
     const later2 = (sec, f) => WU.timers.push(setTimeout(() => {
       if (WU && WU.playing) f();
-    }, sec * 1e3 / sp));
+    }, sec * 1e3 / sp2));
     if (s.kind === "breath") {
       let k = 0;
       const total = s.cycles * 10;
@@ -3665,7 +3665,7 @@ details summary{cursor:pointer}
         say(ph < 4 ? `Вдох ${ph + 1}` : `Выдох «с» ${ph - 3}`);
         k++;
         if (k >= total) warmupNext();
-      }, 1e3 / sp);
+      }, 1e3 / sp2);
       say("Вдох 1");
       return;
     }
@@ -3676,7 +3676,7 @@ details summary{cursor:pointer}
         left--;
         say(left + " с");
         if (left <= 0) warmupNext();
-      }, 1e3 / sp);
+      }, 1e3 / sp2);
       return;
     }
     WU.res[s.id] = [];
@@ -3708,7 +3708,7 @@ details summary{cursor:pointer}
     });
     WU.timer = setTimeout(() => {
       if (WU && WU.playing) warmupNext();
-    }, (t - t0 + 0.4) * 1e3 / sp);
+    }, (t - t0 + 0.4) * 1e3 / sp2);
   }
   function __set_WU(v) {
     WU = v;
@@ -3839,14 +3839,14 @@ details summary{cursor:pointer}
     const r = voiceState().rec[k] || [];
     return r[r.length - 1] || null;
   };
-  function phonStep(P, now, active) {
-    if (P.done) return P;
+  function phonStep(P2, now, active) {
+    if (P2.done) return P2;
     if (active) {
-      if (P.start == null) P.start = now;
-      P.last = now;
-    } else if (P.start != null && now - P.last > 0.6) P.done = true;
-    P.sec = P.start == null ? 0 : P.last - P.start;
-    return P;
+      if (P2.start == null) P2.start = now;
+      P2.last = now;
+    } else if (P2.start != null && now - P2.last > 0.6) P2.done = true;
+    P2.sec = P2.start == null ? 0 : P2.last - P2.start;
+    return P2;
   }
   var VS = null;
   function voiceStop() {
@@ -3953,7 +3953,7 @@ details summary{cursor:pointer}
   async function voicePlay() {
     if (!VS) return;
     if (camOn() && !camRecording()) await camSession(`Голос и речь · ${VS.set.title}`, vsPanel);
-    const s = VS.set.steps[VS.i], sp = window.VS_SPEED || 1;
+    const s = VS.set.steps[VS.i], sp2 = window.VS_SPEED || 1;
     if (s.kind === "text") {
       const tw = vsList(s);
       if (tw.k < tw.items.length - 1) {
@@ -3985,7 +3985,7 @@ details summary{cursor:pointer}
         say(syl ? syl[k % syl.length] : String(k % 4 + 1), Math.max(0, Math.round(n * b - k * b)) + " с");
         k++;
         if (k >= n) voiceNextStep();
-      }, b * 1e3 / sp);
+      }, b * 1e3 / sp2);
       return;
     }
     if (s.kind === "piano") {
@@ -3993,13 +3993,13 @@ details summary{cursor:pointer}
       let t = c.currentTime + 0.15;
       const t0 = t;
       keys.forEach((k) => {
-        VS.timers.push(setTimeout(() => say(noteShort(k + Math.min(...pat)), "пой за пианино"), (t - t0) * 1e3 / sp));
+        VS.timers.push(setTimeout(() => say(noteShort(k + Math.min(...pat)), "пой за пианино"), (t - t0) * 1e3 / sp2));
         [0, 4, 7].forEach((x) => tone(k + x, t, b * 1.6, 0.06));
         t += b * 2;
         pat.forEach((x, j) => tone(k + x, t + j * b, (j === pat.length - 1 ? 1.8 : 0.95) * b, 0.2));
         t += (pat.length + 1.5) * b;
       });
-      VS.timer = setTimeout(voiceNextStep, (t - t0 + 0.3) * 1e3 / sp);
+      VS.timer = setTimeout(voiceNextStep, (t - t0 + 0.3) * 1e3 / sp2);
       return;
     }
     let left = stepSec(s);
@@ -4008,7 +4008,7 @@ details summary{cursor:pointer}
       left--;
       say(left + " с");
       if (left <= 0) voiceNextStep();
-    }, 1e3 / sp);
+    }, 1e3 / sp2);
   }
   async function voiceMeasure(s) {
     let stream;
@@ -4024,7 +4024,7 @@ details summary{cursor:pointer}
     VS.result = null;
     VS.resultText = "";
     voiceDraw();
-    const T = micTap(stream), t0 = performance.now() / 1e3, floor = [], P = VS.P = { start: null, last: 0, sec: 0, done: false };
+    const T = micTap(stream), t0 = performance.now() / 1e3, floor = [], P2 = VS.P = { start: null, last: 0, sec: 0, done: false };
     const say = (a, b) => {
       if ($("#vsnow")) $("#vsnow").textContent = a;
       if ($("#vssub")) $("#vssub").textContent = b;
@@ -4045,11 +4045,11 @@ details summary{cursor:pointer}
       }
       const fl = VA.median(floor.slice()), thr = Math.max(6e-3, fl * 4);
       const active = s.kind === "mpt" ? VA.livePitch(buf, T.c.sampleRate) != null : rms > thr;
-      phonStep(P, now, active);
-      say(P.sec.toFixed(1) + " с", P.start == null ? s.kind === "mpt" ? "Вдох и тяни «а-а-а»" : "Вдох и выдыхай «с-с-с»" : "Держи ровно...");
-      if (P.done || now > 120) {
+      phonStep(P2, now, active);
+      say(P2.sec.toFixed(1) + " с", P2.start == null ? s.kind === "mpt" ? "Вдох и тяни «а-а-а»" : "Вдох и выдыхай «с-с-с»" : "Держи ровно...");
+      if (P2.done || now > 120) {
         cancelAnimationFrame(VS.raf);
-        voiceMeasureDone(s, P.sec);
+        voiceMeasureDone(s, P2.sec);
       }
     };
     loop();
@@ -4785,6 +4785,7 @@ details summary{cursor:pointer}
     let h = `<h1>Шарик</h1><p class="muted" style="margin:6px 0 0">Шарик катится по дорожке, впереди стены с окнами. Пой ноту, и шарик поднимется на её высоту: чем выше окно, тем выше нота. Сначала отдельные ноты, потом тоннели и мелодии.</p>
     <button class="item sec" style="margin-top:14px" ${act("go", "warmup")}><div class="dot rhythm">${doneToday() ? "✓" : "♪"}</div><div class="t"><b>${doneToday() ? "Распевка сегодня сделана" : "Сначала распевка"}</b><span class="small muted">${doneToday() ? "Голос разогрет, можно играть" : `Около ${warmupMin()} мин, чтобы голос не устал и ноты брались легче`}</span></div><span class="muted">›</span></button>
     ${diffSeg()}
+    <button class="item" ${act("go", "songs")}><div class="dot pitch">🎵</div><div class="t"><b>Песни в «Шарике»</b><span class="small muted">Стены по нотам песни: фраза за фразой, пока не запомнишь мелодию. Можно добавить свою</span></div><span class="muted">›</span></button>
     <div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">★ ${total} из ${BALL_LEVELS.length * 3}</span><span class="pill">Пройдено: ${BALL_LEVELS.filter((l) => ballDone(l.n)).length} из ${BALL_LEVELS.length}</span></div>`;
     const curCh = Math.floor((ballNextN() - 1) / 10);
     BALL_CHAPTERS.forEach((C2, ci) => {
@@ -4847,10 +4848,10 @@ details summary{cursor:pointer}
     const b = 60 / lv.bpm;
     let t = 0;
     const walls = [];
-    lv.walls.forEach(([s, len, gap], i) => {
+    lv.walls.forEach(([s, len, gap, word], i) => {
       const prev = lv.walls[i - 1];
       const open = prev && prev[2] < 0.5 && prev[0] !== s ? Math.min(Math.max(0.4, 0.45 * b), len * b * 0.55) : 0;
-      walls.push({ rel: s, t0: t + open, t1: t + len * b, crashed: false, passed: false, inT: 0, outT: 0 });
+      walls.push({ rel: s, t0: t + open, t1: t + len * b, crashed: false, passed: false, inT: 0, outT: 0, ...word ? { word } : {} });
       t += (len + gap) * b;
     });
     return { walls, D: t };
@@ -4991,6 +4992,11 @@ details summary{cursor:pointer}
       ctx.font = "800 13px Manrope, system-ui";
       ctx.textAlign = "center";
       if (x1 > -10) ctx.fillText(B.dupName ? noteShort(base() + w.rel) : VA.noteName(base() + w.rel), x1 + Math.min(24, (x2 - x1) / 2), gy - gh - 10);
+      if (w.word && x1 > -10) {
+        ctx.font = "700 12px Manrope, system-ui";
+        ctx.fillStyle = "rgba(255,240,200,.95)";
+        ctx.fillText(w.word.trim().slice(0, 10), x1 + Math.min(24, (x2 - x1) / 2), gy + gh + 20);
+      }
     }
     ctx.textAlign = "left";
     ctx.fillStyle = "rgba(0,0,0,.25)";
@@ -5040,10 +5046,11 @@ details summary{cursor:pointer}
     ctx.fillStyle = "#FFD27A";
     ctx.fillRect(40, 12, (W - 140) * done / B.walls.length, 6);
     if (now < 0 && B.mode !== "idle") {
-      ctx.font = "700 48px Lora, serif";
+      const ls = B.pre != null && now < B.pre;
+      ctx.font = ls ? "800 22px Manrope, system-ui" : "700 48px Lora, serif";
       ctx.textAlign = "center";
       ctx.fillStyle = "#fff";
-      ctx.fillText(String(Math.ceil(-now)), W / 2, H / 2);
+      ctx.fillText(ls ? "🎹 Слушай мелодию" : String(Math.ceil(-now)), W / 2, ls ? 54 : H / 2);
       ctx.textAlign = "left";
     }
     if (B.banner && now - B.banner.t < 1) {
@@ -5135,8 +5142,19 @@ details summary{cursor:pointer}
     });
   }
   function ballCountIn() {
-    const c = ac(), b = 60 / B.lv.bpm, t = c.currentTime + 0.1;
+    const c = ac(), b = 60 / B.lv.bpm;
+    let t = c.currentTime + 0.1;
     stopAll();
+    B.pre = null;
+    if (B.lv.preview) {
+      let x = 0;
+      for (const [s, len, gap] of B.lv.walls) {
+        tone(base() + s, t + x * b, Math.max(0.12, len * b * 0.95), 0.2);
+        x += len + gap;
+      }
+      t += x * b + 0.6;
+      B.pre = -(1.4 + 4.5 * b) - 0.3;
+    }
     tone(base() + B.walls[0].rel, t, 1.1);
     for (let i = 0; i < 3; i++) click(t + 1.4 + i * b, i === 0);
     return t + 1.4 + 3 * b + 1.5 * b;
@@ -5190,7 +5208,7 @@ details summary{cursor:pointer}
     const buf = new Float32Array(an.fftSize), hist = [];
     const t0 = ballCountIn();
     ballSchedule(t0, false);
-    camRecStart("#bcv", `${profName() ? profName() + " · " : ""}Шарик · уровень ${B.lv.n}`, stream);
+    camRecStart("#bcv", `${profName() ? profName() + " · " : ""}${B.lv.camTitle || "Шарик · уровень " + B.lv.n}`, stream);
     $("#blive").innerHTML = ICON.stop + " Остановить";
     let last = -9;
     const loop = () => {
@@ -5201,7 +5219,7 @@ details summary{cursor:pointer}
       hist.push(VA.livePitch(buf, c.sampleRate));
       if (hist.length > 3) hist.shift();
       const v = hist.filter((x) => x != null);
-      ballStep(now, dt, v.length >= 2 ? VA.median(v) - base() : null);
+      ballStep(now, dt, v.length >= 2 && !(B.pre != null && now < B.pre) ? VA.median(v) - base() : null);
       ballDraw(now);
       if (B.lives <= 0) {
         ballFinish(false);
@@ -5280,6 +5298,10 @@ details summary{cursor:pointer}
   function ballResult(mode) {
     const lv = B.lv, passed = B.walls.filter((w) => w.passed).length, total = B.walls.length;
     const pct = Math.round(100 * passed / total), st = ballStarsFor(pct, B.lives);
+    if (lv.onResult) {
+      lv.onResult({ pct, stars: st, lives: B.lives, passed, total, mode });
+      return;
+    }
     const g = ballState(), bm = g.best, prev = bm[lv.n], wasOpen = ballUnlocked(lv.n + 1), tol = ballTol();
     g.plays.push({ lvl: lv.n, pct, stars: st, lives: B.lives, mode, tol, date: nowLocal() });
     if (g.plays.length > 300) g.plays.splice(0, g.plays.length - 300);
@@ -5690,85 +5712,32 @@ details summary{cursor:pointer}
     DY = v;
   }
 
-  // src/features/songs.js
-  var songs_exports2 = {};
-  __export(songs_exports2, {
-    SG: () => SG,
-    SONG_FAKE: () => SONG_FAKE,
-    __set_SG: () => __set_SG,
-    __set_SONG_FAKE: () => __set_SONG_FAKE,
-    shiftText: () => shiftText,
-    songAskDel: () => songAskDel,
-    songById: () => songById,
-    songCancel: () => songCancel,
-    songDel: () => songDel,
-    songDraftDraw: () => songDraftDraw,
-    songEnsureMic: () => songEnsureMic,
-    songFile: () => songFile,
-    songFromAudioBuf: () => songFromAudioBuf,
-    songFromMidiBuf: () => songFromMidiBuf,
-    songGoPhrase: () => songGoPhrase,
-    songInit: () => songInit,
-    songListenAll: () => songListenAll,
-    songNext: () => songNext,
-    songPickTrack: () => songPickTrack,
-    songPlay: () => songPlay,
-    songPreview: () => songPreview,
-    songRecord: () => songRecord,
-    songRoll: () => songRoll,
-    songSave: () => songSave,
-    songSetMode: () => songSetMode,
-    songSetTempo: () => songSetTempo,
-    songShiftBy: () => songShiftBy,
-    songShiftOf: () => songShiftOf,
-    songStop: () => songStop,
-    songTempo: () => songTempo,
-    songWin: () => songWin,
-    songsAll: () => songsAll,
-    songsMine: () => songsMine,
-    viewSong: () => viewSong,
-    viewSongs: () => viewSongs
+  // src/features/path.js
+  var path_exports = {};
+  __export(path_exports, {
+    PATH: () => PATH,
+    pathAll: () => pathAll,
+    pathCard: () => pathCard,
+    pathGo: () => pathGo,
+    pathHide: () => pathHide,
+    pathNext: () => pathNext
   });
 
-  // src/data/songs.js
-  var songs_exports = {};
-  __export(songs_exports, {
-    BUILTIN_SONGS: () => BUILTIN_SONGS
+  // src/features/songball.js
+  var songball_exports = {};
+  __export(songball_exports, {
+    SB_NEED: () => SB_NEED,
+    sbCount: () => sbCount,
+    sbDone: () => sbDone,
+    sbNextN: () => sbNextN,
+    sbParse: () => sbParse,
+    sbShift: () => sbShift,
+    sbUnlocked: () => sbUnlocked,
+    songLevels: () => songLevels,
+    songWalls: () => songWalls,
+    viewSongBall: () => viewSongBall,
+    viewSongLevels: () => viewSongLevels
   });
-  var mk = (id, title, bpm, lines, by) => {
-    const b = 60 / bpm, notes = [], ph = [];
-    let t = 0;
-    for (const line of lines) {
-      ph.push(notes.length);
-      for (const [m, beats] of line) {
-        notes.push({ m, t: +t.toFixed(3), d: +(beats * b * 0.92).toFixed(3) });
-        t += beats * b;
-      }
-    }
-    return { id, title, by, src: "builtin", notes, ph };
-  };
-  var C = 60;
-  var D = 62;
-  var E = 64;
-  var F = 65;
-  var G2 = 67;
-  var A = 69;
-  var BUILTIN_SONGS = [
-    mk("b-twinkle", "Маленькая звёздочка", 100, [
-      [[C, 1], [C, 1], [G2, 1], [G2, 1], [A, 1], [A, 1], [G2, 2]],
-      [[F, 1], [F, 1], [E, 1], [E, 1], [D, 1], [D, 1], [C, 2]],
-      [[G2, 1], [G2, 1], [F, 1], [F, 1], [E, 1], [E, 1], [D, 2]],
-      [[G2, 1], [G2, 1], [F, 1], [F, 1], [E, 1], [E, 1], [D, 2]],
-      [[C, 1], [C, 1], [G2, 1], [G2, 1], [A, 1], [A, 1], [G2, 2]],
-      [[F, 1], [F, 1], [E, 1], [E, 1], [D, 1], [D, 1], [C, 2]]
-    ], "Французская народная мелодия"),
-    mk("b-ode", "Ода к радости", 110, [
-      [[E, 1], [E, 1], [F, 1], [G2, 1], [G2, 1], [F, 1], [E, 1], [D, 1]],
-      [[C, 1], [C, 1], [D, 1], [E, 1], [E, 1.5], [D, 0.5], [D, 2]],
-      [[E, 1], [E, 1], [F, 1], [G2, 1], [G2, 1], [F, 1], [E, 1], [D, 1]],
-      [[C, 1], [C, 1], [D, 1], [E, 1], [D, 1.5], [C, 0.5], [C, 2]]
-    ], "Бетховен, 9-я симфония")
-  ];
 
   // src/features/songlib.js
   var songlib_exports = {};
@@ -5783,6 +5752,7 @@ details summary{cursor:pointer}
     phraseNotes: () => phraseNotes,
     phraseRange: () => phraseRange,
     phraseWords: () => phraseWords,
+    sbTotal: () => sbTotal,
     songFromMidi: () => songFromMidi,
     songFromSegs: () => songFromSegs,
     songGame: () => songGame,
@@ -6011,6 +5981,7 @@ details summary{cursor:pointer}
     return out;
   }
   var phraseRange = (song, k) => [song.ph[k], k + 1 < song.ph.length ? song.ph[k + 1] : song.notes.length];
+  var sbTotal = (P2) => P2 + (P2 > 1 ? Math.ceil(P2 / 2) : 0) + 1;
   var phraseNotes = (song, k) => {
     const [a, b] = phraseRange(song, k);
     return song.notes.slice(a, b);
@@ -6090,6 +6061,86 @@ details summary{cursor:pointer}
   }
 
   // src/features/songs.js
+  var songs_exports2 = {};
+  __export(songs_exports2, {
+    SG: () => SG,
+    SONG_FAKE: () => SONG_FAKE,
+    __set_SG: () => __set_SG,
+    __set_SONG_FAKE: () => __set_SONG_FAKE,
+    shiftText: () => shiftText,
+    songAskDel: () => songAskDel,
+    songById: () => songById,
+    songCancel: () => songCancel,
+    songDel: () => songDel,
+    songDraftDraw: () => songDraftDraw,
+    songEnsureMic: () => songEnsureMic,
+    songFile: () => songFile,
+    songFromAudioBuf: () => songFromAudioBuf,
+    songFromMidiBuf: () => songFromMidiBuf,
+    songGoPhrase: () => songGoPhrase,
+    songInit: () => songInit,
+    songListenAll: () => songListenAll,
+    songNext: () => songNext,
+    songPickTrack: () => songPickTrack,
+    songPlay: () => songPlay,
+    songPreview: () => songPreview,
+    songRecord: () => songRecord,
+    songRoll: () => songRoll,
+    songSave: () => songSave,
+    songSetMode: () => songSetMode,
+    songSetTempo: () => songSetTempo,
+    songShiftBy: () => songShiftBy,
+    songShiftOf: () => songShiftOf,
+    songStop: () => songStop,
+    songTempo: () => songTempo,
+    songWin: () => songWin,
+    songsAll: () => songsAll,
+    songsMine: () => songsMine,
+    viewSong: () => viewSong,
+    viewSongs: () => viewSongs
+  });
+
+  // src/data/songs.js
+  var songs_exports = {};
+  __export(songs_exports, {
+    BUILTIN_SONGS: () => BUILTIN_SONGS
+  });
+  var mk = (id, title, bpm, lines, by) => {
+    const b = 60 / bpm, notes = [], ph = [];
+    let t = 0;
+    for (const line of lines) {
+      ph.push(notes.length);
+      for (const [m, beats] of line) {
+        notes.push({ m, t: +t.toFixed(3), d: +(beats * b * 0.92).toFixed(3) });
+        t += beats * b;
+      }
+    }
+    return { id, title, by, src: "builtin", notes, ph };
+  };
+  var C = 60;
+  var D = 62;
+  var E = 64;
+  var F = 65;
+  var G2 = 67;
+  var A = 69;
+  var BUILTIN_SONGS = [
+    mk("b-twinkle", "Маленькая звёздочка", 100, [
+      [[C, 1], [C, 1], [G2, 1], [G2, 1], [A, 1], [A, 1], [G2, 2]],
+      [[F, 1], [F, 1], [E, 1], [E, 1], [D, 1], [D, 1], [C, 2]],
+      [[G2, 1], [G2, 1], [F, 1], [F, 1], [E, 1], [E, 1], [D, 2]],
+      [[G2, 1], [G2, 1], [F, 1], [F, 1], [E, 1], [E, 1], [D, 2]],
+      [[C, 1], [C, 1], [G2, 1], [G2, 1], [A, 1], [A, 1], [G2, 2]],
+      [[F, 1], [F, 1], [E, 1], [E, 1], [D, 1], [D, 1], [C, 2]]
+    ], "Французская народная мелодия"),
+    mk("b-ode", "Ода к радости", 110, [
+      [[E, 1], [E, 1], [F, 1], [G2, 1], [G2, 1], [F, 1], [E, 1], [D, 1]],
+      [[C, 1], [C, 1], [D, 1], [E, 1], [E, 1.5], [D, 0.5], [D, 2]],
+      [[E, 1], [E, 1], [F, 1], [G2, 1], [G2, 1], [F, 1], [E, 1], [D, 1]],
+      [[C, 1], [C, 1], [D, 1], [E, 1], [D, 1.5], [C, 0.5], [C, 2]]
+    ], "Бетховен, 9-я симфония")
+  ];
+
+  // src/features/songs.js
   var LIB_KEY = "vocal-songs";
   function songsMine() {
     try {
@@ -6156,12 +6207,12 @@ details summary{cursor:pointer}
     SG = { draft: SG && SG.draft, timers: [] };
     afterHooks.push(songDraftDraw);
     const item = (s) => {
-      const p = (state.songs || {})[s.id], n = learned(s);
-      return `<button class="item" ${act("go", `song-${s.id}`)}><div class="dot pitch">${n === s.ph.length ? "✓" : "🎵"}</div><div class="t"><b>${esc(s.title)}</b><span class="small muted">${s.ph.length} ${plural(s.ph.length, "фраза", "фразы", "фраз")}${n ? ` · выучено ${n}` : ""}${p && p.whole ? ` · целиком ${p.whole}%` : ""}${s.by ? " · " + esc(s.by) : ""}</span></div><span class="muted">›</span></button>`;
+      const p = (state.songs || {})[s.id], tot = sbTotal(s.ph.length), n = Object.values(p && p.ball || {}).filter((b) => b.stars >= 2).length;
+      return `<button class="item" ${act("go", `song-${s.id}`)}><div class="dot pitch">${n >= tot ? "✓" : "🎵"}</div><div class="t"><b>${esc(s.title)}</b><span class="small muted">${s.ph.length} ${plural(s.ph.length, "фраза", "фразы", "фраз")} · ${n ? `пройдено ${n} из ${tot}` : `${tot} ${plural(tot, "задание", "задания", "заданий")}`}${p && p.whole ? ` · караоке ${p.whole}%` : ""}${s.by ? " · " + esc(s.by) : ""}</span></div><span class="muted">›</span></button>`;
     };
     const mine = songsMine();
     return `<button class="back" ${act("go", "today")}>${ICON.back} Сегодня</button><h1>Песни</h1>
-    <p class="muted" style="margin:6px 0 0">Разучиваем по фразам: пианино играет кусочек, ты повторяешь, микрофон показывает, какие ноты чисто. Потом поёшь всю песню сам.</p>
+    <p class="muted" style="margin:6px 0 0">Каждая песня - как глава «Шарика»: стены по нотам мелодии, ты ведёшь шарик голосом. Сначала по фразе с подсказкой пианино, потом по памяти, в конце вся песня. А ещё можно спеть её в караоке.</p>
     ${mine.length ? `<div class="sec"><h2>Мои песни</h2>${mine.map(item).join("")}</div>` : ""}
     <div class="sec"><h2>Для начала</h2>${BUILTIN_SONGS.map(item).join("")}</div>
     <div class="sec"><h2>Добавить свою</h2><div class="card stack">
@@ -6352,7 +6403,8 @@ details summary{cursor:pointer}
   function viewSong(id) {
     songStop();
     const s = songById(id);
-    SG = { s, k: 0, mode: state.settings.songMode === "whole" ? "whole" : "phrase", timers: [], tries: 0, phase: "idle", trail: [], parts: [] };
+    const sm = state.settings.songMode;
+    SG = { s, k: 0, mode: sm === "whole" || sm === "along" ? sm : "phrase", timers: [], tries: 0, phase: "idle", trail: [], parts: [] };
     const p = (state.songs || {})[s.id];
     if (p) {
       const k = s.ph.findIndex((_, i) => (p.ph[i] || 0) < 80);
@@ -6362,13 +6414,14 @@ details summary{cursor:pointer}
     afterHooks.push(() => {
       if (camOn()) camStart();
     });
-    const sh = songShiftOf(s), ms = s.notes.map((n) => n.m), r = lastRange(), tp = songTempo(), ph = SG.mode === "phrase";
-    return `<button class="back" ${act("go", "songs")}>${ICON.back} Песни</button><h1>${esc(s.title)}</h1>
+    const sh = songShiftOf(s), ms = s.notes.map((n) => n.m), r = lastRange(), tp = songTempo(), ph = SG.mode === "phrase", md = SG.mode;
+    return `<button class="back" ${act("go", `song-${s.id}`)}>${ICON.back} ${esc(s.title)}</button><h1>Караоке</h1>
     <p class="muted" style="margin:6px 0 0">${s.ph.length} ${plural(s.ph.length, "фраза", "фразы", "фраз")} · ${noteShort(Math.min(...ms) + sh)} - ${noteShort(Math.max(...ms) + sh)}${p && p.whole ? ` · рекорд ${"★".repeat(p.stars || 0)}${"☆".repeat(3 - (p.stars || 0))} ${p.whole}%` : ""}</p>
-    <div class="seg sec" style="margin-top:12px"><button class="${ph ? "on" : ""}" ${act("songSetMode", "phrase")}>Учить по фразам</button><button class="${ph ? "" : "on"}" ${act("songSetMode", "whole")}>Спеть целиком</button></div>
+    <div class="seg sec" style="margin-top:12px">${[["along", "С пианино"], ["phrase", "По фразам"], ["whole", "Целиком"]].map(([m, t]) => `<button class="${md === m ? "on" : ""}" ${act("songSetMode", m)}>${t}</button>`).join("")}</div>
+    <div class="tiny muted" style="margin-top:6px">${md === "along" ? "Шаг 1: поёшь вместе с пианино, оно ведёт." : ph ? "Шаг 2: пианино играет фразу, потом ты повторяешь сам." : "Шаг 3: вся песня без пианино, только первая нота."}</div>
     <div style="margin-top:10px;border-radius:16px;overflow:hidden;background:#1B1838"><canvas id="sgcv" style="display:block;width:100%"></canvas></div>
-    <div class="row" style="margin-top:10px"><button class="btn" style="flex:1" id="sgplay" ${act("songPlay")}>${ICON.play} ${ph ? "Начать" : "Спеть"}</button>${ph ? `<button class="btn ghost" ${act("songNext")}>Дальше ›</button>` : `<button class="btn ghost" ${act("songListenAll")}>${ICON.play} Послушать</button>`}</div>
-    <div id="sgmsg" class="small muted" style="margin-top:8px;min-height:20px">${MIC_DIRECT ? ph ? "Сначала послушай фразу, потом спой её сам. Ноты едут справа налево: пой ту, что под белой линией." : "Прозвучит первая нота и отсчёт, дальше вся песня без подсказки. Попадаешь - нота зеленеет." : "Здесь микрофон закрыт: можно слушать и подпевать. Проверка нот - на сайте или в приложении."}</div>
+    <div class="row" style="margin-top:10px"><button class="btn" style="flex:1" id="sgplay" ${act("songPlay")}>${ICON.play} ${md === "whole" ? "Спеть" : "Начать"}</button>${ph ? `<button class="btn ghost" ${act("songNext")}>Дальше ›</button>` : `<button class="btn ghost" ${act("songListenAll")}>${ICON.play} Послушать</button>`}</div>
+    <div id="sgmsg" class="small muted" style="margin-top:8px;min-height:20px">${!MIC_DIRECT ? "Здесь микрофон закрыт: можно слушать и подпевать. Проверка нот - на сайте или в приложении." : md === "along" ? "Пианино играет всю песню, пой вместе с ним ту ноту, что под белой линией. В наушниках покажу, какие ноты чисто." : ph ? "Сначала послушай фразу, потом спой её сам. Ноты едут справа налево: пой ту, что под белой линией." : "Прозвучит первая нота и отсчёт, дальше вся песня без подсказки. Попадаешь - нота зеленеет."}</div>
     <div id="sgchips" class="sec">${phraseChips()}</div>
     <div class="card sec stack" style="padding:12px 14px">
       <div class="row" style="gap:8px"><span class="small" style="flex:1">Тональность: <b>${shiftText(sh)}</b></span>
@@ -6413,7 +6466,7 @@ details summary{cursor:pointer}
   };
   var btn = (playing2) => {
     const b = $("#sgplay");
-    if (b) b.innerHTML = playing2 ? ICON.stop + " Стоп" : ICON.play + " " + (SG.mode === "phrase" ? SG.res ? "Ещё раз" : "Начать" : SG.res ? "Ещё раз" : "Спеть");
+    if (b) b.innerHTML = playing2 ? ICON.stop + " Стоп" : ICON.play + " " + (SG.res ? "Ещё раз" : SG.mode === "whole" ? "Спеть" : "Начать");
   };
   var unitNotes = () => SG.mode === "phrase" && !SG.unitAll ? phraseNotes(SG.s, SG.k) : SG.s.notes;
   var unitOff = () => SG.mode === "phrase" && !SG.unitAll ? SG.s.ph[SG.k] : 0;
@@ -6510,7 +6563,11 @@ details summary{cursor:pointer}
     if (camOn() && !camRecording() && SG.stream) camRecStart("#sgcv", `${profName() ? profName() + " · " : ""}${SG.s.title}`, SG.stream);
     SG.playing = true;
     btn(true);
-    if (SG.mode === "whole" && SG.stream) songRunSing(true);
+    if (SG.mode === "along") {
+      songScene();
+      if (SG.stream) songRunCheck(songRunAlong);
+      else songRunAlong(false);
+    } else if (SG.mode === "whole" && SG.stream) songRunSing(true);
     else songRunListen(!!SG.stream);
   }
   function songListenAll() {
@@ -6539,6 +6596,41 @@ details summary{cursor:pointer}
       }
       songRunSing(false);
     });
+  }
+  function songRunCheck(next) {
+    SG.phase = "check";
+    msg("🎧 Помолчи секунду: проверяю, слышит ли микрофон пианино...");
+    const c = ac(), t0 = c.currentTime + 0.2, m = SG.G.N[0].m;
+    SG.checkM = m;
+    tone(m, t0, 1.1, 0.2);
+    let frames = 0, hits = 0;
+    const loop = () => {
+      if (!SG || !SG.playing) return;
+      const now = c.currentTime - t0;
+      if (now > 0.3 && now < 1.2) {
+        const v = SONG_FAKE ? SONG_FAKE(now, SG) : micPitch();
+        frames++;
+        if (v != null && songNear({ strict: false }, { m }, v)) hits++;
+      }
+      songDrawFrame(-1.2);
+      if (now >= 1.5) {
+        SG.leak = hits >= Math.max(3, frames * 0.2);
+        next(!SG.leak);
+        return;
+      }
+      SG.raf = requestAnimationFrame(loop);
+    };
+    loop();
+  }
+  function songRunAlong(scored) {
+    songScene();
+    SG.phase = scored ? "sing" : "along";
+    SG.scored = scored;
+    const c = ac(), b = 0.5, t0 = c.currentTime + 1.4;
+    for (let i = 0; i < 2; i++) click(t0 - (2 - i) * b, i === 0);
+    for (const n of SG.G.N) tone(n.m, t0 + n.t0, Math.max(0.12, (n.t1 - n.t0) * 0.95), 0.2);
+    msg(scored ? "Наушники: микрофон пианино не слышит, считаю ноты. Пой вместе!" : SG.stream ? "Пой вместе с пианино. Микрофон слышит пианино из динамика, поэтому сейчас без оценки: надень наушники, и я покажу, какие ноты чисто." : "Пой вместе с пианино.");
+    songLoop(t0, songUnitDone);
   }
   function songRunSing(whole) {
     songScene();
@@ -6592,6 +6684,19 @@ details summary{cursor:pointer}
     p.last = nowLocal();
     SG.res = r;
     SG.banner = { r, t: performance.now() };
+    if (SG.mode === "along") {
+      p.along = (p.along || 0) + 1;
+      if (SG.scored) p.alongPct = Math.max(p.alongPct || 0, r.pct);
+      else SG.banner = null;
+      save();
+      SG.playing = false;
+      SG.phase = "done";
+      btn(false);
+      songDrawFrame(G3.D + 1);
+      msg(SG.scored ? `<b>${r.n} из ${r.total} нот вместе с пианино.</b> ${r.pct >= 80 ? "Отлично! Теперь «По фразам»: там пианино сначала играет, а поёшь ты один." : "Спой ещё раз, можно «Медленно» (ниже)."}` : `<b>Спето вместе с пианино ✓</b> ${p.along >= 2 ? "Когда подпевается легко, переходи «По фразам»: там микрофон проверит каждую ноту." : "Спой так ещё раз-другой, чтобы мелодия запомнилась."}`);
+      if (camRecording()) camRecStop(SG.scored ? `${r.pct}% нот с пианино` : "Спето с пианино");
+      return;
+    }
     if (SG.mode === "whole") {
       if (r.pct > (p.whole || 0)) {
         p.whole = r.pct;
@@ -6680,7 +6785,7 @@ details summary{cursor:pointer}
       if (x2 < 26 || x1 > W + 10) continue;
       const y = Y(n.m) - bh / 2, act2 = !fit && now >= n.t0 && now <= n.t1;
       let col = "rgba(255,214,130,.55)";
-      if (SG.phase === "listen" || SG.phase === "idle") col = act2 ? "#FFE3A3" : "rgba(186,170,255,.6)";
+      if (SG.phase === "listen" || SG.phase === "idle" || SG.phase === "along" || SG.phase === "check") col = act2 ? "#FFE3A3" : "rgba(186,170,255,.6)";
       else if (n.hit) col = "#5ED18A";
       else if (n.done) col = "rgba(232,105,94,.55)";
       else if (act2) col = "#FFD27A";
@@ -6768,7 +6873,7 @@ details summary{cursor:pointer}
     ctx.textAlign = "left";
     ctx.font = "800 13px Manrope, system-ui";
     ctx.fillStyle = "#fff";
-    ctx.fillText(SG.phase === "listen" ? "🎹 Слушай" : sing ? "🎤 Теперь ты" : SG.mode === "whole" || SG.unitAll ? "Вся песня" : `Фраза ${SG.k + 1} из ${SG.s.ph.length}`, 12, 24);
+    ctx.fillText(SG.phase === "check" ? "🎧 Проверка" : SG.phase === "along" || sing && SG.mode === "along" ? "🎹 Пой вместе" : SG.phase === "listen" ? "🎹 Слушай" : sing ? "🎤 Теперь ты" : SG.mode !== "phrase" || SG.unitAll ? "Вся песня" : `Фраза ${SG.k + 1} из ${SG.s.ph.length}`, 12, 24);
     const done = Math.max(0, Math.min(1, now / G3.D));
     if (!fit) {
       ctx.fillStyle = "rgba(255,255,255,.18)";
@@ -6783,7 +6888,7 @@ details summary{cursor:pointer}
       ctx.fillStyle = "#7FE3A4";
       ctx.fillText(`Серия ${G3.combo}`, W - 12, 24);
     }
-    if (sing && now < 0) {
+    if ((sing || SG.phase === "along") && now < 0) {
       ctx.textAlign = "center";
       ctx.fillStyle = "#fff";
       ctx.font = "700 46px Lora, serif";
@@ -6832,13 +6937,13 @@ details summary{cursor:pointer}
     }
     let x = (W - w) / 2;
     ctx.textAlign = "left";
-    const live = SG.phase !== "idle" && SG.phase !== "done";
+    const live = SG.phase !== "idle" && SG.phase !== "done" && SG.phase !== "check";
     for (const tk of toks) {
       ctx.fillStyle = !live ? "rgba(255,255,255,.85)" : tk.i < gi ? "#FFD27A" : tk.i === gi && now >= -0.2 ? "#FFFFFF" : "rgba(255,255,255,.45)";
       ctx.fillText(tk.t, x, bot + 46);
       x += ctx.measureText(tk.t).width;
     }
-    if (k + 1 < s.ph.length && (SG.mode === "whole" || SG.unitAll)) {
+    if (k + 1 < s.ph.length && (SG.mode !== "phrase" || SG.unitAll)) {
       const nt = line(k + 1).map((x2) => x2.t).join("");
       ctx.font = "600 12px Manrope, system-ui";
       ctx.fillStyle = "rgba(255,255,255,.4)";
@@ -6861,6 +6966,264 @@ details summary{cursor:pointer}
   }
   function __set_SONG_FAKE(v) {
     SONG_FAKE = v;
+  }
+
+  // src/features/songball.js
+  var SB_NEED = 2;
+  function songWalls(notes, rel) {
+    const ds = notes.map((n) => n.d).sort((a, b) => a - b), q = ds[Math.floor(ds.length / 4)];
+    const k = Math.max(1, Math.min(3, 0.8 / q));
+    return notes.map((n, i) => {
+      const len = Math.max(0.75, n.d * k), nx = notes[i + 1];
+      const gap = nx ? Math.max(0, (nx.t - n.t) * k - len) : 1;
+      const w = n.w && n.w.trim().length <= 12 ? n.w.trim() : "";
+      return [n.m + rel, +len.toFixed(3), +gap.toFixed(3), ...w ? [w] : []];
+    });
+  }
+  function songLevels(s) {
+    const P2 = s.ph.length, rel = songShiftOf(s) - base(), out = [];
+    const add = (title, notes, o) => out.push({ n: out.length + 1, song: s.id, title, bpm: 60, walls: songWalls(notes, rel), ...o });
+    const range = (a, b) => s.notes.slice(s.ph[a], b + 1 < P2 ? s.ph[b + 1] : s.notes.length);
+    for (let k = 0; k < P2; k++) add(`Фраза ${k + 1}`, phraseNotes(s, k), { preview: true, guide: true, hint: "Сначала пианино сыграет фразу, потом пой её сам: шарик полетит за голосом" });
+    if (P2 > 1) for (let k = 0; k < P2; k += 2) {
+      const a = Math.min(k, P2 - 2);
+      add(`Фразы ${a + 1}-${a + 2}`, range(a, a + 1), { preview: false, guide: false, hint: "По памяти: прозвучит только первая нота" });
+    }
+    add("Вся песня", s.notes, { preview: false, guide: false, exam: true, hint: "Вся песня по памяти, от первой ноты" });
+    return out;
+  }
+  var sbProg = (id) => ((state.songs ||= {})[id] ||= { ph: {}, whole: 0, plays: 0 }).ball ||= {};
+  var sbBest = (id, n) => (((state.songs || {})[id] || {}).ball || {})[n];
+  var sbDone = (id, n) => ((sbBest(id, n) || {}).stars || 0) >= SB_NEED;
+  var sbUnlocked = (id, n) => n === 1 || sbDone(id, n - 1);
+  var sbCount = (s) => songLevels(s).filter((l) => sbDone(s.id, l.n)).length;
+  var sbNextN = (s) => {
+    const L = songLevels(s), l = L.find((x) => !sbDone(s.id, x.n));
+    return (l || L[L.length - 1]).n;
+  };
+  function viewSongLevels(id) {
+    const s = songById(id), L = songLevels(s), ms = s.notes.map((n) => n.m), sh = songShiftOf(s);
+    const stars = L.reduce((a, l) => a + ((sbBest(id, l.n) || {}).stars || 0), 0), done = L.filter((l) => sbDone(id, l.n)).length;
+    let h = `<button class="back" ${act("go", "songs")}>${ICON.back} Песни</button><h1>${esc(s.title)}</h1>
+    <p class="muted" style="margin:6px 0 0">${s.ph.length} ${plural(s.ph.length, "фраза", "фразы", "фраз")} · ${noteShort(Math.min(...ms) + sh)} - ${noteShort(Math.max(...ms) + sh)}${s.by ? " · " + esc(s.by) : ""}</p>
+    <p class="small" style="margin:8px 0 0">Песня как глава «Шарика»: стены стоят по нотам мелодии. Сначала каждая фраза с подсказкой пианино, потом по памяти, в конце вся песня. Так мелодия и запоминается.</p>
+    <div class="row sec" style="margin-top:12px;gap:8px"><span class="pill">★ ${stars} из ${L.length * 3}</span><span class="pill">Пройдено: ${done} из ${L.length}</span></div>
+    <div class="ggrid sec" style="margin-top:12px">`;
+    for (const lv of L) {
+      const best = sbBest(id, lv.n), o = sbUnlocked(id, lv.n), ok = sbDone(id, lv.n);
+      h += `<button class="gtile ${o ? "" : "locked"}" ${o ? act("go", `sball-${id}-${lv.n}`) : ""}>
+      <span class="gnum">${o ? lv.exam ? "🎓" : lv.n : "🔒"}</span><b>${esc(lv.title)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
+      <span class="tiny muted">${ok ? "пройдено" : best ? "нужно 2★, есть " + best.stars : o ? lv.preview ? "с подсказкой" : "по памяти" : "закрыто"}</span></button>`;
+    }
+    h += `</div><p class="tiny muted">3 жизни. Звёзды: 1 за 60% стен, 2 за 80%, 3 за все. Задание засчитано с 2 звёзд, тогда открывается следующее.</p>
+    <div class="card sec stack" style="padding:12px 14px">
+      <div class="row" style="gap:8px"><span class="small" style="flex:1">Тональность: <b>${shiftText(sh)}</b></span>
+        <button class="iconbtn" ${act("sbShift", id, -1)} title="Ниже">−</button><button class="iconbtn" ${act("sbShift", id, 1)} title="Выше">+</button></div>
+      <div class="tiny muted" style="margin-top:-6px">Подобрал под твой голос (${noteShort(songWin()[0])} - ${noteShort(songWin()[1])}). Неудобно - сдвинь на полутон.</div></div>
+    <button class="item sec" ${act("go", `karaoke-${id}`)}><div class="dot rhythm">🎤</div><div class="t"><b>Караоке${s.notes.some((n) => n.w) ? " со словами" : ""}</b><span class="small muted">Спеть вместе с пианино, повторять по фразам или целиком, ноты-полоски едут под слова</span></div><span class="muted">›</span></button>
+    ${s.src !== "builtin" ? `<button class="btn ghost block sec" style="color:var(--bad)" ${act("songAskDel", s.id)}>Удалить песню</button>` : ""}`;
+    return h;
+  }
+  function sbShift(id, d) {
+    const s = songById(id);
+    if (!s) return;
+    const p = (state.songs ||= {})[id] ||= { ph: {}, whole: 0, plays: 0 };
+    p.shift = songShiftOf(s) + d;
+    save();
+    render();
+  }
+  function sbParse(rest) {
+    const m = /^(.+)-(\d+)$/.exec(rest);
+    if (!m) return null;
+    const s = songById(m[1]);
+    if (!s) return null;
+    const lv = songLevels(s).find((l) => l.n === +m[2]);
+    return lv ? { s, lv } : null;
+  }
+  function viewSongBall(rest) {
+    const { s, lv } = sbParse(rest), id = s.id, L = songLevels(s);
+    if (!sbUnlocked(id, lv.n)) return `<button class="back" ${act("go", `song-${id}`)}>${ICON.back} ${esc(s.title)}</button><div class="note">🔒 Сначала пройди предыдущее задание на 2 звезды.</div>`;
+    lv.camTitle = `${s.title} · ${lv.title}`;
+    lv.onResult = (r) => sbResult(s, lv, L.length, r);
+    const best = sbBest(id, lv.n);
+    afterHooks.push(() => ballSetup(lv));
+    afterHooks.push(() => {
+      if (camOn()) camStart();
+    });
+    return `<button class="back" ${act("go", `song-${id}`)}>${ICON.back} ${esc(s.title)}</button>
+    <div class="row between"><div><div class="tiny muted">«${esc(s.title)}» · задание ${lv.n} из ${L.length} · точность ±${ballTol()} ц</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. Чтобы засчитать, нужно 2 звезды (80% стен).</p>${octaveHint()}${camToggleHTML()}
+    ${diffSeg()}
+    <div id="bbest">${sbBestHTML(s, lv, L.length)}</div>
+    <div class="gstage sec"><canvas id="bcv"></canvas></div>
+    <div id="bctl" class="stack" style="margin-top:12px"></div><div id="bnote"></div><div id="bres"></div>`;
+  }
+  function sbNextBtn(s, lv, total) {
+    return lv.n < total && sbUnlocked(s.id, lv.n + 1) ? `<button class="btn" ${act("go", `sball-${s.id}-${lv.n + 1}`)}>Задание ${lv.n + 1} →</button>` : lv.n === total && sbDone(s.id, lv.n) ? `<button class="btn" ${act("go", `karaoke-${s.id}`)}>🎤 Спеть в караоке</button>` : "";
+  }
+  function sbBestHTML(s, lv, total) {
+    const best = sbBest(s.id, lv.n);
+    if (!best) return "";
+    return `<div class="card row between wrap" style="margin-top:12px;gap:8px;padding:12px 14px"><div><div class="tiny muted">Твой рекорд сохранён</div><b>${starStr(best.stars)} ${best.pct}% стен при ±${best.tol || 40}</b></div>${sbNextBtn(s, lv, total)}</div>`;
+  }
+  function sbResult(s, lv, total, r) {
+    const bm = sbProg(s.id), prev = bm[lv.n], tol = ballTol(), wasOpen = sbUnlocked(s.id, lv.n + 1);
+    const record = !prev || rank(r.stars, r.pct, tol) > rank(prev.stars, prev.pct, prev.tol || 40);
+    if (record) bm[lv.n] = { pct: r.pct, stars: r.stars, tol, date: nowLocal() };
+    save();
+    $("#bstars").innerHTML = starStr(bm[lv.n].stars);
+    $("#bbest").innerHTML = sbBestHTML(s, lv, total);
+    const opened = !wasOpen && lv.n < total && sbUnlocked(s.id, lv.n + 1);
+    const msg2 = r.lives <= 0 ? "Шарик разбился. Посмотри демо, послушай мелодию и попробуй снова." : r.stars < SB_NEED ? `Чтобы засчитать, нужно 2 звезды (80% стен). Сейчас ${r.stars}★ - ещё раз, мелодия запоминается с повтором.` : lv.n === total ? `Песня пройдена! Ты спел «${esc(s.title)}» по памяти.` : opened ? `Засчитано! Задание ${lv.n + 1} открыто.` : r.stars === 3 ? "Все стены чисто!" : "Засчитано. Можно улучшить рекорд или идти дальше.";
+    const notesTxt = B.walls.map((w) => `${w.word ? esc(w.word) + " " : ""}${noteShort(base() + w.rel)} ${w.passed ? "✓" : w.crashed ? "✗" : "·"}`).join(" · ");
+    $("#bres").innerHTML = `<div class="card sec stack" style="text-align:center">
+    <div>${starStr(r.stars, true)}</div>
+    <div style="font-family:Lora,serif;font-size:32px;font-weight:600">${r.passed} из ${r.total} стен</div>
+    <div class="small muted">жизней осталось: ${Math.max(0, r.lives)}${record && prev ? " · новый рекорд!" : ""}</div>
+    <div class="small">${notesTxt}</div>
+    <div class="${r.stars ? "info" : "note"}">${msg2}</div>
+    <div class="row wrap" style="justify-content:center">${sbNextBtn(s, lv, total)}</div></div>`;
+    if (opened) toast(`Задание ${lv.n + 1} открыто!`);
+  }
+
+  // src/features/path.js
+  var STAR = "b-twinkle";
+  var sp = () => (state.songs || {})[STAR] || { ph: {} };
+  var nDone = (a, b) => {
+    let n = 0;
+    for (let i = a; i <= b; i++) if (ballDone(i)) n++;
+    return n;
+  };
+  var firstOpen = (a, b) => {
+    for (let i = a; i <= b; i++) if (!ballDone(i)) return i;
+    return b;
+  };
+  var P = () => {
+    const s = songById(STAR);
+    return s ? s.ph.length : 1;
+  };
+  var sbN = (a, b) => {
+    let n = 0;
+    for (let i = a; i <= b; i++) if (sbDone(STAR, i)) n++;
+    return n;
+  };
+  var sbFirst = (a, b) => {
+    for (let i = a; i <= b; i++) if (!sbDone(STAR, i)) return i;
+    return b;
+  };
+  var PATH = [
+    {
+      id: "range",
+      icon: "↕",
+      title: "Замерь свой диапазон",
+      why: "Одна минута: приложение узнает, где твоему голосу удобно, и подстроит под него ноты.",
+      done: () => !!lastRange(),
+      to: () => "range"
+    },
+    {
+      id: "note",
+      icon: "🟠",
+      title: "Шарик: повтори одну ноту",
+      why: "Главный навык пения: услышал ноту - повторил её голосом. Первые 3 задания, от 2 звёзд.",
+      done: () => nDone(1, 3) === 3,
+      prog: () => `${nDone(1, 3)} из 3`,
+      to: () => "ball-" + firstOpen(1, 3)
+    },
+    {
+      id: "warmup",
+      icon: "♪",
+      title: "Распевка",
+      why: "Дыхание, мычание и гаммы разогревают голос, ноты потом берутся легче. Дальше - перед каждым пением.",
+      done: () => (state.warmups || []).length > 0,
+      to: () => "warmup"
+    },
+    {
+      id: "along",
+      icon: "🎹",
+      title: "Первая песня вместе с пианино",
+      why: "«Маленькая звёздочка»: пианино играет, ты поёшь вместе с ним. Спой так два раза.",
+      done: () => (sp().along || 0) >= 2,
+      prog: () => `${Math.min(2, sp().along || 0)} из 2`,
+      to: () => ["karaoke-" + STAR, "along"]
+    },
+    {
+      id: "note10",
+      icon: "🟠",
+      title: "Шарик: вся глава «Одна нота»",
+      why: "Одна нота от всех ступеней и экзамен главы без ударов.",
+      done: () => ballDone(10),
+      prog: () => `${nDone(1, 10)} из 10`,
+      to: () => "ball-" + firstOpen(1, 10)
+    },
+    {
+      id: "step",
+      icon: "🟠",
+      title: "Шарик: шаг на соседнюю ноту",
+      why: "Глава «Секунда», первые 3 задания. Из таких шагов состоит любая мелодия.",
+      done: () => nDone(11, 13) === 3,
+      prog: () => `${nDone(11, 13)} из 3`,
+      to: () => "ball-" + firstOpen(11, 13)
+    },
+    {
+      id: "phrase",
+      icon: "🎵",
+      title: "«Звёздочка» в Шарике: по фразе",
+      why: "Стены по нотам песни. Пианино играет фразу, потом ты ведёшь шарик сам. Каждая фраза на 2 звезды.",
+      done: () => sbN(1, P()) === P(),
+      prog: () => `${sbN(1, P())} из ${P()}`,
+      to: () => "sball-" + STAR + "-" + sbFirst(1, P())
+    },
+    {
+      id: "whole",
+      icon: "⭐",
+      title: "«Звёздочка» по памяти",
+      why: "Фразы парами без подсказки, потом вся песня целиком. Так мелодия запоминается.",
+      done: () => sbDone(STAR, sbTotal(P())),
+      prog: () => `${sbN(P() + 1, sbTotal(P()))} из ${sbTotal(P()) - P()}`,
+      to: () => "sball-" + STAR + "-" + sbFirst(P() + 1, sbTotal(P()))
+    }
+  ];
+  var pathNext = () => PATH.findIndex((s) => !s.done());
+  function pathGo(i) {
+    const st = PATH[i];
+    if (!st) return;
+    closeSheet();
+    const t = st.to();
+    if (Array.isArray(t)) {
+      state.settings.songMode = t[1];
+      save();
+      go(t[0]);
+    } else go(t);
+  }
+  function pathHide(v) {
+    state.settings.pathHide = !!v;
+    save();
+    closeSheet();
+    render();
+  }
+  var stepItem = (st, i, cur) => {
+    const ok = st.done(), pr = st.prog ? st.prog() : "";
+    return `<button class="item" ${act("pathGo", i)} style="${i === cur ? "border:2px solid var(--accent)" : ""}"><div class="dot ${ok ? "ear" : "pitch"}">${ok ? "✓" : i + 1}</div><div class="t"><b>${esc(st.title)}</b><span class="small muted">${esc(st.why)}${pr ? " · " + esc(pr) : ""}</span></div><span class="muted">›</span></button>`;
+  };
+  function pathAll() {
+    const cur = pathNext();
+    sheet(`<h2>Путь с нуля</h2>
+    <p class="small" style="margin:0">Петь - это навык, ему учатся: услышать ноту и попасть в неё голосом. Идём от одной ноты к песне, по 10-15 минут в день. Шаг отмечается сам, когда микрофон его засчитал.</p>
+    <div class="stack" style="gap:6px">${PATH.map((st, i) => stepItem(st, i, cur)).join("")}</div>
+    <button class="btn ghost" ${act("pathHide", 1)}>Я уже пою - скрыть путь</button>
+    <button class="btn" ${act("closeSheet")}>Закрыть</button>`);
+  }
+  function pathCard() {
+    if (state.settings.pathHide) return "";
+    const i = pathNext(), n = PATH.filter((s) => s.done()).length;
+    if (i < 0) return `<div class="card sec stack" style="padding:14px"><b>Путь с нуля пройден 🎉</b>
+    <div class="small muted">Ты спел первую песню сам. Дальше: «Ода к радости», главы «Шарика» по порядку и своя песня.</div>
+    <div class="row"><button class="btn ghost" style="flex:1" ${act("go", "songs")}>Песни</button><button class="btn ghost" style="flex:1" ${act("pathHide", 1)}>Скрыть</button></div></div>`;
+    const st = PATH[i], pr = st.prog ? st.prog() : "";
+    return `<div class="card sec stack" style="padding:14px">
+    <div class="row" style="gap:8px"><div style="flex:1"><b>Путь с нуля</b><div class="tiny muted">Сделано ${n} из ${PATH.length} · следующий шаг</div></div><button class="btn ghost" style="padding:6px 12px" ${act("pathAll")}>Весь путь</button></div>
+    <div class="bar"><i style="width:${Math.round(100 * n / PATH.length)}%"></i></div>
+    <button class="item" style="margin:0" ${act("pathGo", i)}><div class="dot pitch">${st.icon}</div><div class="t"><b>${esc(st.title)}</b><span class="small muted">${esc(st.why)}${pr ? " · " + esc(pr) : ""}</span></div><span class="muted">›</span></button></div>`;
   }
 
   // src/screens/today.js
@@ -6889,6 +7252,7 @@ details summary{cursor:pointer}
     let h = `<h1>Сегодня</h1><div class="muted">${d.getDate()} ${MONTHS[d.getMonth()]}</div>
     <p class="small" style="margin:8px 0 0">🍷 ${profName() ? esc(profName()) + ", налей" : "Налей"} бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.</p>`;
     if (!profName()) h += `<div class="card sec stack" style="padding:14px"><b>Как тебя зовут?</b><div class="row"><input id="tdname" class="inp" style="flex:1" maxlength="30" placeholder="Имя"><button class="btn" ${act("profRenameFrom", "#tdname")}>Готово</button></div><div class="tiny muted">Имя появится в твоих видео. Если телефон передают друзьям, у каждого может быть свой профиль: нажми 🎤 вверху.</div></div>`;
+    h += pathCard();
     if (!state.sessions.length) {
       h += `<div class="card sec stack"><h3>Привет! С чего начнём</h3>
       <p class="small" style="margin:0">Твой уровень пока не определён, и приложение ничего не додумывает. Оно отталкивается только от того, что ты сам отметишь после практики.</p>
@@ -6909,7 +7273,7 @@ details summary{cursor:pointer}
     }
     {
       const mine = songsAll().filter((x) => x.src !== "builtin").length;
-      h += `<button class="item" ${act("go", "songs")}><div class="dot rhythm">🎵</div><div class="t"><b>Разучить песню</b><span class="small muted">${mine ? "Моих песен: " + mine + " · " : ""}Своя из MIDI или караоке, или напой сам. По фразам, потом целиком</span></div><span class="muted">›</span></button>`;
+      h += `<button class="item" ${act("go", "songs")}><div class="dot rhythm">🎵</div><div class="t"><b>Разучить песню</b><span class="small muted">${mine ? "Моих песен: " + mine + " · " : ""}Как уровни «Шарика»: стены по нотам песни, фраза за фразой, пока не запомнишь. Своя из MIDI, караоке или напой сам</span></div><span class="muted">›</span></button>`;
     }
     {
       const r = lastRange();
@@ -6926,6 +7290,7 @@ details summary{cursor:pointer}
     if (fresh.length) h += `<div class="sec"><h2>Можно попробовать</h2>${fresh.map((e) => exItem(e)).join("")}</div>`;
     h += `<div class="sec"><h2>Уровни</h2><div class="grid3">${Object.keys(CATS).map(levelCard).join("")}</div>
     <p class="tiny muted">Следующий уровень открывается только после ${NEED_CONF} отметок «Уверенно» на текущем уровне минимум за ${NEED_DAYS} разных дня.</p></div>`;
+    if (state.settings.pathHide) h += `<button class="btn ghost block sec" ${act("pathHide", 0)}>Показать путь «С нуля»</button>`;
     return h;
   }
 
@@ -7124,7 +7489,7 @@ details summary{cursor:pointer}
   }
 
   // src/main.js
-  var NAMESPACES = [analysis_exports, audio_exports, piano_exports, router_exports, store_exports, ui_exports, util_exports, exercises_exports, check_exports, exercise_exports, exercises_exports2, logic_exports, recorder_exports, tap_exports, ball_exports, cam_exports, diary_exports, game_exports, learn_exports, range_exports, register_exports, voice_exports, warmup_exports, songlib_exports, songs_exports2, songs_exports, history_exports, notes_exports, profiles_exports, settings_exports, today_exports];
+  var NAMESPACES = [analysis_exports, audio_exports, piano_exports, router_exports, store_exports, ui_exports, util_exports, exercises_exports, check_exports, exercise_exports, exercises_exports2, logic_exports, recorder_exports, tap_exports, ball_exports, cam_exports, diary_exports, game_exports, learn_exports, range_exports, register_exports, voice_exports, warmup_exports, songlib_exports, songs_exports2, songball_exports, path_exports, songs_exports, history_exports, notes_exports, profiles_exports, settings_exports, today_exports];
   var { viewToday: viewToday2 } = today_exports;
   var { viewHistory: viewHistory2 } = history_exports;
   var { viewNotes: viewNotes2 } = notes_exports;
@@ -7144,11 +7509,13 @@ details summary{cursor:pointer}
   registerRoute("learn", viewLearn);
   registerRoute("voice", viewVoice, "exercises");
   registerRoute("diary", viewDiary);
-  registerRoute("songs", viewSongs, "exercises");
+  registerRoute("songs", viewSongs, "ball");
   registerPrefix("ex-", (id) => viewExercise2(exById2(id)), "exercises", (id) => !!exById2(id));
   registerPrefix("game-", (n) => viewGameLevel(+n), "ball", (n) => /^\d+$/.test(n));
   registerPrefix("ball-", (n) => viewBallLevel(+n), "ball", (n) => /^\d+$/.test(n));
-  registerPrefix("song-", (id) => viewSong(id), "exercises", (id) => !!songById(id));
+  registerPrefix("song-", (id) => viewSongLevels(id), "ball", (id) => !!songById(id));
+  registerPrefix("karaoke-", (id) => viewSong(id), "ball", (id) => !!songById(id));
+  registerPrefix("sball-", (r) => viewSongBall(r), "ball", (r) => !!sbParse(r));
   registerPrefix("voice-", (id) => viewVoiceSet(id), "exercises", (id) => !!voiceSet(id));
   beforeRender(gameStop);
   beforeRender(ballRebuild);
@@ -7208,6 +7575,9 @@ details summary{cursor:pointer}
     rangeSetBreak,
     rangeStart,
     rangeWork,
+    pathAll,
+    pathGo,
+    pathHide,
     resetAll,
     saveMelody,
     saveNote,
@@ -7215,6 +7585,7 @@ details summary{cursor:pointer}
     selectMelody,
     setExFilter,
     setRating,
+    sbShift,
     setStrict,
     setTol,
     setVoice,

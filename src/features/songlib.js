@@ -158,6 +158,8 @@ export function splitPhrases(notes, starts) {
   return out;
 }
 export const phraseRange = (song, k) => [song.ph[k], k + 1 < song.ph.length ? song.ph[k + 1] : song.notes.length];
+// сколько заданий у песни в «Шарике» (songball.js): каждая фраза, фразы парами, вся песня
+export const sbTotal = P => P + (P > 1 ? Math.ceil(P / 2) : 0) + 1;
 export const phraseNotes = (song, k) => { const [a, b] = phraseRange(song, k); return song.notes.slice(a, b); };
 // текст фразы: слоги вместе, если слов нет - пусто
 export const phraseWords = notes => notes.map(n => n.w || '').join('').replace(/\s+/g, ' ').trim();

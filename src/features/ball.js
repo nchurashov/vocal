@@ -112,6 +112,7 @@ export function viewBall() {
   let h = `<h1>Шарик</h1><p class="muted" style="margin:6px 0 0">Шарик катится по дорожке, впереди стены с окнами. Пой ноту, и шарик поднимется на её высоту: чем выше окно, тем выше нота. Сначала отдельные ноты, потом тоннели и мелодии.</p>
     <button class="item sec" style="margin-top:14px" ${act('go', 'warmup')}><div class="dot rhythm">${doneToday() ? '✓' : '♪'}</div><div class="t"><b>${doneToday() ? 'Распевка сегодня сделана' : 'Сначала распевка'}</b><span class="small muted">${doneToday() ? 'Голос разогрет, можно играть' : `Около ${warmupMin()} мин, чтобы голос не устал и ноты брались легче`}</span></div><span class="muted">›</span></button>
     ${diffSeg()}
+    <button class="item" ${act('go', 'songs')}><div class="dot pitch">🎵</div><div class="t"><b>Песни в «Шарике»</b><span class="small muted">Стены по нотам песни: фраза за фразой, пока не запомнишь мелодию. Можно добавить свою</span></div><span class="muted">›</span></button>
     <div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">★ ${total} из ${BALL_LEVELS.length * 3}</span><span class="pill">Пройдено: ${BALL_LEVELS.filter(l => ballDone(l.n)).length} из ${BALL_LEVELS.length}</span></div>`;
   const curCh = Math.floor((ballNextN() - 1) / 10);
   BALL_CHAPTERS.forEach((C, ci) => {
@@ -167,11 +168,11 @@ export function ballBestHTML(lv) {
 }
 export function ballBuild(lv) {
   const b = 60 / lv.bpm; let t = 0; const walls = [];
-  lv.walls.forEach(([s, len, gap], i) => {
+  lv.walls.forEach(([s, len, gap, word], i) => {
     // окно для смены ноты: если нота идёт сразу за другой, тоннель начинается чуть позже её начала
     const prev = lv.walls[i - 1];
     const open = prev && prev[2] < .5 && prev[0] !== s ? Math.min(Math.max(.4, .45 * b), len * b * .55) : 0;
-    walls.push({ rel: s, t0: t + open, t1: t + len * b, crashed: false, passed: false, inT: 0, outT: 0 });
+    walls.push({ rel: s, t0: t + open, t1: t + len * b, crashed: false, passed: false, inT: 0, outT: 0, ...(word ? { word } : {}) });
     t += (len + gap) * b;
   });
   // соседние тоннели без паузы склеиваются визуально
@@ -247,6 +248,8 @@ export function ballDraw(now) {
     // подпись ноты
     ctx.fillStyle = '#fff'; ctx.font = '800 13px Manrope, system-ui'; ctx.textAlign = 'center';
     if (x1 > -10) ctx.fillText(B.dupName ? noteShort(base() + w.rel) : VA.noteName(base() + w.rel), x1 + Math.min(24, (x2 - x1) / 2), gy - gh - 10);
+    // слог песни - под окном
+    if (w.word && x1 > -10) { ctx.font = '700 12px Manrope, system-ui'; ctx.fillStyle = 'rgba(255,240,200,.95)'; ctx.fillText(w.word.trim().slice(0, 10), x1 + Math.min(24, (x2 - x1) / 2), gy + gh + 20); }
   }
   ctx.textAlign = 'left';
   // линейка высоты слева
@@ -269,7 +272,7 @@ export function ballDraw(now) {
   ctx.font = '16px system-ui'; ctx.fillText('❤️'.repeat(Math.max(0, B.lives)) + '🤍'.repeat(3 - Math.max(0, B.lives)), W - 84, 22);
   const done = B.walls.filter(w => w.passed || w.crashed).length;
   ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(40, 12, W - 140, 6); ctx.fillStyle = '#FFD27A'; ctx.fillRect(40, 12, (W - 140) * done / B.walls.length, 6);
-  if (now < 0 && B.mode !== 'idle') { ctx.font = '700 48px Lora, serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(String(Math.ceil(-now)), W / 2, H / 2); ctx.textAlign = 'left'; }
+  if (now < 0 && B.mode !== 'idle') { const ls = B.pre != null && now < B.pre; ctx.font = ls ? '800 22px Manrope, system-ui' : '700 48px Lora, serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(ls ? '🎹 Слушай мелодию' : String(Math.ceil(-now)), W / 2, ls ? 54 : H / 2); ctx.textAlign = 'left'; }
   if (B.banner && now - B.banner.t < 1) { ctx.font = '800 17px Manrope, system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = B.banner.good ? '#B9F5CF' : '#FFC2BA'; ctx.globalAlpha = 1 - (now - B.banner.t); ctx.fillText(B.banner.text, W / 2, B.floor + 38); ctx.globalAlpha = 1; ctx.textAlign = 'left'; }
 }
 
@@ -317,8 +320,11 @@ export function ballSchedule(t0, withMelody) {
   });
 }
 export function ballCountIn() {
-  const c = ac(), b = 60 / B.lv.bpm, t = c.currentTime + .1;
-  stopAll(); tone(base() + B.walls[0].rel, t, 1.1);
+  const c = ac(), b = 60 / B.lv.bpm; let t = c.currentTime + .1;
+  stopAll(); B.pre = null;
+  // песня: сначала пианино играет всю фразу (B.pre - до какого времени «Слушай», голос в это время не считается)
+  if (B.lv.preview) { let x = 0; for (const [s, len, gap] of B.lv.walls) { tone(base() + s, t + x * b, Math.max(.12, len * b * .95), .2); x += len + gap; } t += x * b + .6; B.pre = -(1.4 + 4.5 * b) - .3; }
+  tone(base() + B.walls[0].rel, t, 1.1);
   for (let i = 0; i < 3; i++) click(t + 1.4 + i * b, i === 0);
   return t + 1.4 + 3 * b + 1.5 * b; // запас на подлёт к первой стене
 }
@@ -347,7 +353,7 @@ export async function ballLive() {
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const t0 = ballCountIn(); ballSchedule(t0, false);
-  camRecStart('#bcv', `${profName() ? profName() + ' · ' : ''}Шарик · уровень ${B.lv.n}`, stream);
+  camRecStart('#bcv', `${profName() ? profName() + ' · ' : ''}${B.lv.camTitle || 'Шарик · уровень ' + B.lv.n}`, stream);
   $('#blive').innerHTML = ICON.stop + ' Остановить';
   let last = -9;
   const loop = () => {
@@ -356,7 +362,7 @@ export async function ballLive() {
     an.getFloatTimeDomainData(buf);
     hist.push(VA.livePitch(buf, c.sampleRate)); if (hist.length > 3) hist.shift();
     const v = hist.filter(x => x != null);
-    ballStep(now, dt, v.length >= 2 ? VA.median(v) - base() : null); ballDraw(now);
+    ballStep(now, dt, v.length >= 2 && !(B.pre != null && now < B.pre) ? VA.median(v) - base() : null); ballDraw(now);
     if (B.lives <= 0) { ballFinish(false); return; }
     if (now < B.D + .6) B.raf = requestAnimationFrame(loop); else ballFinish(false);
   };
@@ -402,6 +408,7 @@ export async function ballTake(arrayBuf) {
 export function ballResult(mode) {
   const lv = B.lv, passed = B.walls.filter(w => w.passed).length, total = B.walls.length;
   const pct = Math.round(100 * passed / total), st = ballStarsFor(pct, B.lives);
+  if (lv.onResult) { lv.onResult({ pct, stars: st, lives: B.lives, passed, total, mode }); return; } // песня в «Шарике»: свой прогресс
   const g = ballState(), bm = g.best, prev = bm[lv.n], wasOpen = ballUnlocked(lv.n + 1), tol = ballTol();
   g.plays.push({ lvl: lv.n, pct, stars: st, lives: B.lives, mode, tol, date: nowLocal() }); if (g.plays.length > 300) g.plays.splice(0, g.plays.length - 300);
   const record = !prev || rank(st, pct, tol) > rank(prev.stars, prev.pct, bestTol(prev, lv.n));

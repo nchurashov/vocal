@@ -5,6 +5,7 @@ import { MONTHS, daysBetween, esc, fmtDay, plural, ymd } from '../core/util.js';
 import { CATS, RATINGS } from '../data/exercises.js';
 import { BALL_CHAPTERS, BALL_LEVELS, ballDone, ballNextN } from '../features/ball.js';
 import { diaryTodayItem } from '../features/diary.js';
+import { pathCard } from '../features/path.js';
 import { lastRange } from '../features/register.js';
 import { songsAll } from '../features/songs.js';
 import { setMin, voiceDoneToday, voiceNext } from '../features/voice.js';
@@ -37,6 +38,7 @@ export function viewToday() {
   let h = `<h1>Сегодня</h1><div class="muted">${d.getDate()} ${MONTHS[d.getMonth()]}</div>
     <p class="small" style="margin:8px 0 0">🍷 ${profName() ? esc(profName()) + ', налей' : 'Налей'} бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.</p>`;
   if (!profName()) h += `<div class="card sec stack" style="padding:14px"><b>Как тебя зовут?</b><div class="row"><input id="tdname" class="inp" style="flex:1" maxlength="30" placeholder="Имя"><button class="btn" ${act('profRenameFrom', '#tdname')}>Готово</button></div><div class="tiny muted">Имя появится в твоих видео. Если телефон передают друзьям, у каждого может быть свой профиль: нажми 🎤 вверху.</div></div>`;
+  h += pathCard();
   if (!state.sessions.length) {
     h += `<div class="card sec stack"><h3>Привет! С чего начнём</h3>
       <p class="small" style="margin:0">Твой уровень пока не определён, и приложение ничего не додумывает. Оно отталкивается только от того, что ты сам отметишь после практики.</p>
@@ -52,7 +54,7 @@ export function viewToday() {
   { const nx = BALL_LEVELS[ballNextN() - 1], done = BALL_LEVELS.filter(l => ballDone(l.n)).length;
     h += `<button class="item" ${act('go', `ball-${nx.n}`)}><div class="dot pitch">🟠</div><div class="t"><b>Шарик: глава ${nx.ch + 1}, ${nx.exam ? 'экзамен' : 'задание ' + nx.task}</b><span class="small muted">${esc(BALL_CHAPTERS[nx.ch].title)} · пройдено ${done} из ${BALL_LEVELS.length}</span></div><span class="muted">›</span></button>`; }
   { const mine = songsAll().filter(x => x.src !== 'builtin').length;
-    h += `<button class="item" ${act('go', 'songs')}><div class="dot rhythm">🎵</div><div class="t"><b>Разучить песню</b><span class="small muted">${mine ? 'Моих песен: ' + mine + ' · ' : ''}Своя из MIDI или караоке, или напой сам. По фразам, потом целиком</span></div><span class="muted">›</span></button>`; }
+    h += `<button class="item" ${act('go', 'songs')}><div class="dot rhythm">🎵</div><div class="t"><b>Разучить песню</b><span class="small muted">${mine ? 'Моих песен: ' + mine + ' · ' : ''}Как уровни «Шарика»: стены по нотам песни, фраза за фразой, пока не запомнишь. Своя из MIDI, караоке или напой сам</span></div><span class="muted">›</span></button>`; }
   { const r = lastRange();
     h += `<button class="item" ${act('go', 'range')}><div class="dot ear">↕</div><div class="t"><b>${r ? 'Мой диапазон: ' + noteShort(r.lo) + ' - ' + noteShort(r.hi) : 'Замерить мой диапазон'}</b><span class="small muted">${r ? 'Последний замер ' + fmtDay(r.date.slice(0, 10)).toLowerCase() + ' · работаем от ' + noteShort(base()) + (strictOct() ? ', строго в октаве' : '') : 'Минута: узнаешь свой низ и верх и выберешь, где работать'}</span></div><span class="muted">›</span></button>`; }
   h += `<button class="item" ${act('go', 'learn')}><div class="dot pitch">🎹</div><div class="t"><b>Как устроены ноты</b><span class="small muted">До-ре-ми и C-D-E, октавы, что значат C4 и E2, клавиатура со звуком</span></div><span class="muted">›</span></button>`;
@@ -63,5 +65,6 @@ export function viewToday() {
   if (fresh.length) h += `<div class="sec"><h2>Можно попробовать</h2>${fresh.map(e => exItem(e)).join('')}</div>`;
   h += `<div class="sec"><h2>Уровни</h2><div class="grid3">${Object.keys(CATS).map(levelCard).join('')}</div>
     <p class="tiny muted">Следующий уровень открывается только после ${NEED_CONF} отметок «Уверенно» на текущем уровне минимум за ${NEED_DAYS} разных дня.</p></div>`;
+  if (state.settings.pathHide) h += `<button class="btn ghost block sec" ${act('pathHide', 0)}>Показать путь «С нуля»</button>`;
   return h;
 }

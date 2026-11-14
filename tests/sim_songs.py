@@ -13,7 +13,9 @@ SIL = os.path.join(OUT, 'silence.wav')
 with wave.open(SIL, 'wb') as w:  # микрофон молчит: голос подаём имитацией, чтобы знать, что спето
     w.setnchannels(1); w.setsampwidth(2); w.setframerate(44100); w.writeframes(b'\0\0' * 44100 * 2)
 # певец: поёт в такт полоскам (опоздание 0.15 с, вибрато), bad - фальшь 0.7 полутона, off - молчит. Вместо микрофона (SONG_FAKE)
+# 'leak' - нет наушников: во время проверки микрофон слышит проверочную ноту пианино, в песне - само пианино
 SINGER = """window.__sing = 'good'; window.SONG_FAKE = (now, S) => { if (window.__sing === 'off') return null;
+  if (S.phase === 'check') return window.__sing === 'leak' ? S.checkM : null;
   const t = now - .15, n = S.G.N.find(n => t >= n.t0 && t < n.t1 - .04);
   return n ? n.m + .12 * Math.sin(now * 35) + (window.__sing === 'bad' ? .7 : 0) : null; }; 1"""
 fails = []
@@ -31,6 +33,8 @@ with sync_playwright() as p:
         if t not in body: fails.append(f'в списке песен нет «{t}»')
     # --- по фразам: чисто -> сам идёт дальше; фальшь -> повтор, фраза не засчитана
     pg.click('text=Маленькая звёздочка'); pg.wait_for_timeout(300)
+    if pg.evaluate('location.hash') != '#song-b-twinkle': fails.append('песня из списка открылась не на заданиях')
+    pg.click('text=Караоке'); pg.wait_for_timeout(300)
     pg.evaluate(SINGER)
     pg.click('#sgplay')
     pg.wait_for_timeout(1500)
@@ -52,10 +56,41 @@ with sync_playwright() as p:
     except Exception: fails.append('по фразам: после фальши фраза не повторилась (k=%s, %s)' % (pg.evaluate('SG.k'), pg.evaluate('SG.tries')))
     pg.goto(URL + '#songs'); pg.wait_for_timeout(400)
     if pg.evaluate('!!(SG && SG.stream) || busy'): fails.append('микрофон не закрылся при уходе с песни')
-    if 'выучено 2' not in pg.inner_text('body'): fails.append('в списке не видно прогресса «выучено 2»')
+    pg.goto(URL + '#karaoke-b-twinkle'); pg.wait_for_timeout(300)
+    if pg.inner_text('#sgchips').count('✓') < 2: fails.append('в караоке не видно двух выученных фраз')
+    # --- с пианино: в наушниках считаем ноты; без наушников (микрофон слышит пианино) - без оценки, фразы не засчитываются
+    pg.goto(URL + '#songs'); pg.wait_for_timeout(200); pg.goto(URL + '#karaoke-b-twinkle'); pg.wait_for_timeout(300)
+    pg.click('.seg button:has-text("С пианино")'); pg.wait_for_timeout(300)
+    if pg.evaluate("SG.mode") != 'along': fails.append('с пианино: кнопка режима не сработала')
+    pg.evaluate(SINGER + "; window.__sing = 'leak'")
+    ph_before = pg.evaluate("JSON.stringify(state.songs['b-twinkle'].ph)")
+    pg.click('#sgplay')
+    try: pg.wait_for_function("SG.phase === 'along'", timeout=8000)
+    except Exception: fails.append('с пианино без наушников: не перешёл в подпевание без оценки: ' + str(pg.evaluate('SG.phase')))
+    if 'без оценки' not in pg.inner_text('#sgmsg'): fails.append('с пианино без наушников: не сказал, что без оценки')
+    pg.wait_for_timeout(2500)
+    if pg.evaluate("SG.G.N.some(n => n.hit)"): fails.append('с пианино без наушников: ноты засчитаны, хотя микрофон слышит пианино')
+    try: pg.wait_for_function("SG.phase === 'done'", timeout=60000)
+    except Exception: fails.append('с пианино без наушников: песня не закончилась')
+    if pg.evaluate("state.songs['b-twinkle'].along") != 1: fails.append('с пианино: проход не записан')
+    if pg.evaluate("state.songs['b-twinkle'].alongPct || 0"): fails.append('с пианино без наушников: записан процент')
+    if pg.evaluate("JSON.stringify(state.songs['b-twinkle'].ph)") != ph_before: fails.append('с пианино: фразы засчитались как выученные')
+    if 'Спето вместе с пианино' not in pg.inner_text('#sgmsg'): fails.append('с пианино: нет итога: ' + pg.inner_text('#sgmsg'))
+    pg.evaluate("window.__sing = 'good'"); pg.click('#sgplay')
+    try: pg.wait_for_function("SG.phase === 'sing' && SG.scored", timeout=8000)
+    except Exception: fails.append('с пианино в наушниках: оценка не включилась: ' + str(pg.evaluate('SG.phase')))
+    try: pg.wait_for_function("SG.phase === 'done'", timeout=60000)
+    except Exception: fails.append('с пианино в наушниках: песня не закончилась')
+    if pg.evaluate("state.songs['b-twinkle'].alongPct || 0") < 90: fails.append('с пианино в наушниках: чистый певец получил мало: ' + str(pg.evaluate("state.songs['b-twinkle'].alongPct")))
+    pg.evaluate("window.__sing = 'bad'"); pg.click('#sgplay')
+    try: pg.wait_for_function("SG.phase === 'done'", timeout=60000)
+    except Exception: fails.append('с пианино фальшиво: песня не закончилась')
+    if pg.evaluate("SG.res.pct") > 20: fails.append('с пианино в наушниках: фальшь дала %s%%' % pg.evaluate("SG.res.pct"))
+    if pg.evaluate("state.songs['b-twinkle'].along") != 3: fails.append('с пианино: проходов должно быть 3')
+    pg.evaluate("window.__sing = 'off'")
     # --- целиком: первая нота, дальше всю песню сам; засчитываются и фразы
     pg.evaluate("state.settings.songMode = 'whole'; save()")
-    pg.goto(URL + '#song-b-ode'); pg.wait_for_timeout(300)
+    pg.goto(URL + '#karaoke-b-ode'); pg.wait_for_timeout(300)
     pg.evaluate(SINGER)
     pg.click('#sgplay')
     try: pg.wait_for_function("(state.songs['b-ode']||{}).whole >= 90", timeout=60000)
@@ -74,7 +109,7 @@ with sync_playwright() as p:
     pg.evaluate("window.__sing = 'off'; state.settings.songMode = 'phrase'; save()")
     # --- тональность: под низкий голос октавой ниже, кнопки сдвигают
     pg.evaluate("state.range = [{date: '2026-11-01T10:00:00', lo: 40, hi: 64}]; save()")
-    pg.goto(URL + '#song-b-twinkle'); pg.wait_for_timeout(300)
+    pg.goto(URL + '#karaoke-b-twinkle'); pg.wait_for_timeout(300)
     if pg.evaluate("songShiftOf(songById('b-twinkle'))") != -12: fails.append('тональность под диапазон E2-E4 должна быть на октаву ниже')
     pg.click('button[title="Выше"]'); pg.wait_for_timeout(200)
     if pg.evaluate("state.songs['b-twinkle'].shift") != -11: fails.append('кнопка «Выше» не сдвинула на полутон')
@@ -86,6 +121,7 @@ with sync_playwright() as p:
     if pg.input_value('#sgtitle') != 'Берёза': fails.append('караоке: название не из файла: ' + pg.input_value('#sgtitle'))
     pg.click('#sgadd button:has-text("Сохранить")'); pg.wait_for_timeout(400)
     if not pg.evaluate("location.hash.startsWith('#song-s')"): fails.append('после сохранения не открылась песня')
+    pg.goto(URL + '#karaoke-' + pg.evaluate("location.hash.slice(6)")); pg.wait_for_timeout(300)
     if pg.evaluate("SG.s.notes.map(n => n.w || '').join('')").replace(' ', '')[:6] != 'Вополе': fails.append('караоке: слова не дошли до песни')
     kid = pg.evaluate("SG.s.id")
     # --- своя песня из записи голоса (без музыки)
@@ -96,6 +132,7 @@ with sync_playwright() as p:
     n = pg.evaluate("SG.draft ? SG.draft.notes.length : 0")
     if not 8 <= n <= 11: fails.append(f'голос: в записи 10 нот, нашёл {n}')
     pg.fill('#sglyr', 'Первая строчка'); pg.click('#sgadd button:has-text("Сохранить")'); pg.wait_for_timeout(400)
+    pg.goto(URL + '#karaoke-' + pg.evaluate("location.hash.slice(6)")); pg.wait_for_timeout(300)
     if pg.evaluate("SG.s.notes[0].w") != 'Первая строчка': fails.append('голос: введённые слова не сохранились')
     vid = pg.evaluate("SG.s.id")
     # песни общие для профилей, прогресс - у каждого свой
@@ -106,7 +143,7 @@ with sync_playwright() as p:
     if not pg.evaluate(f"!!songById('{kid}')"): fails.append('удалилась не та песня')
     # --- вредный файл песен в памяти: код не выполняется, разметка не вставляется
     pg.evaluate("""localStorage.setItem('vocal-songs', JSON.stringify([{id: 'sevil', title: '<img src=x onerror="window.__pwn=1">', notes: [{m:60,t:0,d:1,w:'<b onclick=1>я</b>'},{m:62,t:1,d:1},{m:64,t:2,d:1}], ph:[0]}, {id: '"><script>', title: 'x', notes: []}]))""")
-    pg.goto(URL + '#songs'); pg.wait_for_timeout(300); pg.goto(URL + '#song-sevil'); pg.wait_for_timeout(500)
+    pg.goto(URL + '#songs'); pg.wait_for_timeout(300); pg.goto(URL + '#song-sevil'); pg.wait_for_timeout(500); pg.goto(URL + '#karaoke-sevil'); pg.wait_for_timeout(500)
     if pg.evaluate('window.__pwn') or pg.evaluate("!!document.querySelector('img[src=x], b[onclick]')"): fails.append('вредное название песни выполнилось или вставилось как разметка')
     if '<img' not in pg.inner_text('body'): fails.append('вредное название должно показаться как текст')
     # прогресс песен переживает перезагрузку и проверку данных
