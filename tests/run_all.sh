@@ -6,6 +6,7 @@ python3 build.py
 python3 tests/check_code.py
 python3 tests/check_modules.py
 node tests/test_analysis.js
+node tests/test_server.js
 node tests/synth.js
 node tests/test_songs.js
 for t in smoke_ui sim_data sim_ball sim_game sim_range sim_warmup sim_voice sim_cam sim_diary sim_profiles sim_songs; do

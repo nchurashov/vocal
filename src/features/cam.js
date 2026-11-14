@@ -109,13 +109,30 @@ export function camPanel(g, W, y, h, p) {
   g.textAlign = 'center'; g.fillStyle = '#7A6E66'; g.font = '700 26px Manrope, system-ui, sans-serif';
   if (p.top) g.fillText(String(p.top).slice(0, 40), W / 2, y + 46);
   const big = String(p.big || '').trim();
-  if (big) {
+  if (p.keys) { // замер: нота поменьше, под ней клавиатура как на экране
+    if (big) { g.fillStyle = '#2B231E'; g.font = '800 60px Lora, Georgia, serif'; g.fillText(big.slice(0, 12), W / 2, y + 112); }
+    camPiano(g, 32, y + 134, W - 64, Math.min(150, h - 230), p.keys);
+  } else if (big) {
     let fs = big.length > 60 ? 34 : big.length > 28 ? 42 : big.length > 12 ? 58 : 84, n;
     for (; fs >= 26; fs -= 4) { g.font = `800 ${fs}px Lora, Georgia, serif`; n = camWrap(g, big, W / 2, 0, W - 80, fs * 1.18, false); if (n * fs * 1.18 <= h - 120) break; }
     g.fillStyle = '#2B231E'; const lh = fs * 1.18, top = y + 70 + (h - 120 - n * lh) / 2 + fs * .9;
     camWrap(g, big, W / 2, top, W - 80, lh);
   }
   if (p.sub) { g.fillStyle = '#C8573A'; g.font = '700 26px Manrope, system-ui, sans-serif'; g.fillText(String(p.sub).slice(0, 48), W / 2, y + h - 24); }
+}
+// клавиатура на холсте, как pianoSVG: k = { from, to, lo, hi, chestHi, cur } (midi); грудной - цвет бренда, фальцет - жёлтый, текущая нота - залита
+export function camPiano(g, x, y, w, h, k) {
+  const pc = m => ((m % 12) + 12) % 12, blk = m => [1, 3, 6, 8, 10].includes(pc(m));
+  const from = k.from - pc(k.from), to = k.to + 11 - pc(k.to);
+  const whites = []; for (let m = from; m <= to; m++) if (!blk(m)) whites.push(m);
+  const ww = w / whites.length, bw = ww * .62, bh = h * .62, ch = k.chestHi == null ? k.hi : k.chestHi, cur = k.cur == null ? null : Math.round(k.cur);
+  const fill = (m, b) => m === cur ? '#C8573A' : k.lo != null && m >= k.lo && m <= ch ? (b ? '#81402D' : '#F3DAD4') : k.lo != null && m > ch && m <= k.hi ? (b ? '#826025' : '#F0E0C3') : (b ? '#2B231E' : '#FFFFFF');
+  const xs = {}; whites.forEach((m, i) => xs[m] = x + i * ww);
+  g.strokeStyle = '#7A6E66'; g.lineWidth = 1.5;
+  for (const m of whites) { g.fillStyle = fill(m, false); camRound(g, xs[m], y, ww, h, 4); g.fill(); g.stroke(); }
+  for (let m = from; m <= to; m++) if (blk(m)) { g.fillStyle = fill(m, true); camRound(g, xs[m - 1] + ww - bw / 2, y, bw, bh, 3); g.fill(); g.stroke(); }
+  g.fillStyle = '#7A6E66'; g.font = '700 18px Manrope, system-ui, sans-serif'; g.textAlign = 'center';
+  for (const m of whites) if (pc(m) === 0) g.fillText('C' + (Math.floor(m / 12) - 1), xs[m] + ww / 2, y + h + 22);
 }
 // микрофон для записи в упражнениях (там, где своего нет): открывается один раз на сессию, закрывается в camOff
 export async function camMic() {

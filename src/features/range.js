@@ -110,7 +110,8 @@ export async function rangeStart() {
   RG = { mode: 'live', fr: [], stream, lo: null, hi: null };
   rangeDraw();
   const T = micTap(stream), hist = [];
-  if (camOn()) camRecStart(() => ({ top: 'Замер диапазона', big: RG && RG.cur != null ? noteShort(RG.cur) : '...', sub: RG && RG.lo != null ? `низ ${noteShort(RG.lo)} · верх ${noteShort(RG.hi)}` : '' }), (profName() ? profName() + ' · ' : '') + 'Мой диапазон', stream);
+  if (camOn()) camRecStart(() => ({ top: 'Замер диапазона', big: RG && RG.cur != null ? noteShort(RG.cur) : '...', sub: RG && RG.lo != null ? `низ ${noteShort(RG.lo)} · верх ${noteShort(RG.hi)}${RG.chestHi != null ? ' · грудной до ' + noteShort(RG.chestHi) : ''}` : '',
+    keys: { from: Math.min(36, RG?.lo ?? 36), to: Math.max(83, RG?.hi ?? 83), lo: RG?.lo, hi: RG?.hi, chestHi: RG?.chestHi, cur: RG?.cur } }), (profName() ? profName() + ' · ' : '') + 'Мой диапазон', stream);
   const loop = () => {
     if (!RG || RG.mode !== 'live') return;
     RG.raf = requestAnimationFrame(loop);
