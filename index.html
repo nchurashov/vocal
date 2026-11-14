@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-8KRYJjwnolAbXypoNdT5GrqBa/TMct81KuP5atHsUu8='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-57zaki44zdWPPhB9fee/Wdf2gDw1S48sWw7+4meaEN0='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Вокал под бокал</title>
 <meta name="apple-mobile-web-app-title" content="Вокал под бокал"><meta name="description" content="Вокал под бокал: налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -4107,6 +4107,7 @@ details summary{cursor:pointer}
     ballGap: () => ballGap,
     ballGen: () => ballGen,
     ballLive: () => ballLive,
+    ballMicWatch: () => ballMicWatch,
     ballNextLbl: () => ballNextLbl,
     ballNextN: () => ballNextN,
     ballOpenCh: () => ballOpenCh,
@@ -4732,7 +4733,7 @@ details summary{cursor:pointer}
     });
     out[out.length - 1][1] = Math.max(2, out[out.length - 1][1]);
     out[out.length - 1][2] = 1;
-    const from = fixed ? `от ${DEG_NAME[ti]}` : "вразнобой";
+    const from = fixed ? `от ${VA.noteName(base() + fixed.r).toLowerCase()}` : "вразнобой";
     return { n: ci * 10 + ti + 1, ch: ci, task: ti + 1, exam, from, title: exam ? `Экзамен: ${C2.title.toLowerCase()}` : `${C2.title} ${from}`, hint: C2.goal, bpm, guide, walls: out };
   }
   var BALL_LEVELS = [];
@@ -5032,6 +5033,19 @@ details summary{cursor:pointer}
       ctx.fillRect(p.x + p.vx * a, p.y + p.vy * a + 300 * a * a, 4, 4);
     }
     ctx.globalAlpha = 1;
+    if (B.mode === "live" && B.mic) {
+      ctx.fillStyle = "rgba(0,0,0,.35)";
+      ctx.fillRect(10, H - 10, 60, 4);
+      ctx.fillStyle = B.mic.dead ? "#E8695E" : "#7FD39E";
+      ctx.fillRect(10, H - 10, 60 * Math.min(1, Math.sqrt(B.mic.level) * 2.6), 4);
+      if (B.mic.dead) {
+        ctx.font = "800 14px Manrope, system-ui";
+        ctx.fillStyle = "#FFC2BA";
+        ctx.textAlign = "center";
+        ctx.fillText("🎤 Микрофон молчит", W / 2, B.ceil + 22);
+        ctx.textAlign = "left";
+      }
+    }
     ctx.font = "16px system-ui";
     ctx.fillText("❤️".repeat(Math.max(0, B.lives)) + "🤍".repeat(3 - Math.max(0, B.lives)), W - 84, 22);
     const done = B.walls.filter((w) => w.passed || w.crashed).length;
@@ -5118,6 +5132,7 @@ details summary{cursor:pointer}
     B.trail = [];
     B.parts = [];
     B.voice = null;
+    B.mic = null;
     B.oct = null;
     B.octBuf = [];
     B.y = B.floor - B.r;
@@ -5188,6 +5203,7 @@ details summary{cursor:pointer}
     an.fftSize = 4096;
     src.connect(an);
     const buf = new Float32Array(an.fftSize), hist = [];
+    B.mic = { zero: 0, heard: 0, level: 0, dead: false };
     const t0 = ballCountIn();
     ballSchedule(t0, false);
     camRecStart("#bcv", `${profName() ? profName() + " · " : ""}Шарик · уровень ${B.lv.n}`, stream);
@@ -5195,10 +5211,17 @@ details summary{cursor:pointer}
     let last = -9;
     const loop = () => {
       if (!B || B.stopped || B.mode !== "live") return;
+      if (c.state !== "running") {
+        const r = c.resume();
+        if (r && r.catch) r.catch(() => {
+        });
+      }
       const now = c.currentTime - t0, dt = last < -8 ? 0 : Math.min(0.05, now - last);
       last = now;
       an.getFloatTimeDomainData(buf);
-      hist.push(VA.livePitch(buf, c.sampleRate));
+      const p = VA.livePitch(buf, c.sampleRate);
+      ballMicWatch(buf, p, now);
+      hist.push(p);
       if (hist.length > 3) hist.shift();
       const v = hist.filter((x) => x != null);
       ballStep(now, dt, v.length >= 2 ? VA.median(v) - base() : null);
@@ -5211,6 +5234,28 @@ details summary{cursor:pointer}
       else ballFinish(false);
     };
     loop();
+  }
+  function ballMicWatch(buf, p, now) {
+    const M = B.mic;
+    let mx = 0, e = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = buf[i];
+      e += v * v;
+      if (v > mx) mx = v;
+      else if (-v > mx) mx = -v;
+    }
+    M.level = Math.sqrt(e / buf.length);
+    if (mx === 0) {
+      if (++M.zero > 90 && !M.dead) {
+        M.dead = true;
+        $("#bnote").innerHTML = `<div class="note small" style="margin-top:10px">${MIC_DEAD}</div>`;
+      }
+    } else if (M.dead) {
+      M.zero = 0;
+      M.dead = false;
+      $("#bnote").innerHTML = "";
+    } else M.zero = 0;
+    if (p != null && B.walls.some((w) => now >= w.t0 && now <= w.t1)) M.heard++;
   }
   function ballFinish(aborted) {
     if (!B) return;
@@ -5227,6 +5272,12 @@ details summary{cursor:pointer}
     if (aborted) {
       ballReset();
       ballDraw(-2);
+      return;
+    }
+    if (mode === "live" && B.mic && B.mic.heard < 10) {
+      const dead = B.mic.dead || B.mic.level === 0;
+      $("#bnote").innerHTML = "";
+      $("#bres").innerHTML = `<div class="note" style="margin-top:10px"><b>Микрофон не услышал голоса</b>, поэтому шарик стоял на месте. Результат не записан.<br>${dead ? MIC_DEAD : "Пой громче и ближе к телефону, на «ма» или «ла». Если подключены наушники с микрофоном, попробуй без них."}</div>`;
       return;
     }
     ballResult(mode === "replay" ? "take" : "live");

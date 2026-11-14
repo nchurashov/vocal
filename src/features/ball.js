@@ -1,6 +1,6 @@
 import { act, onChange, onInput } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
-import { MIC_DIRECT, ac, afterMic, base, click, master, noteShort, openMic, stopAll, strictOct, tone } from '../core/audio.js';
+import { MIC_DEAD, MIC_DIRECT, ac, afterMic, base, click, master, noteShort, openMic, stopAll, strictOct, tone } from '../core/audio.js';
 import { afterHooks, render } from '../core/router.js';
 import { profName, save, state } from '../core/store.js';
 import { toast } from '../core/ui.js';
@@ -75,7 +75,8 @@ export function ballGen(ci, ti, W) {
     return [s, len, legato ? 0 : Math.max(1, 2 - Math.round(d * 2) * .5)];
   });
   out[out.length - 1][1] = Math.max(2, out[out.length - 1][1]); out[out.length - 1][2] = 1;
-  const from = fixed ? `от ${DEG_NAME[ti]}` : 'вразнобой';
+  // название - настоящая нота (как на стене), а не ступень от базовой: при базе Ля# «от фа» звучало бы как Ре#
+  const from = fixed ? `от ${VA.noteName(base() + fixed.r).toLowerCase()}` : 'вразнобой';
   return { n: ci * 10 + ti + 1, ch: ci, task: ti + 1, exam, from, title: exam ? `Экзамен: ${C.title.toLowerCase()}` : `${C.title} ${from}`, hint: C.goal, bpm, guide, walls: out };
 }
 export let BALL_LEVELS = [];
@@ -265,6 +266,12 @@ export function ballDraw(now) {
   B.parts = B.parts.filter(p => now - p.t < .8);
   for (const p of B.parts) { const a = now - p.t; ctx.fillStyle = p.c; ctx.globalAlpha = 1 - a / .8; ctx.fillRect(p.x + p.vx * a, p.y + p.vy * a + 300 * a * a, 4, 4); }
   ctx.globalAlpha = 1;
+  // громкость микрофона (живая игра): видно, слышит ли телефон голос
+  if (B.mode === 'live' && B.mic) {
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(10, H - 10, 60, 4);
+    ctx.fillStyle = B.mic.dead ? '#E8695E' : '#7FD39E'; ctx.fillRect(10, H - 10, 60 * Math.min(1, Math.sqrt(B.mic.level) * 2.6), 4);
+    if (B.mic.dead) { ctx.font = '800 14px Manrope, system-ui'; ctx.fillStyle = '#FFC2BA'; ctx.textAlign = 'center'; ctx.fillText('🎤 Микрофон молчит', W / 2, B.ceil + 22); ctx.textAlign = 'left'; }
+  }
   // интерфейс
   ctx.font = '16px system-ui'; ctx.fillText('❤️'.repeat(Math.max(0, B.lives)) + '🤍'.repeat(3 - Math.max(0, B.lives)), W - 84, 22);
   const done = B.walls.filter(w => w.passed || w.crashed).length;
@@ -308,7 +315,7 @@ export function ballStep(now, dt, voiceRel) {
   }
 }
 export function buzz() { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.type = 'sawtooth'; o.frequency.value = 90; g.gain.setValueAtTime(.12, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .25); o.connect(g).connect(master); o.start(); o.stop(c.currentTime + .3); }
-export function ballReset(keepResult) { cancelAnimationFrame(B.raf); stopAll(); B.walls.forEach(w => Object.assign(w, { crashed: false, passed: false, inT: 0, outT: 0 })); B.lives = 3; B.trail = []; B.parts = []; B.voice = null; B.oct = null; B.octBuf = []; B.y = B.floor - B.r; B.vy = 0; B.banner = null; B.devs = null; $('#bnote').innerHTML = ''; if (!keepResult) $('#bres').innerHTML = ''; }
+export function ballReset(keepResult) { cancelAnimationFrame(B.raf); stopAll(); B.walls.forEach(w => Object.assign(w, { crashed: false, passed: false, inT: 0, outT: 0 })); B.lives = 3; B.trail = []; B.parts = []; B.voice = null; B.mic = null; B.oct = null; B.octBuf = []; B.y = B.floor - B.r; B.vy = 0; B.banner = null; B.devs = null; $('#bnote').innerHTML = ''; if (!keepResult) $('#bres').innerHTML = ''; }
 export function ballSchedule(t0, withMelody) {
   const b = 60 / B.lv.bpm;
   B.walls.forEach((w, i) => {
@@ -346,21 +353,35 @@ export async function ballLive() {
   const c = ac(); ballReset(); B.mode = 'live'; B.stream = stream; setBusy(true);
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
+  B.mic = { zero: 0, heard: 0, level: 0, dead: false };
   const t0 = ballCountIn(); ballSchedule(t0, false);
   camRecStart('#bcv', `${profName() ? profName() + ' · ' : ''}Шарик · уровень ${B.lv.n}`, stream);
   $('#blive').innerHTML = ICON.stop + ' Остановить';
   let last = -9;
   const loop = () => {
     if (!B || B.stopped || B.mode !== 'live') return;
+    // iPhone может приостановить звуковой движок (звонок, уведомление, окно разрешения) - будим, иначе игра замрёт
+    if (c.state !== 'running') { const r = c.resume(); if (r && r.catch) r.catch(() => { }); }
     const now = c.currentTime - t0, dt = last < -8 ? 0 : Math.min(.05, now - last); last = now;
     an.getFloatTimeDomainData(buf);
-    hist.push(VA.livePitch(buf, c.sampleRate)); if (hist.length > 3) hist.shift();
+    const p = VA.livePitch(buf, c.sampleRate); ballMicWatch(buf, p, now);
+    hist.push(p); if (hist.length > 3) hist.shift();
     const v = hist.filter(x => x != null);
     ballStep(now, dt, v.length >= 2 ? VA.median(v) - base() : null); ballDraw(now);
     if (B.lives <= 0) { ballFinish(false); return; }
     if (now < B.D + .6) B.raf = requestAnimationFrame(loop); else ballFinish(false);
   };
   loop();
+}
+// сторож микрофона в живой игре: громкость для полоски, ровный ноль ~1.5 с = звук с микрофона не приходит, сколько кадров с голосом
+export function ballMicWatch(buf, p, now) {
+  const M = B.mic; let mx = 0, e = 0;
+  for (let i = 0; i < buf.length; i++) { const v = buf[i]; e += v * v; if (v > mx) mx = v; else if (-v > mx) mx = -v; }
+  M.level = Math.sqrt(e / buf.length);
+  if (mx === 0) { if (++M.zero > 90 && !M.dead) { M.dead = true; $('#bnote').innerHTML = `<div class="note small" style="margin-top:10px">${MIC_DEAD}</div>`; } }
+  else if (M.dead) { M.zero = 0; M.dead = false; $('#bnote').innerHTML = ''; } else M.zero = 0;
+  // считаем только внутри тоннелей: подсказку пианино из динамика (она звучит до стены) за голос не принимаем
+  if (p != null && B.walls.some(w => now >= w.t0 && now <= w.t1)) M.heard++;
 }
 export function ballFinish(aborted) {
   if (!B) return;
@@ -369,6 +390,13 @@ export function ballFinish(aborted) {
   if (mode === 'live') camRecStop(aborted ? '' : `${B.walls.filter(w => w.passed).length} из ${B.walls.length} стен`, aborted);
   const btn = $('#blive'); if (btn) btn.innerHTML = ICON.play + ' Играть ещё раз';
   if (aborted) { ballReset(); ballDraw(-2); return; }
+  // микрофон не услышал ни одной ноты - это не попытка: результат не пишем, честно говорим, что случилось
+  if (mode === 'live' && B.mic && B.mic.heard < 10) {
+    const dead = B.mic.dead || B.mic.level === 0;
+    $('#bnote').innerHTML = '';
+    $('#bres').innerHTML = `<div class="note" style="margin-top:10px"><b>Микрофон не услышал голоса</b>, поэтому шарик стоял на месте. Результат не записан.<br>${dead ? MIC_DEAD : 'Пой громче и ближе к телефону, на «ма» или «ла». Если подключены наушники с микрофоном, попробуй без них.'}</div>`;
+    return;
+  }
   ballResult(mode === 'replay' ? 'take' : 'live');
 }
 // попытка записью: шарик летит по спетым нотам

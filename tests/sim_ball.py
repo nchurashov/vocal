@@ -68,6 +68,17 @@ with sync_playwright() as p:
       state.ball.best[10] = { stars: 3 }; out.push(ballUnlocked(11), BALL_LEVELS.length, BALL_LEVELS.filter(l => l.exam).length);
       return out; })()""")
     if rules != [True, 0, False, True, True, False, True, 100, 10]: fails.append(f'правила открытия: {rules}')
+    # название задания - настоящая нота: при базе Ля# задание 4 главы 1 «от ре#», как на стене
+    nm = pg.evaluate("(() => { state.settings.base = 46; state.range = []; save(); ballRebuild(); const r = BALL_LEVELS.slice(0, 7).map(l => l.from + '=' + VA.noteName(base() + l.walls[0][0]).toLowerCase()); state.settings.base = 48; save(); ballRebuild(); return r; })()")
+    if any(x.split('=')[0] != 'от ' + x.split('=')[1] for x in nm): fails.append(f'название задания не совпадает с нотой на стене: {nm}')
+    # сторож микрофона: ровный ноль = «молчит»; ни одной ноты в тоннелях - результат не пишется
+    pg.goto(f'{URL}#ball-4'); pg.wait_for_timeout(100)
+    mic = pg.evaluate("""(() => { delete state.ball.best[4]; save(); ballReset(); B.mode = 'live'; B.mic = { zero: 0, heard: 0, level: 0, dead: false };
+      const z = new Float32Array(2048); for (let i = 0; i < 100; i++) ballMicWatch(z, null, 1);
+      const dead = B.mic.dead; ballFinish(false);
+      const out = [dead, !!state.ball.best[4], document.querySelector('#bres').innerText.includes('не услышал')];
+      B.mode = 'live'; B.mic = { zero: 0, heard: 50, level: .1, dead: false }; ballFinish(false); out.push(!!state.ball.best[4]); return out; })()""")
+    if mic != [True, False, True, True]: fails.append(f'сторож микрофона: {mic}')
     br.close()
 print('\n'.join(fails) if fails else 'OK: все 100 заданий честные (±40 и ±20)')
 sys.exit(1 if fails else 0)
