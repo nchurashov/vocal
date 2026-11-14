@@ -6,7 +6,7 @@ import { afterHooks, go, render } from '../core/router.js';
 import { profName, save, state } from '../core/store.js';
 import { toast } from '../core/ui.js';
 import { $, BASE_MAX, BASE_MIN, ICON, fmtDay, nowLocal, plural, setBusy } from '../core/util.js';
-import { camOn, camRecStart, camRecStop, camRecording, camStart, camToggleHTML } from './cam.js';
+import { CAM, camOff, camOn, camRecStart, camRecStop, camRecording, camStart, camToggleHTML } from './cam.js';
 import { lastRange } from './register.js';
 
 // ===== Замер диапазона: маршрут #range =====
@@ -77,13 +77,15 @@ export function viewRange() {
 export function rangeDraw() {
   const box = $('#rgbox'); if (!box || !RG) return;
   if (RG.mode === 'live') {
-    box.innerHTML = `<div style="text-align:center"><div class="tiny muted">Сейчас</div><div id="rgcur" style="font:800 34px Lora,serif;min-height:44px">-</div><div id="rgcurru" class="small muted" style="min-height:20px"></div><div id="rgheld" class="small" style="min-height:20px;color:var(--ok)"></div></div>
+    const rec = camRecording();
+    box.innerHTML = `${rec ? '<div class="row small" style="justify-content:center;gap:6px;color:var(--bad);font-weight:700"><span class="rec-dot"></span>Идёт запись видео</div>' : ''}
+      <button class="btn block" ${act('rangeDone')}>${ICON.stop} ${rec ? 'Готово, остановить запись' : 'Готово'}</button>
+      <div style="text-align:center"><div class="tiny muted">Сейчас</div><div id="rgcur" style="font:800 34px Lora,serif;min-height:44px">-</div><div id="rgcurru" class="small muted" style="min-height:20px"></div><div id="rgheld" class="small" style="min-height:20px;color:var(--ok)"></div></div>
       <div class="row" style="gap:8px"><span class="tiny muted" style="flex:none">Микрофон</span><div style="flex:1">${levelBar('rglvl')}</div></div><div id="rgdead" class="small" style="color:var(--bad)"></div>
       <div style="overflow-x:auto">${pianoSVG(36, 83, { id: 'pkrange' })}</div>
       <div class="row" style="justify-content:space-around"><div style="text-align:center"><div class="tiny muted">Низ</div><b id="rglo">-</b></div><div style="text-align:center"><div class="tiny muted">Верх</div><b id="rghi">-</b></div><div style="text-align:center"><div class="tiny muted">Грудной до</div><b id="rgchest">-</b></div></div>
       <button class="btn ghost block" ${act('rangeMarkBreak')}>Перешёл в фальцет</button>
-      <div class="tiny muted" style="text-align:center;margin-top:-4px">Нажми, когда голос переключился в фальцет. Можно отметить и после замера.</div>
-      <button class="btn block" ${act('rangeDone')}>${ICON.stop} Готово</button>`;
+      <div class="tiny muted" style="text-align:center;margin-top:-4px">Нажми, когда голос переключился в фальцет. Можно отметить и после замера.</div>`;
     return;
   }
   if (RG.mode === 'result') {
@@ -108,9 +110,12 @@ export async function rangeStart() {
   catch (e) { RG = { mode: 'idle', fr: [], err: '<b>Нет доступа к микрофону.</b> В Safari нажми «аА» слева от адреса → «Настройки веб-сайта» → «Микрофон» → «Разрешить», потом обнови страницу.' }; rangeDraw(); return; }
   setBusy(true);
   RG = { mode: 'live', fr: [], stream, lo: null, hi: null };
-  rangeDraw();
   const T = micTap(stream), hist = [];
+  if (camOn()) await camStart(); // после прошлого замера камера выключена - включаем снова
   if (camOn()) camRecStart(() => ({ top: 'Замер диапазона', big: RG && RG.cur != null ? noteShort(RG.cur) : '...', sub: RG && RG.lo != null ? `низ ${noteShort(RG.lo)} · верх ${noteShort(RG.hi)}` : '' }), (profName() ? profName() + ' · ' : '') + 'Мой диапазон', stream);
+  rangeDraw();
+  // на телефоне блок замера ниже первого экрана: прокручиваем к нему, чтобы «Готово» (и стоп записи) было видно сразу
+  const box = $('#rgbox'); if (box) window.scrollTo({ top: Math.max(0, box.getBoundingClientRect().top + window.scrollY - 8), behavior: 'smooth' });
   const loop = () => {
     if (!RG || RG.mode !== 'live') return;
     RG.raf = requestAnimationFrame(loop);
@@ -135,6 +140,9 @@ export function rangeDone() {
   if (!RG) return;
   const { lo, hi } = RG, chestHi = RG.chestHi != null && RG.chestHi < RG.hi ? RG.chestHi : null;
   if (camRecording()) camRecStop(lo == null ? null : `${noteShort(lo)} - ${noteShort(hi)}`, lo == null);
+  // запись кончилась - гасим превью камеры, чтобы не казалось, что съёмка идёт (видео дописывается и открывается само)
+  const off = () => { if (CAM.rec && CAM.rec.state !== 'finished') setTimeout(off, 300); else if (!RG || RG.mode !== 'live') camOff(); };
+  if (CAM.stream) off();
   rangeStop();
   if (lo == null) { RG = { mode: 'idle', fr: [], err: 'Не услышал ни одной удержанной ноты. Пой громче и держи каждую ноту секунду.' }; rangeDraw(); return; }
   (state.range ||= []).push({ date: nowLocal(), lo, hi, ...(chestHi != null ? { chestHi } : {}) }); if (state.range.length > 100) state.range.shift();

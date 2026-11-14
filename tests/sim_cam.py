@@ -59,7 +59,20 @@ with sync_playwright() as p:
     exid = pg.evaluate("EXERCISES.find(e => e.kind === 'sing').id")
     n0 = clips(); pg.goto(URL + '#ex-' + exid); pg.reload(); pg.wait_for_timeout(1200)
     pg.click('text=Записать с микрофона'); pg.wait_for_timeout(4000); pg.click('text=Остановить'); checked('упражнение с записью', n0)
-    n0 = clips(); pg.goto(URL + '#range'); pg.reload(); pg.wait_for_timeout(1200); pg.click('text=Начать замер'); pg.wait_for_timeout(4000); pg.click('text=Готово'); checked('замер диапазона', n0)
+    n0 = clips(); pg.goto(URL + '#range'); pg.reload(); pg.wait_for_timeout(1200); pg.click('text=Начать замер'); pg.wait_for_timeout(4000)
+    # кнопка стопа должна быть на экране (не под нижним меню и не под превью камеры), и видно, что идёт запись
+    vis = pg.evaluate("""(() => { const b = [...document.querySelectorAll('#rgbox button')].find(x => x.textContent.includes('Готово')); if (!b) return 'нет кнопки';
+      const r = b.getBoundingClientRect(), tabs = document.getElementById('tabs').getBoundingClientRect().top, pv = document.getElementById('campv')?.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > tabs) return 'кнопка за краем экрана: ' + Math.round(r.top) + '..' + Math.round(r.bottom) + ', меню с ' + Math.round(tabs);
+      if (pv && r.bottom > pv.top && r.top < pv.bottom && r.right > pv.left) return 'кнопку закрывает превью камеры';
+      return document.getElementById('rgbox').textContent.includes('Идёт запись') ? 'ok' : 'нет пометки «Идёт запись»'; })()""")
+    if vis != 'ok': fails.append('замер диапазона: ' + vis)
+    pg.click('#rgbox button:has-text("Готово")'); checked('замер диапазона', n0)
+    pg.wait_for_timeout(500)
+    if pg.evaluate("!!CAM.stream || !!document.getElementById('campv')"): fails.append('замер диапазона: после записи превью камеры не погасло')
+    n1 = clips(); pg.click('#rgbox button:has-text("Замерить ещё раз"), #rgbox button:has-text("Начать замер")'); pg.wait_for_timeout(3000)
+    if not pg.evaluate("camRecording()"): fails.append('замер диапазона: «Замерить ещё раз» не включил запись снова')
+    pg.click('#rgbox button:has-text("Готово")'); checked('замер диапазона (повтор)', n1)
     pg.evaluate("state.settings.cam = false; save()")
     pg.goto(URL + '#today'); pg.wait_for_timeout(300)
     if pg.evaluate("!!CAM.stream || !!document.getElementById('campv')"): fails.append('камера не выключилась при уходе с уровня')
