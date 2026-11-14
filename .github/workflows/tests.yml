@@ -22,4 +22,5 @@ jobs:
           export CHROME=$(python -c "from playwright.sync_api import sync_playwright as s; p=s().start(); print(p.chromium.executable_path); p.stop()")
           bash tests/run_all.sh
       - name: Собранный index.html совпадает с src
-        run: git diff --exit-code index.html || (echo "index.html не пересобран: запусти python3 build.py и закоммить" && exit 1)
+        run: |
+          git diff --exit-code index.html || (echo "index.html не пересобран: запусти python3 build.py и закоммить" && exit 1)
