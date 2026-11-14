@@ -19,22 +19,23 @@ import { lastAudio, setLastAudio } from '../trainer/recorder.js';
 // Если нота ни в какую октаву не помещается, её место занимает задание вразнобой. Задания детерминированы (сид = номер).
 // walls: [полутон от базовой ноты, длина тоннеля в долях, пауза после в долях]
 export const BALL_CHAPTERS = [
-  { title: 'Одна нота', goal: 'Держи ровно одну ноту. В каждом задании своя высота: до, ре, ми...', kind: 'hold', bpm: [58, 70] },
-  { title: 'Секунда', goal: 'Соседние ступени: шаг вверх и обратно от разных нот', kind: 'int', deg: 1, bpm: [60, 72] },
-  { title: 'Терция', goal: 'Через ступень: до-ми, ре-фа, ми-соль...', kind: 'int', deg: 2, bpm: [60, 72] },
-  { title: 'Кварта', goal: 'Через две ступени: до-фа, ре-соль...', kind: 'int', deg: 3, bpm: [60, 72] },
-  { title: 'Квинта', goal: 'Через три ступени: до-соль, ре-ля...', kind: 'int', deg: 4, bpm: [60, 72] },
-  { title: 'Гамма', goal: 'Пять ступеней подряд вверх и вниз от разных нот', kind: 'scale', deg: 4, bpm: [62, 78] },
-  { title: 'Трезвучие', goal: 'Аккорд по нотам: до-ми-соль, ре-фа-ля...', kind: 'triad', deg: 4, bpm: [60, 74] },
-  { title: 'Секста', goal: 'Большой прыжок: до-ля, ре-си...', kind: 'int', deg: 5, bpm: [58, 70] },
-  { title: 'Мелодии', goal: 'Ноты подряд без пауз: короткие мелодии от разных нот', kind: 'melody', deg: 4, bpm: [62, 78] },
-  { title: 'Октава', goal: 'Та же нота, только выше: до-до, ре-ре, ми-ми...', kind: 'int', deg: 7, bpm: [56, 70] },
+  { title: 'Одна нота', goal: 'Держи ровно одну ноту. В каждом задании своя высота: до, ре, ми...', kind: 'hold', th: { id: 'note', title: 'Нота и унисон' }, bpm: [58, 70] },
+  { title: 'Секунда', goal: 'Соседние ступени: шаг вверх и обратно от разных нот', kind: 'int', deg: 1, th: { id: 'step', title: 'Шаг: полутон и тон' }, bpm: [60, 72] },
+  { title: 'Терция', goal: 'Через ступень: до-ми, ре-фа, ми-соль...', kind: 'int', deg: 2, th: { id: 'third', title: 'Терции: малая и большая' }, bpm: [60, 72] },
+  { title: 'Кварта', goal: 'Через две ступени: до-фа, ре-соль...', kind: 'int', deg: 3, th: { id: 'fourth', title: 'Откуда интервалы: обертоны и Пифагор' }, bpm: [60, 72] },
+  { title: 'Квинта', goal: 'Через три ступени: до-соль, ре-ля...', kind: 'int', deg: 4, th: { id: 'fifth', title: 'Квинта и 12 нот' }, bpm: [60, 72] },
+  { title: 'Гамма', goal: 'Пять ступеней подряд вверх и вниз от разных нот', kind: 'scale', deg: 4, th: { id: 'scale', title: 'Гамма и лад' }, bpm: [62, 78] },
+  { title: 'Трезвучие', goal: 'Аккорд по нотам: до-ми-соль, ре-фа-ля...', kind: 'triad', deg: 4, th: { id: 'chord', title: 'Аккорд из терций' }, bpm: [60, 74] },
+  { title: 'Секста', goal: 'Большой прыжок: до-ля, ре-си...', kind: 'int', deg: 5, th: { id: 'leap', title: 'Широкие прыжки и обращение' }, bpm: [58, 70] },
+  { title: 'Мелодии', goal: 'Ноты подряд без пауз: короткие мелодии от разных нот', kind: 'melody', deg: 4, th: { id: 'melody', title: 'Мелодия и внутренний слух' }, bpm: [62, 78] },
+  { title: 'Октава', goal: 'Та же нота, только выше: до-до, ре-ре, ми-ми...', kind: 'int', deg: 7, th: { id: 'octave', title: 'Октава и голос' }, bpm: [56, 70] },
 ];
 export const DEG_SEMI = d => 12 * Math.floor(d / 7) + [0, 2, 4, 5, 7, 9, 11][((d % 7) + 7) % 7];
 export const DEG_NAME = ['до', 'ре', 'ми', 'фа', 'соль', 'ля', 'си'];
-// урок теории к главе: [адрес, о чём]
-export const ballTheory = C => C.kind === 'hold' ? ['learn-iv-0', 'прима и унисон'] : C.kind === 'int' ? [`learn-iv-${DEG_SEMI(C.deg)}`, C.title.toLowerCase()] : C.kind === 'melody' ? ['learn-intervals', 'интервалы в мелодии'] : ['learn-scale', C.title.toLowerCase()];
-const theoryLink = C => { const [h, t] = ballTheory(C); return `<a href="#${h}" class="small">📖 Теория: ${t}</a>`; };
+// раздел теории к главе (C.th): [адрес, название]; непрочитанный показываем крупно, прочитанный - ссылкой
+export const ballTheory = C => [`learn-${C.th.id}`, C.th.title];
+export const theoryRead = C => !!(state.learn && state.learn.read && state.learn.read[C.th.id]);
+const theoryLink = C => { const [h, t] = ballTheory(C); return theoryRead(C) ? `<a href="#${h}" class="small">📖 Теория: ${t} ✓</a>` : `<button class="item thnew" ${act('go', h)}><div class="dot pitch">📖</div><div class="t"><b>Сначала теория: ${t} <span class="chip pitch">новое</span></b><span class="small muted">3-5 минут со звуком, к этой главе</span></div><span class="muted">›</span></button>`; };
 export function ballRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 // окно голоса в полутонах от базовой ноты
 export function ballWindow() {
@@ -155,7 +156,7 @@ export function viewBallLevel(n) {
   afterHooks.push(() => ballSetup(lv)); afterHooks.push(() => { if (camOn()) camStart(); });
   return `<button class="back" ${act('go', 'ball')}>${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Глава ${lv.ch + 1} «${esc(BALL_CHAPTERS[lv.ch].title)}» · ${lv.exam ? 'экзамен' : 'задание ' + lv.task + ' из 10'} · точность ±${ballTol()} ц</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. ${lv.exam ? 'Экзамен: нужно пролететь все стены без удара, тогда откроется следующая глава.' : `Чтобы засчитать, нужно 2 звезды (80% стен).${lv.guide ? '' : ' Без подсказки пианино перед стеной.'}`} ${theoryLink(BALL_CHAPTERS[lv.ch])}</p>${octaveHint()}${camToggleHTML()}
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. ${lv.exam ? 'Экзамен: нужно пролететь все стены без удара, тогда откроется следующая глава.' : `Чтобы засчитать, нужно 2 звезды (80% стен).${lv.guide ? '' : ' Без подсказки пианино перед стеной.'}`}</p>${theoryRead(BALL_CHAPTERS[lv.ch]) ? `<p style="margin:4px 0 0">${theoryLink(BALL_CHAPTERS[lv.ch])}</p>` : `<div style="margin-top:10px">${theoryLink(BALL_CHAPTERS[lv.ch])}</div>`}${octaveHint()}${camToggleHTML()}
     ${diffSeg()}
     <div id="bbest">${ballBestHTML(lv)}</div>
     <div class="gstage sec"><canvas id="bcv"></canvas></div>
@@ -422,6 +423,7 @@ export function ballResult(mode) {
     <div class="small muted">жизней осталось: ${Math.max(0, B.lives)}${record && prev ? ' · новый рекорд!' : ''}</div>
     <div class="small">${notesTxt}</div>
     <div class="${st ? 'info' : 'note'}">${msg}</div>
+    ${opened && lv.exam ? `<div style="text-align:left">${theoryLink(BALL_CHAPTERS[lv.ch + 1])}</div>` : ''}
     <div class="row wrap" style="justify-content:center">${mode === 'take' && lastAudio ? `<button class="btn ghost" ${act('playAudioLast')}>${ICON.play} Моя попытка</button>` : ''}
     ${ballUnlocked(lv.n + 1) && lv.n < BALL_LEVELS.length ? `<button class="btn" ${act('go', `ball-${lv.n + 1}`)}>${ballNextLbl(lv.n + 1)} →</button>` : ''}</div></div>`;
   if (opened) toast(`${ballNextLbl(lv.n + 1)} открыто!`);

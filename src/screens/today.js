@@ -5,6 +5,7 @@ import { MONTHS, daysBetween, esc, fmtDay, plural, ymd } from '../core/util.js';
 import { CATS, RATINGS } from '../data/exercises.js';
 import { BALL_CHAPTERS, BALL_LEVELS, ballDone, ballNextN } from '../features/ball.js';
 import { diaryTodayItem } from '../features/diary.js';
+import { learnTodayItem } from '../features/learn.js';
 import { lastRange } from '../features/register.js';
 import { songsAll } from '../features/songs.js';
 import { setMin, voiceDoneToday, voiceNext } from '../features/voice.js';
@@ -55,7 +56,7 @@ export function viewToday() {
     h += `<button class="item" ${act('go', 'songs')}><div class="dot rhythm">🎵</div><div class="t"><b>Разучить песню</b><span class="small muted">${mine ? 'Моих песен: ' + mine + ' · ' : ''}Своя из MIDI или караоке, или напой сам. По фразам, потом целиком</span></div><span class="muted">›</span></button>`; }
   { const r = lastRange();
     h += `<button class="item" ${act('go', 'range')}><div class="dot ear">↕</div><div class="t"><b>${r ? 'Мой диапазон: ' + noteShort(r.lo) + ' - ' + noteShort(r.hi) : 'Замерить мой диапазон'}</b><span class="small muted">${r ? 'Последний замер ' + fmtDay(r.date.slice(0, 10)).toLowerCase() + ' · работаем от ' + noteShort(base()) + (strictOct() ? ', строго в октаве' : '') : 'Минута: узнаешь свой низ и верх и выберешь, где работать'}</span></div><span class="muted">›</span></button>`; }
-  h += `<button class="item" ${act('go', 'learn')}><div class="dot pitch">🎹</div><div class="t"><b>Теория: ноты, интервалы, лад</b><span class="small muted">7 коротких уроков со звуком: откуда интервалы и 12 нот, как их слышать и петь, зачем упражнения идут в таком порядке</span></div><span class="muted">›</span></button>`;
+  h += learnTodayItem();
   h += `<div class="sec"><h2>Повторить сегодня</h2>`;
   if (due.length) h += due.map(e => { const s = state.srs[e.id]; return exItem(e, `В прошлый раз: ${RATINGS[s.lastRating].label.toLowerCase()} · ${fmtDay(s.last).toLowerCase()}`); }).join('');
   else h += `<div class="card small muted">${state.sessions.length ? 'На сегодня повторов нет. Можно взять новое упражнение ниже.' : 'Повторы появятся после первых отметок: что не получилось, вернётся раньше, что получилось уверенно, реже.'}</div>`;

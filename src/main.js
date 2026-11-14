@@ -98,6 +98,7 @@ registerActions({
   go: core_router.go,
   goCloseSheet: features_register.goCloseSheet,
   importFile: screens_settings.importFile,
+  learnOpenAll: features_learn.learnOpenAll,
   learnPlay: features_learn.learnPlay,
   learnQuiz: features_learn.learnQuiz,
   learnQuizAns: features_learn.learnQuizAns,

@@ -36,7 +36,7 @@ export function registerCard(inSheet) {
     <div class="row wrap" style="gap:6px"><button class="btn ghost" style="flex:1;min-height:38px;padding:6px 10px" ${act('stepBase', -12)}>Октавой ниже</button><button class="btn ghost" style="flex:1;min-height:38px;padding:6px 10px" ${act('stepBase', 12)}>Октавой выше</button><button class="btn ghost" style="min-height:38px;padding:6px 10px" aria-label="Послушать ноту" ${act('playNotes', [[0,2]],80)}>${ICON.play}</button></div>
     <label class="check" style="border:0;padding:0"><input type="checkbox" ${strictOct() ? 'checked' : ''} ${onChange('setStrict')}><span class="small"><b>Только в этой октаве.</b> Для работы над регистром: октавой выше или ниже не засчитается.${strictOct() ? '' : ' Сейчас подходит любая октава.'}</span></label>
     ${rangeWarn()}
-    <div class="row wrap small" style="gap:14px"><a href="#range" ${inSheet ? act('goCloseSheet', 'range') : ''}>${r ? 'Замерить диапазон заново' : 'Замерить мой диапазон'}</a><a href="#learn-notes" ${inSheet ? act('goCloseSheet', 'learn-notes') : ''}>Как читать ноты</a> <a href="#learn" ${inSheet ? act('goCloseSheet', 'learn') : ''}>Теория</a></div></div>`;
+    <div class="row wrap small" style="gap:14px"><a href="#range" ${inSheet ? act('goCloseSheet', 'range') : ''}>${r ? 'Замерить диапазон заново' : 'Замерить мой диапазон'}</a><a href="#learn-note" ${inSheet ? act('goCloseSheet', 'learn-note') : ''}>Как читать ноты</a> <a href="#learn" ${inSheet ? act('goCloseSheet', 'learn') : ''}>Теория</a></div></div>`;
 }
 // подсказка на экранах игр: при первом заходе - выбор голоса, потом - карточка высоты
 export function octaveHint() {

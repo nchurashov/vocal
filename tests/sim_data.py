@@ -35,7 +35,7 @@ with sync_playwright() as p:
     # 1. Старый формат v1 из localStorage переносится без потерь
     pg.goto(URL + '#today'); pg.evaluate('(d) => localStorage.setItem("vocal-practice", JSON.stringify(d))', V1); pg.reload(); pg.wait_for_timeout(300)
     st = pg.evaluate('state')
-    check(st['v'] == pg.evaluate('STATE_V') == 3 and st['songs'] == {}, 'v1 переведён в текущую версию (v3), прогресс песен - пустой')
+    check(st['v'] == pg.evaluate('STATE_V') == 4 and st['songs'] == {} and st['learn'] == {'read': {}}, 'v1 переведён в текущую версию (v4), прогресс песен и теории - пустой')
     check(len(st['sessions']) == 1 and st['sessions'][0]['note'] == 'хорошо', 'занятие и его заметка сохранились')
     check(st['settings'] == {'base': 43, 'latency': 20, 'tol': 20, 'strict': True}, 'настройки сохранились')
     check(st['range'] == V1['range'] and st['warmups'] == [], 'диапазон на месте, распевки - пустой список')
