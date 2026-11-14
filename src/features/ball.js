@@ -124,7 +124,7 @@ export function viewBall() {
       h += `<div class="ggrid" style="padding:0 12px 12px">`;
       for (const lv of lvls) {
         const best = g.best[lv.n], o = ballUnlocked(lv.n), ok = ballDone(lv.n);
-        h += `<button class="gtile ${o ? '' : 'locked'}" ${o ? `${act('go', `ball-lv.n`)}` : ''}>
+        h += `<button class="gtile ${o ? '' : 'locked'}" ${o ? `${act('go', `ball-${lv.n}`)}` : ''}>
           <span class="gnum">${o ? (lv.exam ? '🎓' : lv.task) : '🔒'}</span><b>${lv.exam ? 'Экзамен' : lv.from[0].toUpperCase() + lv.from.slice(1)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
           <span class="tiny muted">${ok ? 'пройдено' : best ? 'нужно ' + BALL_NEED(lv.n) + '★, есть ' + best.stars : o ? (lv.exam ? 'без ударов, 3★' : lv.guide ? 'с подсказкой' : 'без подсказки') : 'закрыто'}</span></button>`;
       }
@@ -163,7 +163,7 @@ export function ballBestHTML(lv) {
   const best = ballState().best[lv.n]; if (!best) return '';
   const next = lv.n < BALL_LEVELS.length && ballUnlocked(lv.n + 1);
   return `<div class="card row between wrap" style="margin-top:12px;gap:8px;padding:12px 14px"><div><div class="tiny muted">Твой рекорд сохранён</div><b>${starStr(best.stars)} ${best.pct}% стен при ±${bestTol(best, lv.n)}</b></div>
-    ${next ? `<button class="btn soft" style="min-height:40px" ${act('go', `ball-lv.n + 1`)}>${ballNextLbl(lv.n + 1)} →</button>` : ''}</div>`;
+    ${next ? `<button class="btn soft" style="min-height:40px" ${act('go', `ball-${lv.n + 1}`)}>${ballNextLbl(lv.n + 1)} →</button>` : ''}</div>`;
 }
 export function ballBuild(lv) {
   const b = 60 / lv.bpm; let t = 0; const walls = [];
@@ -420,7 +420,7 @@ export function ballResult(mode) {
     <div class="small">${notesTxt}</div>
     <div class="${st ? 'info' : 'note'}">${msg}</div>
     <div class="row wrap" style="justify-content:center">${mode === 'take' && lastAudio ? `<button class="btn ghost" ${act('playAudioLast')}>${ICON.play} Моя попытка</button>` : ''}
-    ${ballUnlocked(lv.n + 1) && lv.n < BALL_LEVELS.length ? `<button class="btn" ${act('go', `ball-lv.n + 1`)}>${ballNextLbl(lv.n + 1)} →</button>` : ''}</div></div>`;
+    ${ballUnlocked(lv.n + 1) && lv.n < BALL_LEVELS.length ? `<button class="btn" ${act('go', `ball-${lv.n + 1}`)}>${ballNextLbl(lv.n + 1)} →</button>` : ''}</div></div>`;
   if (opened) toast(`${ballNextLbl(lv.n + 1)} открыто!`);
 }
 window.addEventListener('resize', () => { if (B && B.mode === 'idle') { ballResize(); ballDraw(-2); } });

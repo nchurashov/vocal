@@ -5,10 +5,11 @@ import { $, BASE_MAX, BASE_MIN, busy } from './util.js';
 // ===== Хранилище =====
 // STATE_V - версия формата данных. Поменял структуру: подними версию и допиши шаг в MIGRATIONS,
 // тогда старый прогресс (из localStorage, облака или файла) перенесётся, а не сломается.
-export const STATE_V = 2;
-export const DEFAULT = () => ({ v: STATE_V, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] }, range: [], warmups: [] });
+export const STATE_V = 3;
+export const DEFAULT = () => ({ v: STATE_V, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] }, range: [], warmups: [], songs: {} });
 export const MIGRATIONS = {
   1: s => s, // v1 -> v2: формат стал версионным; поля, которых не было, добавит DEFAULT
+  2: s => s, // v2 -> v3: прогресс песен state.songs[id] = { ph: {номер фразы: лучший %}, whole: %, shift, plays, last }; пустой добавит DEFAULT
 };
 // Поля со свободным текстом. Их можно хранить любыми, но выводить на экран ТОЛЬКО через esc().
 export const TEXT_KEYS = new Set(['text', 'note']);
