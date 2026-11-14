@@ -1,13 +1,13 @@
 import { act, onChange } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
-import { ac, base, playNotes, playRhythm, stopAll, tone } from '../core/audio.js';
-import { afterHooks, go } from '../core/router.js';
+import { ac, base, noteFull, playNotes, playRhythm, stopAll, tone } from '../core/audio.js';
+import { afterHooks, go, render } from '../core/router.js';
 import { save, state } from '../core/store.js';
-import { toast } from '../core/ui.js';
+import { closeSheet, sheet, toast } from '../core/ui.js';
 import { $, ICON, esc, nowLocal, plural, uid } from '../core/util.js';
 import { CATS, RATINGS, exById } from '../data/exercises.js';
 import { sessionRow } from '../screens/history.js';
-import { NEED_CONF, NEED_DAYS, isUnlocked, levelInfo, srsUpdate, suggestRating } from './logic.js';
+import { NEED_CONF, NEED_DAYS, catProgress, isUnlocked, levelInfo, nextExercise, srsUpdate, suggestRating } from './logic.js';
 import { recorderUI } from './recorder.js';
 import { tapUI } from './tap.js';
 
@@ -41,6 +41,11 @@ export function rollSVG(notes, result) {
   });
   return out + '</svg>';
 }
+// {ноты} в шагах = настоящие ноты примера от базовой ноты пользователя (а не всегда «до, ре, до»)
+export function stepText(ex, s) {
+  if (!ex.notes) return s;
+  return s.replace('{ноты}', ex.notes.map(([x]) => VA.noteName(base() + x).toLowerCase()).join(', '));
+}
 export function viewExerciseBase(ex) {
   if (!ex) return '<div class="empty">Упражнение не найдено</div>';
   const locked = !isUnlocked(ex);
@@ -49,7 +54,7 @@ export function viewExerciseBase(ex) {
     <div class="row wrap" style="gap:6px"><span class="chip ${ex.cat}">${CATS[ex.cat].name}</span><span class="chip">Уровень ${ex.level}</span><span class="chip">${ex.min} мин</span></div>
     <h1 style="margin-top:10px">${esc(ex.title)}</h1><p class="muted" style="margin:6px 0 0">${esc(ex.goal)}</p>`;
   if (locked) h += `<div class="note sec">🔒 Это упражнение уровня ${ex.level}. Оно откроется после ${NEED_CONF} отметок «Уверенно» на уровне ${ex.level - 1} в разделе «${CATS[ex.cat].name}» за ${NEED_DAYS}+ дня. Можно прочитать, но в план оно пока не попадёт.</div>`;
-  h += `<div class="card sec"><h3 style="margin-bottom:12px">Как делать</h3><ol class="steps">${ex.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol></div>`;
+  h += `<div class="card sec"><h3 style="margin-bottom:12px">Как делать</h3><ol class="steps">${ex.steps.map(s => `<li>${esc(stepText(ex, s))}</li>`).join('')}</ol>${ex.kind === 'sing' ? `<p class="tiny muted" style="margin:10px 0 0">Ноты подстроены под твой голос: пример начинается с ноты ${noteFull(base())}. Поменять можно в ⚙ «Где работаем».</p>` : ''}</div>`;
   // Пример
   h += `<div class="card sec"><h3>Пример</h3>`;
   if (ex.kind === 'sing') h += `${rollSVG(ex.notes)}<div class="row wrap" style="margin-top:10px"><button class="btn" ${act('playEx', ex.id)}>${ICON.play} Послушать пример</button><button class="btn ghost" ${act('playExFirst', ex.id)}>Дать первую ноту</button></div>`;
@@ -73,13 +78,24 @@ export function viewExerciseBase(ex) {
 export function practiceIntro(ex) {
   if (ex.kind === 'quiz') return `<h3>Тренировка с проверкой</h3><p class="small muted" style="margin:4px 0 12px">10 вопросов. После каждого ответа сразу видно, верно или нет.</p>${ex.quiz === 'interval' ? intervalRefs() : ''}<button class="btn block" ${act('startQuiz')}>${ICON.play} Начать</button>`;
   if (ex.kind === 'sing') return `<h3>Проверка по записи</h3><p class="small muted" style="margin:4px 0 12px">Спой и запиши себя. Приложение найдёт каждую ноту и покажет, верно она спета, близко или мимо.</p><div id="recbox"></div>`;
-  return `<h3>Проверка: отстучи ритм</h3><p class="small muted" style="margin:4px 0 12px">После 4 щелчков отсчёта стучи по кнопке (или пробелом). Хлопков в проверке не будет, только метроном.</p><div id="tapbox"></div>`;
+  return `<h3>Проверка: отстучи ритм</h3><p class="small muted" style="margin:4px 0 6px">После 4 щелчков отсчёта стучи по кнопке (или пробелом). Хлопков в проверке не будет, только метроном.</p><div class="info" style="margin-bottom:8px"><b>${esc(tapHint(ex))}</b></div><div id="tapbox"></div>`;
 }
-export function rhythmSVG(ex) {
+// что стучать: метроном щёлкает на каждую долю, а нажимать надо только по рисунку
+export function tapHint(ex) {
+  const n = ex.onsets.length, beats = Math.ceil(Math.max(...ex.onsets) + 1), bars = Math.ceil(beats / 4) * 4;
+  const taps = `${n} ${plural(n, 'нажатие', 'нажатия', 'нажатий')}`;
+  const whole = ex.onsets.every(o => o === Math.round(o));
+  if (whole && n === bars) return `Стучи на каждый щелчок - ${taps}.`;
+  if (whole && ex.onsets.every((o, i) => o === i * 2)) return `Стучи только на 1 и 3, через щелчок. На 2 и 4 пауза. Щелчков будет ${bars}, а нажатий всего ${n}.`;
+  if (ex.onsets.every((o, i) => o === i / 2)) return `Два нажатия на каждый щелчок - ${taps}.`;
+  return `Стучи рисунок с полоски (кружки), а не каждый щелчок - ${taps}.`;
+}
+export function rhythmSVG(ex, cursor = false) {
   const beats = Math.ceil(Math.max(...ex.onsets) + 1), bars = Math.ceil(beats / 4) * 4, W = 640, H = 46, bw = (W - 20) / bars;
   let s = `<svg class="roll" viewBox="0 0 ${W} ${H}">`;
   for (let i = 0; i <= bars; i++) s += `<line x1="${10 + i * bw}" x2="${10 + i * bw}" y1="8" y2="${H - 8}" stroke="var(--line)" stroke-width="${i % 4 === 0 ? 2 : 1}"/>`;
   ex.onsets.forEach(o => s += `<circle cx="${10 + o * bw + 4}" cy="${H / 2}" r="7" fill="var(--rhythm)"/>`);
+  if (cursor) s += `<line id="tapcur" x1="10" x2="10" y1="2" y2="${H - 2}" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" opacity="0"/>`;
   return s + '</svg>';
 }
 export function toggleCrit(on, i) { on ? run.crit.add(i) : run.crit.delete(i); }
@@ -104,9 +120,27 @@ export function saveSession() {
   const days = run.ex.kind ? srsUpdate(ex.id, run.rating) : null;
   save();
   const after = levelInfo(s.cat).open;
-  if (after > before) toast(`Открыт уровень ${after} в разделе «${CATS[s.cat].name}». Прогресс зафиксирован!`);
-  else toast(days ? `Сохранено. Повторим ${days === 1 ? 'завтра' : 'через ' + days + ' ' + plural(days, 'день', 'дня', 'дней')}.` : 'Сохранено в историю.');
-  go(run.ex.kind ? 'today' : 'history');
+  if (!ex.kind) { toast('Сохранено в историю.'); go('history'); return; }
+  savedSheet(ex, s.rating, days, after > before ? after : 0);
+}
+// после сохранения: не выкидываем на «Сегодня», а предлагаем следующее упражнение
+export function savedSheet(ex, rating, days, newLevel) {
+  const passed = rating === 3, next = nextExercise(ex), li = levelInfo(ex.cat), pr = li.prog, cp = catProgress(ex.cat);
+  const rep = days ? `Повторим ${days === 1 ? 'завтра' : 'через ' + days + ' ' + plural(days, 'день', 'дня', 'дней')}.` : '';
+  let h = `<div class="row between"><h2>${passed ? '✓ Пройдено!' : 'Сохранено'}</h2><button class="iconbtn" ${act('closeSheet')}>×</button></div>`;
+  h += `<p style="margin:0">${passed ? `«${esc(ex.title)}» отмечено как пройденное.` : `Отметка «${RATINGS[rating].label}». Упражнение засчитается, когда получится уверенно.`} ${rep}</p>`;
+  if (newLevel) h += `<div class="info"><b>🎉 Открыт уровень ${newLevel} в разделе «${CATS[ex.cat].name}»!</b></div>`;
+  h += `<div class="small muted">«${CATS[ex.cat].name}»: пройдено ${cp.done} из ${cp.total}.${!li.done3 && li.open < 3 ? ` До уровня ${li.open + 1}: уверенно ${Math.min(pr.conf, NEED_CONF)} из ${NEED_CONF}, дней ${Math.min(pr.days, NEED_DAYS)} из ${NEED_DAYS}.` : ''}</div>`;
+  const nextBtn = next ? `<button class="btn block" ${act('afterSave', 'ex-' + next.id)}>${ICON.play} Дальше: ${esc(next.title)}</button>` : '';
+  const againBtn = `<button class="btn ${passed && next ? 'ghost ' : ''}block" ${act('afterSave', 'ex-' + ex.id)}>Ещё раз</button>`;
+  h += passed ? nextBtn + againBtn : againBtn + (next ? nextBtn.replace('class="btn block"', 'class="btn ghost block"') : '');
+  if (!next) h += `<div class="small muted">Все открытые упражнения пройдены. Новые откроются со следующим уровнем, а пройденные вернутся на повторение в «Сегодня».</div>`;
+  h += `<button class="btn ghost block" ${act('afterSave', 'today')}>На «Сегодня»</button>`;
+  sheet(h);
+}
+export function afterSave(r) {
+  closeSheet();
+  if (location.hash.slice(1) === r) { render(); scrollTo(0, 0); } else go(r);
 }
 
 // ===== Слух: квиз =====

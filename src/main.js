@@ -58,6 +58,7 @@ registerPrefix('ex-', id => viewExercise(exById(id)), 'exercises', id => !!exByI
 registerPrefix('game-', n => features_game.viewGameLevel(+n), 'ball', n => /^\d+$/.test(n));
 registerPrefix('ball-', n => features_ball.viewBallLevel(+n), 'ball', n => /^\d+$/.test(n));
 registerPrefix('song-', id => features_songs.viewSong(id), 'exercises', id => !!features_songs.songById(id));
+registerPrefix('learn-', features_learn.viewLesson, 'learn', features_learn.learnValid);
 registerPrefix('voice-', id => features_voice.viewVoiceSet(id), 'exercises', id => !!features_voice.voiceSet(id));
 
 // --- что остановить перед сменой экрана (порядок важен: игры и микрофон, потом камера)
@@ -78,7 +79,6 @@ registerActions({
   applyImport: screens_settings.applyImport,
   askDelete: screens_history.askDelete,
   askReset: screens_settings.askReset,
-  back: core_router.back,
   calibrate: screens_settings.calibrate,
   camSet: features_cam.camSet,
   camShare: features_cam.camShare,
@@ -99,6 +99,11 @@ registerActions({
   go: core_router.go,
   goCloseSheet: features_register.goCloseSheet,
   importFile: screens_settings.importFile,
+  learnOpenAll: features_learn.learnOpenAll,
+  learnPlay: features_learn.learnPlay,
+  learnQuiz: features_learn.learnQuiz,
+  learnQuizAns: features_learn.learnQuizAns,
+  learnQuizPlay: features_learn.learnQuizPlay,
   nextQuiz: trainer_exercise.nextQuiz,
   openProfiles: screens_profiles.openProfiles,
   openSettings: screens_settings.openSettings,
@@ -125,6 +130,7 @@ registerActions({
   saveMelody: trainer_check.saveMelody,
   saveNote: screens_notes.saveNote,
   saveSession: trainer_exercise.saveSession,
+  afterSave: trainer_exercise.afterSave,
   selectMelody: trainer_check.selectMelody,
   setExFilter: trainer_exercises.setExFilter,
   setRating: trainer_exercise.setRating,
