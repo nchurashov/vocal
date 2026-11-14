@@ -9,7 +9,7 @@ import { NEED_CONF, NEED_DAYS, catProgress, exPassed, levelInfo } from './logic.
 // ===== Экран: Упражнения =====
 export let exFilter = 'all';
 export function viewExercises() {
-  let h = `<h1>Упражнения</h1><button class="item sec" style="margin-top:14px" ${act('go', 'voice')}><div class="dot ear">🗣️</div><div class="t"><b>Голос и речь</b><span class="small muted">${VOICE_SETS.length} комплексов: зажимы, дыхание, резонанс, дикция, карандаш, плавная речь, низкий голос, диапазон</span></div><span class="muted">›</span></button><div class="sec" style="margin-top:14px"><div class="seg">` +
+  let h = `<h1>Упражнения</h1><button class="item sec" style="margin-top:14px" ${act('go', 'voice')}><div class="dot ear">🗣️</div><div class="t"><b>Голос и речь</b><span class="small muted">${VOICE_SETS.length} комплексов: зажимы, дыхание, резонанс, дикция, карандаш, плавная речь, низкий голос, диапазон</span></div><span class="muted">›</span></button><button class="item" ${act('go', 'songs')}><div class="dot rhythm">🎵</div><div class="t"><b>Песни</b><span class="small muted">Разучить свою песню из MIDI или караоке, или напеть самому. По фразам, потом целиком</span></div><span class="muted">›</span></button><div class="sec" style="margin-top:14px"><div class="seg">` +
     [['all', 'Все'], ...Object.entries(CATS).map(([k, v]) => [k, v.name])].map(([k, n]) => `<button class="${exFilter === k ? 'on' : ''}" ${act('setExFilter', k)}>${n}</button>`).join('') + `</div></div>`;
   // прогресс: сколько упражнений пройдено (хоть раз «Уверенно») и что нужно для следующего уровня
   const cats = exFilter === 'all' ? Object.keys(CATS) : [exFilter], all = catProgress(exFilter === 'all' ? null : exFilter);
