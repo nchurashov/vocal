@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-sF+qQr2bGN7Ga94NUTq0OR6oa4vrA9YQMHOLSvgDVPU='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-rReUkshQ/6KHFb3vRl7Ay6i2M9FFccCX2K7MQnC3rKI='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Вокал под бокал</title>
 <meta name="apple-mobile-web-app-title" content="Вокал под бокал"><meta name="description" content="Вокал под бокал: налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1834,6 +1834,7 @@ details summary{cursor:pointer}
     camRecStart: () => camRecStart,
     camRecStop: () => camRecStop,
     camRecording: () => camRecording,
+    camRestart: () => camRestart,
     camRound: () => camRound,
     camSaveNative: () => camSaveNative,
     camSession: () => camSession,
@@ -1842,6 +1843,7 @@ details summary{cursor:pointer}
     camShow: () => camShow,
     camStart: () => camStart,
     camToggleHTML: () => camToggleHTML,
+    camWatch: () => camWatch,
     camWrap: () => camWrap,
     isAndroidApp: () => isAndroidApp,
     recCanvas: () => recCanvas
@@ -1887,10 +1889,11 @@ details summary{cursor:pointer}
     if (on) await camStart();
     else camOff();
   }
+  var CAM_VIDEO = { video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 960 } }, audio: false };
   async function camStart(force) {
     if (!camOn() && !force || CAM.stream) return !!CAM.stream;
     try {
-      CAM.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 960 } }, audio: false });
+      CAM.stream = await navigator.mediaDevices.getUserMedia(CAM_VIDEO);
     } catch (e) {
       const el = $("#camerr");
       if (el) el.textContent = "Нет доступа к камере. В Safari: «аА» слева от адреса → «Настройки веб-сайта» → «Камера» → «Разрешить».";
@@ -1912,7 +1915,54 @@ details summary{cursor:pointer}
     } catch (e) {
     }
     CAM.video = v;
+    CAM.frameAt = performance.now();
+    if (v.requestVideoFrameCallback && !v._rvfc) {
+      v._rvfc = true;
+      const tick = () => {
+        CAM.frameAt = performance.now();
+        if (v.isConnected) v.requestVideoFrameCallback(tick);
+      };
+      v.requestVideoFrameCallback(tick);
+    }
     return true;
+  }
+  function camWatch(now) {
+    const v = CAM.video;
+    if (!v || !CAM.stream || CAM.fixing) return;
+    if (!v.requestVideoFrameCallback && v.currentTime !== CAM.vt) {
+      CAM.vt = v.currentTime;
+      CAM.frameAt = now;
+    }
+    const idle = now - (CAM.frameAt || now);
+    if (idle > 1500 && v.paused) {
+      const r = v.play();
+      if (r && r.catch) r.catch(() => {
+      });
+    }
+    if (idle > 3e3) camRestart();
+  }
+  async function camRestart() {
+    if (CAM.fixing || !CAM.stream) return;
+    CAM.fixing = true;
+    CAM.stream.getTracks().forEach((t) => t.stop());
+    try {
+      const s = await navigator.mediaDevices.getUserMedia(CAM_VIDEO);
+      if (!CAM.video) {
+        s.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      CAM.stream = s;
+      CAM.video.srcObject = s;
+      try {
+        await CAM.video.play();
+      } catch (e) {
+      }
+      CAM.restarts = (CAM.restarts || 0) + 1;
+    } catch (e) {
+    } finally {
+      CAM.fixing = false;
+      CAM.frameAt = performance.now();
+    }
   }
   function camOff() {
     if (CAM.rec && CAM.rec.state !== "finished") camRecStop(null, true);
@@ -1950,6 +2000,11 @@ details summary{cursor:pointer}
     mr.onstop = () => {
       R.state = "finished";
       cancelAnimationFrame(R.raf);
+      clearInterval(R.iv);
+      try {
+        R.wake?.release();
+      } catch (e) {
+      }
       tracks.forEach((t) => t.stop());
       au.close();
       if (CAM.mic && !busy) {
@@ -1966,7 +2021,11 @@ details summary{cursor:pointer}
     };
     const draw = () => {
       if (R.state === "finished") return;
+      cancelAnimationFrame(R.raf);
       R.raf = requestAnimationFrame(draw);
+      const now = performance.now();
+      R.drawAt = now;
+      camWatch(now);
       const area = H - 96, camH = Math.round(area * 0.67);
       camFrame(g, W, H, R.title, R.outro, camH);
       if (typeof R.canvasSel === "function") {
@@ -1991,6 +2050,18 @@ details summary{cursor:pointer}
       g.textAlign = "left";
     };
     draw();
+    R.iv = setInterval(() => {
+      if (R.state === "finished") return clearInterval(R.iv);
+      if (performance.now() - R.drawAt > 150) draw();
+    }, 100);
+    try {
+      navigator.wakeLock?.request("screen").then((l) => {
+        if (R.state === "finished") l.release();
+        else R.wake = l;
+      }).catch(() => {
+      });
+    } catch (e) {
+    }
     mr.start();
   }
   function camRecStop(outro, now) {
