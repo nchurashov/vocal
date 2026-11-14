@@ -44,7 +44,8 @@ npx cap sync ios                 # www -> ios/App/App/public (нужен npm i)
 git add -A && git commit && git push   # сайт обновится через ~1 мин
 ```
 iPhone: на Маке открыть `ios/App/App.xcodeproj`, Signing -> Team (Apple ID), выбрать iPhone, ▶.
-Android: `npx cap sync android && cd android && ./gradlew assembleDebug` -> `android/app/build/outputs/apk/debug/app-debug.apk` (ставится на телефон файлом).
+Android: APK собирает GitHub Actions (`.github/workflows/android.yml`) на каждый пуш в main и `claude/**`, подписывает постоянным ключом (секреты репозитория `ANDROID_KEYSTORE` - .p12 в base64, `ANDROID_KEYSTORE_PASSWORD`; алиас `vocal`) и выкладывает в релиз: из main - `android`, постоянная ссылка https://github.com/nchurashov/vocal/releases/download/android/vocal-pod-bokalom.apk; из других веток - пробный `android-test`. На телефоне скачать и «Обновить», прогресс остаётся. `versionCode` = номер запуска. Ключ в git НЕ класть (репозиторий публичный); копия .p12 - у Кита. Ставить только APK с этим ключом: сборка с Мака (`assembleDebug`, отладочный ключ) поверх не встанет.
+Локально (для отладки): `npx cap sync android && cd android && ./gradlew assembleDebug` -> `android/app/build/outputs/apk/debug/app-debug.apk`.
 Нужны JDK 21 (`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`) и Android SDK в ~/Library/Android/sdk (`android/local.properties`, не в git). Эмулятор: AVD `vocal`; отладка WebView через `adb forward` + DevTools.
 Бесплатный Apple ID - приложение живёт 7 дней. Аккаунт разработчика ($99/год) - TestFlight.
 

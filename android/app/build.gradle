@@ -7,8 +7,9 @@ android {
         applicationId "ru.nchurashov.vocal"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // В сборке GitHub номер растёт с каждым запуском (VERSION_CODE), иначе 1
+        versionCode((System.getenv("VERSION_CODE") ?: "1") as int)
+        versionName System.getenv("VERSION_NAME") ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +17,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Постоянный ключ подписи: файл и пароль из секретов GitHub (.github/workflows/android.yml).
+    // Без них release собирается неподписанным, а debug - отладочным ключом этого компьютера.
+    def ksFile = System.getenv("ANDROID_KEYSTORE_FILE")
+    signingConfigs {
+        if (ksFile) {
+            vocal {
+                storeFile file(ksFile)
+                storeType "pkcs12"
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias "vocal"
+                keyPassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            if (ksFile) signingConfig signingConfigs.vocal
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
