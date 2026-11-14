@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-nqX/Ul2qERzYEjIGrkL25wYtRsPx7rfMSYrt60iHQoA='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-8KRYJjwnolAbXypoNdT5GrqBa/TMct81KuP5atHsUu8='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Вокал под бокал</title>
 <meta name="apple-mobile-web-app-title" content="Вокал под бокал"><meta name="description" content="Вокал под бокал: налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1825,6 +1825,7 @@ details summary{cursor:pointer}
     androidAlbum: () => androidAlbum,
     camAudio: () => camAudio,
     camFrame: () => camFrame,
+    camLog: () => camLog,
     camMic: () => camMic,
     camMime: () => camMime,
     camNative: () => camNative,
@@ -1836,7 +1837,6 @@ details summary{cursor:pointer}
     camRecStart: () => camRecStart,
     camRecStop: () => camRecStop,
     camRecording: () => camRecording,
-    camRestart: () => camRestart,
     camRound: () => camRound,
     camSaveNative: () => camSaveNative,
     camSession: () => camSession,
@@ -1918,19 +1918,33 @@ details summary{cursor:pointer}
     }
     CAM.video = v;
     CAM.frameAt = performance.now();
+    camTrackLog(CAM.stream);
     if (v.requestVideoFrameCallback && !v._rvfc) {
       v._rvfc = true;
       const tick = () => {
         CAM.frameAt = performance.now();
+        CAM.frames = (CAM.frames || 0) + 1;
         if (v.isConnected) v.requestVideoFrameCallback(tick);
       };
       v.requestVideoFrameCallback(tick);
     }
     return true;
   }
+  function camLog(msg) {
+    const R = CAM.rec;
+    if (!R || R.state === "finished" || !R.d) return;
+    if (R.d.ev.length < 14) R.d.ev.push(((performance.now() - R.t0) / 1e3).toFixed(1) + " " + msg);
+  }
+  function camTrackLog(stream) {
+    (stream ? stream.getVideoTracks() : []).forEach((t) => {
+      t.onmute = () => camLog("камера mute");
+      t.onunmute = () => camLog("камера unmute");
+      t.onended = () => camLog("камера ended");
+    });
+  }
   function camWatch(now) {
-    const v = CAM.video;
-    if (!v || !CAM.stream || CAM.fixing) return;
+    const v = CAM.video, R = CAM.rec;
+    if (!v || !CAM.stream || !R || !R.d) return;
     if (!v.requestVideoFrameCallback && v.currentTime !== CAM.vt) {
       CAM.vt = v.currentTime;
       CAM.frameAt = now;
@@ -1941,29 +1955,12 @@ details summary{cursor:pointer}
       if (r && r.catch) r.catch(() => {
       });
     }
-    if (idle > 3e3) camRestart();
-  }
-  async function camRestart() {
-    if (CAM.fixing || !CAM.stream) return;
-    CAM.fixing = true;
-    CAM.stream.getTracks().forEach((t) => t.stop());
-    try {
-      const s = await navigator.mediaDevices.getUserMedia(CAM_VIDEO);
-      if (!CAM.video) {
-        s.getTracks().forEach((t) => t.stop());
-        return;
-      }
-      CAM.stream = s;
-      CAM.video.srcObject = s;
-      try {
-        await CAM.video.play();
-      } catch (e) {
-      }
-      CAM.restarts = (CAM.restarts || 0) + 1;
-    } catch (e) {
-    } finally {
-      CAM.fixing = false;
-      CAM.frameAt = performance.now();
+    if (idle > 3e3 && !R.d.stall) {
+      R.d.stall = true;
+      camLog("кадров камеры нет 3 с");
+    } else if (idle < 500 && R.d.stall) {
+      R.d.stall = false;
+      camLog("кадры камеры снова идут");
     }
   }
   function camOff() {
@@ -1980,6 +1977,17 @@ details summary{cursor:pointer}
   }
   var camRecording = () => !!(CAM.rec && CAM.rec.state === "rec");
   function camRecStart(canvasSel, title, micStream) {
+    try {
+      camRecStart0(canvasSel, title, micStream);
+    } catch (e) {
+      try {
+        CAM.rec && CAM.rec.mr && CAM.rec.mr.stop();
+      } catch (e2) {
+      }
+      CAM.rec = null;
+    }
+  }
+  function camRecStart0(canvasSel, title, micStream) {
     if (!camOn() || !CAM.stream || !CAM.video || CAM.rec && CAM.rec.state === "rec") return;
     const W = 720, H = 1280, out = document.createElement("canvas");
     out.width = W;
@@ -1995,18 +2003,36 @@ details summary{cursor:pointer}
     } catch (e) {
       return;
     }
-    const R = CAM.rec = { state: "rec", mr, out, g, tracks, title, canvasSel, outro: null, t0: performance.now(), mime: mr.mimeType || mime || "video/webm" };
+    const R = CAM.rec = {
+      state: "rec",
+      mr,
+      out,
+      g,
+      tracks,
+      title,
+      canvasSel,
+      outro: null,
+      t0: performance.now(),
+      mime: mr.mimeType || mime || "video/webm",
+      d: { ev: [], draws: 0, gap: 0, gapAt: 0, cam0: CAM.frames || 0, sampAt: 0, sig: null, same: 0 }
+    };
+    const vt = vs.getVideoTracks()[0];
+    if (vt) {
+      vt.onmute = () => camLog("холст mute");
+      vt.onended = () => camLog("холст ended");
+    }
+    mr.onerror = (e) => camLog("запись: ошибка " + (e && e.error && e.error.name));
+    R.vis = () => camLog("страница " + document.visibilityState);
+    document.addEventListener("visibilitychange", R.vis);
     mr.ondataavailable = (e) => {
       if (e.data && e.data.size) chunks.push(e.data);
     };
     mr.onstop = () => {
+      R.diag = camDiag(R);
+      document.removeEventListener("visibilitychange", R.vis);
       R.state = "finished";
       cancelAnimationFrame(R.raf);
       clearInterval(R.iv);
-      try {
-        R.wake?.release();
-      } catch (e) {
-      }
       tracks.forEach((t) => t.stop());
       au.close();
       if (CAM.mic && !busy) {
@@ -2016,7 +2042,7 @@ details summary{cursor:pointer}
       }
       if (!chunks.length || R.discard) return;
       const blob = new Blob(chunks, { type: R.mime.split(";")[0] });
-      const clip = { blob, url: URL.createObjectURL(blob), title: R.title, outro: R.outro, date: nowLocal(), ext: R.mime.includes("mp4") ? "mp4" : "webm" };
+      const clip = { blob, url: URL.createObjectURL(blob), title: R.title, outro: R.outro, date: nowLocal(), ext: R.mime.includes("mp4") ? "mp4" : "webm", diag: R.diag };
       CAM.clips.push(clip);
       if (CAM.clips.length > 5) URL.revokeObjectURL(CAM.clips.shift().url);
       camShow(clip);
@@ -2025,9 +2051,18 @@ details summary{cursor:pointer}
       if (R.state === "finished") return;
       cancelAnimationFrame(R.raf);
       R.raf = requestAnimationFrame(draw);
-      const now = performance.now();
+      const now = performance.now(), D2 = R.d;
+      if (R.drawAt && now - R.drawAt > D2.gap) {
+        D2.gap = now - R.drawAt;
+        D2.gapAt = R.drawAt - R.t0;
+      }
       R.drawAt = now;
+      D2.draws++;
       camWatch(now);
+      if (now - D2.sampAt > 1e3) {
+        D2.sampAt = now;
+        camSample(D2);
+      }
       const area = H - 96, camH = Math.round(area * 0.67);
       camFrame(g, W, H, R.title, R.outro, camH);
       if (typeof R.canvasSel === "function") {
@@ -2056,15 +2091,30 @@ details summary{cursor:pointer}
       if (R.state === "finished") return clearInterval(R.iv);
       if (performance.now() - R.drawAt > 150) draw();
     }, 100);
+    mr.start();
+  }
+  function camSample(D2) {
+    const v = CAM.video;
+    if (!v || !v.videoWidth) return;
     try {
-      navigator.wakeLock?.request("screen").then((l) => {
-        if (R.state === "finished") l.release();
-        else R.wake = l;
-      }).catch(() => {
-      });
+      const c = D2.sc || (D2.sc = Object.assign(document.createElement("canvas"), { width: 8, height: 8 })), x = c.getContext("2d", { willReadFrequently: true });
+      x.drawImage(v, 0, 0, 8, 8);
+      const px = x.getImageData(0, 0, 8, 8).data;
+      let sig = "";
+      for (let i = 0; i < px.length; i += 4) sig += px[i] + "," + px[i + 1] + ",";
+      if (sig === D2.sig) {
+        if (++D2.same === 2) camLog("картинка камеры не меняется");
+      } else {
+        if (D2.same >= 2) camLog("картинка камеры снова живая");
+        D2.same = 0;
+      }
+      D2.sig = sig;
     } catch (e) {
     }
-    mr.start();
+  }
+  function camDiag(R) {
+    const D2 = R.d, t = (ms) => (ms / 1e3).toFixed(1), dur = performance.now() - R.t0;
+    return `${t(dur)} с, ${R.mime.split(";")[0]} · холст: ${D2.draws} кадров (${(D2.draws / dur * 1e3).toFixed(0)}/с), самая длинная пауза ${t(D2.gap)} с на ${t(D2.gapAt)} с · камера: ${(CAM.frames || 0) - D2.cam0} кадров${CAM.video && CAM.video.requestVideoFrameCallback ? "" : " (счёт недоступен)"}, последний на ${t((CAM.frameAt || 0) - R.t0)} с · ${D2.ev.join(" · ") || "событий нет"}`;
   }
   function camRecStop(outro, now) {
     const R = CAM.rec;
@@ -2277,7 +2327,8 @@ details summary{cursor:pointer}
     ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? "✓ Сохранено в " + GALLERY() : "Сохраняю в " + GALLERY() + "..."}</div>
       <div class="row"><button class="btn" style="flex:1" ${act("camShare", i)}>Отправить</button></div>` : `<div class="row"><button class="btn" style="flex:1" ${act("camShare", i)}>📥 В Фото</button><button class="btn ghost" style="flex:1" ${act("camShare", i)}>Отправить</button></div>
       <div class="tiny muted">На iPhone откроется меню: выбери «Сохранить видео», и оно окажется в Фото. Сразу без меню сохраняет только приложение «Вокал под бокал».</div>`}
-    <div class="tiny muted">Видео есть только у тебя в телефоне. Если не сохранить, после закрытия страницы оно пропадёт.</div>`);
+    <div class="tiny muted">Видео есть только у тебя в телефоне. Если не сохранить, после закрытия страницы оно пропадёт.</div>
+    ${clip.diag ? `<div class="tiny muted" style="user-select:text;-webkit-user-select:text">🔧 Для отладки: ${esc(clip.diag)}</div>` : ""}`);
     if (nat && !clip.saved && clip.autoSave !== false) camSaveNative(clip);
   }
   async function camShare(i) {
