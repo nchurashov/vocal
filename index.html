@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-WQdIgHTldDyTL1dtM+5jEiqxoFgNMyvELTillcBAdjk='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-ZrNW4WP/P4Y5iKsYXRFw53iRi6WJSn+apmd89F19S60='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="vpb-build" content="66b356e163ff">
 <title>Вокал под бокал</title>
 <meta name="apple-mobile-web-app-title" content="Вокал под бокал"><meta name="description" content="Вокал под бокал: налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1365,6 +1366,36 @@ details summary{cursor:pointer}
     if (out) out.innerHTML = `<b>${noteFull(m)}</b><span class="muted"> · ${noteShort(m)}</span>`;
     document.querySelectorAll("#pklearn .pk-cur").forEach((k) => k.classList.remove("pk-cur"));
     document.querySelector(`#pklearn [data-m="${m}"]`)?.classList.add("pk-cur");
+  }
+
+  // src/core/update.js
+  var mine = () => (document.querySelector('meta[name="vpb-build"]') || {}).content || "";
+  var T0 = Date.now();
+  var fresh = "";
+  async function checkUpdate() {
+    if (window.Capacitor || !/^https?:$/.test(location.protocol) || !mine() || fresh) return;
+    try {
+      const r = await fetch(location.pathname + "?nocache=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) return;
+      const m = (await r.text()).match(/name="vpb-build" content="([^"]+)"/);
+      if (m && m[1] !== mine()) fresh = m[1];
+    } catch (e) {
+      return;
+    }
+    if (fresh && Date.now() - T0 < 15e3) applyUpdate();
+  }
+  function applyUpdate() {
+    if (!fresh || busy) return;
+    const v = fresh;
+    fresh = "";
+    toast("Есть новая версия, обновляю...");
+    setTimeout(() => location.replace(location.pathname + "?b=" + encodeURIComponent(v) + location.hash), 500);
+  }
+  function updateWatch() {
+    checkUpdate();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkUpdate();
+    });
   }
 
   // src/data/exercises.js
@@ -4773,6 +4804,7 @@ details summary{cursor:pointer}
       return ((t ^ t >>> 14) >>> 0) / 4294967296;
     };
   }
+  var B0 = () => typeof base === "function" ? base() : 48;
   function ballWindow() {
     const r = typeof lastRange === "function" ? lastRange() : null, b = typeof base === "function" ? base() : 48;
     if (r) {
@@ -4781,12 +4813,15 @@ details summary{cursor:pointer}
     }
     return [-7, 12];
   }
-  function ballRoot(dg, top, W) {
-    for (const oct of [0, -1, 1]) {
-      const r = DEG_SEMI(dg) + 12 * oct, hi = DEG_SEMI(dg + top) + 12 * oct;
-      if (r >= W[0] && hi <= W[1]) return { dg: dg + 7 * oct, r };
+  function ballRoot(dg, top, W, pc = 0) {
+    let best = null;
+    for (const oct of [-2, -1, 0, 1, 2]) {
+      const r = DEG_SEMI(dg) + 12 * oct - pc, hi = DEG_SEMI(dg + top) + 12 * oct - pc;
+      if (r < W[0] || hi > W[1]) continue;
+      const d = Math.abs((r + hi) / 2 - (W[0] + W[1]) / 2);
+      if (!best || d < best.d) best = { dg: dg + 7 * oct, r, d };
     }
-    return null;
+    return best && { dg: best.dg, r: best.r };
   }
   function ballPhrase(C2, R, n) {
     const out = [];
@@ -4818,18 +4853,19 @@ details summary{cursor:pointer}
   }
   function ballGen(ci, ti, W) {
     const C2 = BALL_CHAPTERS[ci], exam = ti === 9, d = ti / 9, R = ballRng((ci + 1) * 1e3 + ti + 7);
-    const top = C2.kind === "hold" ? 0 : C2.deg, roots = [0, 1, 2, 3, 4, 5, 6].map((g) => ballRoot(g, top, W)).filter(Boolean);
-    const fixed = ti < 7 ? ballRoot(ti, top, W) : null;
+    const pc = (B0() % 12 + 12) % 12, top = C2.kind === "hold" ? 0 : C2.deg, roots = [0, 1, 2, 3, 4, 5, 6].map((g) => ballRoot(g, top, W, pc)).filter(Boolean);
+    const fixed = ti < 7 ? ballRoot(ti, top, W, pc) : null;
     const n = exam ? 10 : 5 + Math.round(3 * d), legato = C2.kind === "melody" || C2.kind === "scale" && ti >= 4 || exam && C2.kind !== "hold";
     const bpm = Math.round(C2.bpm[0] + (C2.bpm[1] - C2.bpm[0]) * d), guide = exam ? false : ti < 6;
-    const walls = [];
+    const walls = [], cues = /* @__PURE__ */ new Set();
     if (fixed) {
       ballPhrase(C2, R, n).forEach((g) => walls.push(DEG_SEMI(fixed.dg + g) + (fixed.r - DEG_SEMI(fixed.dg))));
     } else {
       while (walls.length < n) {
-        const rt = roots[Math.floor(R() * roots.length)] || { dg: 0, r: 0 };
+        const rt = roots[Math.floor(R() * roots.length)] || { dg: 0, r: -pc };
+        if (walls.length) cues.add(walls.length);
         ballPhrase(C2, R, C2.kind === "hold" ? 2 : C2.kind === "int" ? 2 : 3).forEach((g) => {
-          if (walls.length < n) walls.push(DEG_SEMI(rt.dg + g));
+          if (walls.length < n) walls.push(DEG_SEMI(rt.dg + g) + (rt.r - DEG_SEMI(rt.dg)));
         });
       }
     }
@@ -4840,6 +4876,10 @@ details summary{cursor:pointer}
     });
     out[out.length - 1][1] = Math.max(2, out[out.length - 1][1]);
     out[out.length - 1][2] = 1;
+    for (const k of cues) {
+      out[k - 1][2] = Math.max(2, out[k - 1][2]);
+      out[k][3] = 1;
+    }
     const from = fixed ? `от ${DEG_NAME[ti]}` : "вразнобой";
     return { n: ci * 10 + ti + 1, ch: ci, task: ti + 1, exam, from, title: exam ? `Экзамен: ${C2.title.toLowerCase()}` : `${C2.title} ${from}`, hint: C2.goal, bpm, guide, walls: out };
   }
@@ -4907,7 +4947,7 @@ details summary{cursor:pointer}
           const best = g.best[lv.n], o = ballUnlocked(lv.n), ok = ballDone(lv.n);
           h += `<button class="gtile ${o ? "" : "locked"}" ${o ? `${act("go", `ball-${lv.n}`)}` : ""}>
           <span class="gnum">${o ? lv.exam ? "🎓" : lv.task : "🔒"}</span><b>${lv.exam ? "Экзамен" : lv.from[0].toUpperCase() + lv.from.slice(1)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
-          <span class="tiny muted">${ok ? "пройдено" : best ? "нужно " + BALL_NEED(lv.n) + "★, есть " + best.stars : o ? lv.exam ? "без ударов, 3★" : lv.guide ? "с подсказкой" : "без подсказки" : "закрыто"}</span></button>`;
+          <span class="tiny muted">${ok ? "пройдено" : best ? "нужно " + BALL_NEED(lv.n) + "★, есть " + best.stars : o ? lv.exam ? "без ударов, 3★" : lv.guide ? "с подсказкой" : lv.walls.some((w) => w[3]) ? "подсказка фраз" : "без подсказки" : "закрыто"}</span></button>`;
         }
         h += `</div>`;
       }
@@ -4938,7 +4978,7 @@ details summary{cursor:pointer}
     });
     return `<button class="back" ${act("go", "ball")}>${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Глава ${lv.ch + 1} «${esc(BALL_CHAPTERS[lv.ch].title)}» · ${lv.exam ? "экзамен" : "задание " + lv.task + " из 10"} · точность ±${ballTol()} ц</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. ${lv.exam ? "Экзамен: нужно пролететь все стены без удара, тогда откроется следующая глава." : `Чтобы засчитать, нужно 2 звезды (80% стен).${lv.guide ? "" : " Без подсказки пианино перед стеной."}`}</p>${theoryRead(BALL_CHAPTERS[lv.ch]) ? `<p style="margin:4px 0 0">${theoryLink(BALL_CHAPTERS[lv.ch])}</p>` : `<div style="margin-top:10px">${theoryLink(BALL_CHAPTERS[lv.ch])}</div>`}${octaveHint()}${camToggleHTML()}
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. ${lv.exam ? "Экзамен: нужно пролететь все стены без удара, тогда откроется следующая глава." : "Чтобы засчитать, нужно 2 звезды (80% стен)."}${lv.guide ? "" : lv.walls.some((w) => w[3]) ? " Пианино подскажет только первую ноту каждой новой фразы, дальше - по слуху." : " Без подсказки пианино перед стеной."}</p>${theoryRead(BALL_CHAPTERS[lv.ch]) ? `<p style="margin:4px 0 0">${theoryLink(BALL_CHAPTERS[lv.ch])}</p>` : `<div style="margin-top:10px">${theoryLink(BALL_CHAPTERS[lv.ch])}</div>`}${octaveHint()}${camToggleHTML()}
     ${diffSeg()}
     <div id="bbest">${ballBestHTML(lv)}</div>
     <div class="gstage sec"><canvas id="bcv"></canvas></div>
@@ -4955,10 +4995,10 @@ details summary{cursor:pointer}
     const b = 60 / lv.bpm;
     let t = 0;
     const walls = [];
-    lv.walls.forEach(([s, len, gap], i) => {
+    lv.walls.forEach(([s, len, gap, cue], i) => {
       const prev = lv.walls[i - 1];
       const open = prev && prev[2] < 0.5 && prev[0] !== s ? Math.min(Math.max(0.4, 0.45 * b), len * b * 0.55) : 0;
-      walls.push({ rel: s, t0: t + open, t1: t + len * b, crashed: false, passed: false, inT: 0, outT: 0 });
+      walls.push({ rel: s, t0: t + open, t1: t + len * b, cue: !!cue, crashed: false, passed: false, inT: 0, outT: 0 });
       t += (len + gap) * b;
     });
     return { walls, D: t };
@@ -5115,6 +5155,11 @@ details summary{cursor:pointer}
       ctx.lineTo(38, bY(B.voice) + 5);
       ctx.fill();
     }
+    if (B.mode === "live") {
+      ctx.font = "700 12px Manrope, system-ui";
+      ctx.fillStyle = "rgba(255,255,255,.85)";
+      ctx.fillText(B.voice != null ? "Слышу: " + VA.noteName(base() + B.voice) : B.micZero > 1.5 ? "Микрофон молчит" : "Слышу: тишина", 40, B.H - 14);
+    }
     for (let i = 0; i < B.trail.length; i++) {
       const p = B.trail[i];
       const x = B.bx - (now - p.t) * B.pps;
@@ -5239,7 +5284,7 @@ details summary{cursor:pointer}
     const b = 60 / B.lv.bpm;
     B.walls.forEach((w, i) => {
       if (withMelody) tone(base() + w.rel, t0 + w.t0, w.t1 - w.t0, 0.2);
-      else if (B.guide && (i === 0 || B.walls[i - 1].t1 < w.t0 - 0.01)) tone(base() + w.rel, t0 + w.t0 - 1.4 * b, 0.35, 0.12);
+      else if ((B.guide || w.cue) && (i === 0 || B.walls[i - 1].t1 < w.t0 - 0.01)) tone(base() + w.rel, t0 + w.t0 - 1.4 * b, 0.35, 0.12);
     });
   }
   function ballCountIn() {
@@ -5291,6 +5336,8 @@ details summary{cursor:pointer}
     ballReset();
     B.mode = "live";
     B.stream = stream;
+    B.micZero = 0;
+    B.deadShown = false;
     setBusy(true);
     const src = c.createMediaStreamSource(stream), an = c.createAnalyser();
     an.fftSize = 4096;
@@ -5306,6 +5353,16 @@ details summary{cursor:pointer}
       const now = c.currentTime - t0, dt = last < -8 ? 0 : Math.min(0.05, now - last);
       last = now;
       an.getFloatTimeDomainData(buf);
+      let mx = 0;
+      for (let i = 0; i < buf.length; i += 4) {
+        const a = buf[i] < 0 ? -buf[i] : buf[i];
+        if (a > mx) mx = a;
+      }
+      B.micZero = mx === 0 ? (B.micZero || 0) + Math.max(0, dt) : 0;
+      if (B.micZero > 1.5 && !B.deadShown) {
+        B.deadShown = true;
+        $("#bnote").innerHTML = `<div class="note small" style="margin-top:10px">${MIC_DEAD.replace("«Готово»", "«Остановить»")}</div>`;
+      }
       hist.push(VA.livePitch(buf, c.sampleRate));
       if (hist.length > 3) hist.shift();
       const v = hist.filter((x) => x != null);
@@ -5686,14 +5743,14 @@ details summary{cursor:pointer}
       return null;
     }
   }
-  async function diaryPlay(id, fresh) {
+  async function diaryPlay(id, fresh2) {
     const b = await diaryBlob(id);
     if (!b) {
       toast("Видео не найдено: браузер мог его стереть");
       return;
     }
     const e = diaryList().find((x) => x.id === id), url = URL.createObjectURL(b);
-    CAM.clips.push({ blob: b, url, title: "Голос", autoSave: !!fresh, date: e ? e.date : nowLocal(), ext: e && e.ext || (b.type.includes("mp4") ? "mp4" : "webm") });
+    CAM.clips.push({ blob: b, url, title: "Голос", autoSave: !!fresh2, date: e ? e.date : nowLocal(), ext: e && e.ext || (b.type.includes("mp4") ? "mp4" : "webm") });
     camShow(CAM.clips[CAM.clips.length - 1]);
   }
   async function diaryShare(id) {
@@ -7116,10 +7173,10 @@ details summary{cursor:pointer}
       const p = (state.songs || {})[s.id], n = learned(s);
       return `<button class="item" ${act("go", `song-${s.id}`)}><div class="dot pitch">${n === s.ph.length ? "✓" : "🎵"}</div><div class="t"><b>${esc(s.title)}</b><span class="small muted">${s.ph.length} ${plural(s.ph.length, "фраза", "фразы", "фраз")}${n ? ` · выучено ${n}` : ""}${p && p.whole ? ` · целиком ${p.whole}%` : ""}${s.by ? " · " + esc(s.by) : ""}</span></div><span class="muted">›</span></button>`;
     };
-    const mine = songsMine();
+    const mine2 = songsMine();
     return `<button class="back" ${act("go", "today")}>${ICON.back} Сегодня</button><h1>Песни</h1>
     <p class="muted" style="margin:6px 0 0">Разучиваем по фразам: пианино играет кусочек, ты повторяешь, микрофон показывает, какие ноты чисто. Потом поёшь всю песню сам.</p>
-    ${mine.length ? `<div class="sec"><h2>Мои песни</h2>${mine.map(item).join("")}</div>` : ""}
+    ${mine2.length ? `<div class="sec"><h2>Мои песни</h2>${mine2.map(item).join("")}</div>` : ""}
     <div class="sec"><h2>Для начала</h2>${BUILTIN_SONGS.map(item).join("")}</div>
     <div class="sec"><h2>Добавить свою</h2><div class="card stack">
       <label class="btn">${ICON.file} Файл MIDI или караоке<input type="file" accept=".mid,.midi,.kar,audio/midi,audio/x-midi" class="hidden" ${onChange("songFile")}></label>
@@ -7748,7 +7805,7 @@ details summary{cursor:pointer}
     <span class="muted">›</span></button>`;
   }
   function viewToday() {
-    const due = dueList(), fresh = freshList(), n7 = state.sessions.filter((s) => daysBetween(s.date.slice(0, 10), ymd()) < 7).length, st = streak();
+    const due = dueList(), fresh2 = freshList(), n7 = state.sessions.filter((s) => daysBetween(s.date.slice(0, 10), ymd()) < 7).length, st = streak();
     const d = /* @__PURE__ */ new Date();
     let h = `<h1>Сегодня</h1><div class="muted">${d.getDate()} ${MONTHS[d.getMonth()]}</div>
     <p class="small" style="margin:8px 0 0">🍷 ${profName() ? esc(profName()) + ", налей" : "Налей"} бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.</p>`;
@@ -7772,8 +7829,8 @@ details summary{cursor:pointer}
       h += `<button class="item" ${act("go", `ball-${nx.n}`)}><div class="dot pitch">🟠</div><div class="t"><b>Шарик: глава ${nx.ch + 1}, ${nx.exam ? "экзамен" : "задание " + nx.task}</b><span class="small muted">${esc(BALL_CHAPTERS[nx.ch].title)} · пройдено ${done} из ${BALL_LEVELS.length}</span></div><span class="muted">›</span></button>`;
     }
     {
-      const mine = songsAll().filter((x) => x.src !== "builtin").length;
-      h += `<button class="item" ${act("go", "songs")}><div class="dot rhythm">🎵</div><div class="t"><b>Разучить песню</b><span class="small muted">${mine ? "Моих песен: " + mine + " · " : ""}Своя из MIDI или караоке, или напой сам. По фразам, потом целиком</span></div><span class="muted">›</span></button>`;
+      const mine2 = songsAll().filter((x) => x.src !== "builtin").length;
+      h += `<button class="item" ${act("go", "songs")}><div class="dot rhythm">🎵</div><div class="t"><b>Разучить песню</b><span class="small muted">${mine2 ? "Моих песен: " + mine2 + " · " : ""}Своя из MIDI или караоке, или напой сам. По фразам, потом целиком</span></div><span class="muted">›</span></button>`;
     }
     {
       const r = lastRange();
@@ -7787,7 +7844,7 @@ details summary{cursor:pointer}
     }).join("");
     else h += `<div class="card small muted">${state.sessions.length ? "На сегодня повторов нет. Можно взять новое упражнение ниже." : "Повторы появятся после первых отметок: что не получилось, вернётся раньше, что получилось уверенно, реже."}</div>`;
     h += `</div>`;
-    if (fresh.length) h += `<div class="sec"><h2>Можно попробовать</h2>${fresh.map((e) => exItem(e)).join("")}</div>`;
+    if (fresh2.length) h += `<div class="sec"><h2>Можно попробовать</h2>${fresh2.map((e) => exItem(e)).join("")}</div>`;
     h += `<div class="sec"><h2>Уровни</h2><div class="grid3">${Object.keys(CATS).map(levelCard).join("")}</div>
     <p class="tiny muted">Следующий уровень открывается только после ${NEED_CONF} отметок «Уверенно» на текущем уровне минимум за ${NEED_DAYS} разных дня.</p></div>`;
     return h;
@@ -7992,6 +8049,7 @@ details summary{cursor:pointer}
   beforeRender(diaryStop);
   beforeRender(songStop);
   beforeRender(camOff);
+  beforeRender(applyUpdate);
   onLeave(stopRecordingIfAny);
   registerActions({
     answerQuiz,
@@ -8097,5 +8155,6 @@ details summary{cursor:pointer}
   }
   document.getElementById("gear").innerHTML = ICON.gear;
   start();
+  updateWatch();
 })();
 </script></body></html>
