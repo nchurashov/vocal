@@ -25,6 +25,7 @@ import * as features_voice from './features/voice.js';
 import * as features_warmup from './features/warmup.js';
 import * as features_songlib from './features/songlib.js';
 import * as features_songs from './features/songs.js';
+import * as features_songgame from './features/songgame.js';
 import * as data_songs from './data/songs.js';
 import * as screens_history from './screens/history.js';
 import * as screens_notes from './screens/notes.js';
@@ -33,7 +34,7 @@ import * as screens_settings from './screens/settings.js';
 import * as screens_today from './screens/today.js';
 import { registerRoute, registerPrefix, beforeRender, onLeave, start } from './core/router.js';
 import { registerActions, initActions } from './core/actions.js';
-const NAMESPACES = [core_analysis, core_audio, core_piano, core_router, core_store, core_ui, core_util, data_exercises, trainer_check, trainer_exercise, trainer_exercises, trainer_logic, trainer_recorder, trainer_tap, features_ball, features_cam, features_diary, features_game, features_learn, features_range, features_register, features_voice, features_warmup, features_songlib, features_songs, data_songs, screens_history, screens_notes, screens_profiles, screens_settings, screens_today];
+const NAMESPACES = [core_analysis, core_audio, core_piano, core_router, core_store, core_ui, core_util, data_exercises, trainer_check, trainer_exercise, trainer_exercises, trainer_logic, trainer_recorder, trainer_tap, features_ball, features_cam, features_diary, features_game, features_learn, features_range, features_register, features_voice, features_warmup, features_songlib, features_songs, features_songgame, data_songs, screens_history, screens_notes, screens_profiles, screens_settings, screens_today];
 
 const { viewToday } = screens_today, { viewHistory } = screens_history, { viewNotes } = screens_notes;
 const { viewExercises } = trainer_exercises, { viewExercise } = trainer_exercise, { viewCheck } = trainer_check;
@@ -142,6 +143,8 @@ registerActions({
   songCancel: features_songs.songCancel,
   songDel: features_songs.songDel,
   songFile: features_songs.songFile,
+  songGamePlay: features_songs.songGamePlay,
+  songGamePreview: features_songs.songGamePreview,
   songGoPhrase: features_songs.songGoPhrase,
   songNext: features_songs.songNext,
   songPickTrack: features_songs.songPickTrack,
