@@ -47,10 +47,18 @@ export async function camStart(force) {
   let v = $('#campv');
   if (!v) { v = document.createElement('video'); v.id = 'campv'; v.className = 'campv'; v.muted = true; v.setAttribute('playsinline', ''); v.setAttribute('autoplay', ''); document.body.appendChild(v); }
   v.srcObject = CAM.stream; try { await v.play(); } catch (e) { }
-  CAM.video = v; CAM.frameAt = performance.now(); camTrackLog(CAM.stream);
+  camUseVideo(v); camTrackLog(CAM.stream);
+  return true;
+}
+// откуда запись берёт кадры камеры. Элемент должен быть на странице и виден: из убранного со страницы <video>
+// iPhone через несколько секунд перестаёт отдавать кадры - видео замирает, а звук идёт дальше («до» писалось 10 с).
+export function camUseVideo(v) {
+  if (!v || !CAM.stream) return;
+  if (v.srcObject !== CAM.stream) v.srcObject = CAM.stream;
+  if (v.paused) { const r = v.play(); if (r && r.catch) r.catch(() => { }); }
+  CAM.video = v; CAM.frameAt = performance.now();
   // отметка каждого нового кадра камеры - по ней сторож видит, что картинка замерла
   if (v.requestVideoFrameCallback && !v._rvfc) { v._rvfc = true; const tick = () => { CAM.frameAt = performance.now(); CAM.frames = (CAM.frames || 0) + 1; if (v.isConnected) v.requestVideoFrameCallback(tick); }; v.requestVideoFrameCallback(tick); }
-  return true;
 }
 // диагностика записи (временно, пока ищем, почему на iPhone видео замирает на ~20 с): события с секундой от начала записи
 export function camLog(msg) {
@@ -292,10 +300,13 @@ export function recCanvas(draw, audio = [], W = 720, H = 1280) {
   const mime = camMime(), chunks = [];
   const mr = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: 1600000 } : undefined);
   const real = mr.mimeType || mime || 'video/webm';
-  let raf = 0, alive = true;
-  const loop = () => { if (!alive) return; raf = requestAnimationFrame(loop); draw(g, W, H); };
+  let raf = 0, alive = true, at = 0;
+  // кадр: превью камеры встало на паузу (iPhone так делает) - пинаем; кадры анимации пропали - рисуем по таймеру
+  const frame = () => { at = performance.now(); const v = CAM.video; if (v && v.paused && CAM.stream) { const r = v.play(); if (r && r.catch) r.catch(() => { }); } draw(g, W, H); };
+  const loop = () => { if (!alive) return; raf = requestAnimationFrame(loop); frame(); };
+  const iv = setInterval(() => { if (!alive) return clearInterval(iv); if (performance.now() - at > 150) frame(); }, 100);
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-  const done = new Promise(res => { mr.onstop = () => { alive = false; cancelAnimationFrame(raf); tracks.forEach(t => t.stop()); au.close(); res({ blob: new Blob(chunks, { type: real.split(';')[0] }), ext: real.includes('mp4') ? 'mp4' : 'webm' }); }; });
+  const done = new Promise(res => { mr.onstop = () => { alive = false; cancelAnimationFrame(raf); clearInterval(iv); tracks.forEach(t => t.stop()); au.close(); res({ blob: new Blob(chunks, { type: real.split(';')[0] }), ext: real.includes('mp4') ? 'mp4' : 'webm' }); }; });
   loop(); mr.start();
   return { stop: () => { try { mr.stop(); } catch (e) { } return done; }, done };
 }

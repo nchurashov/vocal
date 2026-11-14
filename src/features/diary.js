@@ -5,7 +5,7 @@ import { afterHooks, render } from '../core/router.js';
 import { profName, save, state } from '../core/store.js';
 import { toast } from '../core/ui.js';
 import { $, ICON, MONTHS, daysBetween, fmtDay, nowLocal, plural, setBusy, ymd } from '../core/util.js';
-import { CAM, CAM_OK, camFrame, camOff, camPending, camRound, camShare, camShow, camStart, camWrap, recCanvas } from './cam.js';
+import { CAM, CAM_OK, camFrame, camOff, camPending, camRound, camShare, camShow, camStart, camUseVideo, camWrap, recCanvas } from './cam.js';
 import { recBest } from './voice.js';
 
 // ===== Голос: до и после (#diary) =====
@@ -96,7 +96,7 @@ export function diaryDraw() {
       <div id="dyq" style="font:700 21px Lora,serif;line-height:1.35;min-height:58px">${DIARY_Q[0]}</div>
       <div style="height:5px;background:var(--line);border-radius:3px;overflow:hidden"><i id="dyqbar" style="display:block;height:100%;width:0;background:var(--accent)"></i></div>
       <div class="row"><button class="btn ghost" style="flex:1" ${act('diaryNextQ')}>Следующий вопрос ›</button><button class="btn" style="flex:1" ${act('diaryRecStop')}>${ICON.stop} Готово</button></div></div>`;
-    const v = $('#dyprev'); if (v && CAM.stream) { v.srcObject = CAM.stream; v.play().catch(() => { }); }
+    camUseVideo($('#dyprev')); // запись берёт кадры из этого (видимого) превью
   }
 }
 // следующий вопрос; после последнего - конец записи
