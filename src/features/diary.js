@@ -1,37 +1,46 @@
+import { VA } from '../core/analysis.js';
+import { ac, afterMic, micTap, noteFull, noteShort, openMic } from '../core/audio.js';
+import { afterHooks, render } from '../core/router.js';
+import { profName, save, state } from '../core/store.js';
+import { toast } from '../core/ui.js';
+import { $, ICON, MONTHS, daysBetween, fmtDay, nowLocal, plural, setBusy, ymd } from '../core/util.js';
+import { CAM, CAM_OK, camFrame, camOff, camPending, camRound, camShare, camShow, camStart, camWrap, recCanvas } from './cam.js';
+import { recBest } from './voice.js';
+
 // ===== Голос: до и после (#diary) =====
 // Видео «до»: ответы на вопросы (субтитры под камерой, впечатываются в видео). Через месяц - «после». Потом видео сравнения для соцсетей.
 // Метрики только из микрофона: средняя высота речи (медиана тона) и разброс интонаций (от 10-го до 90-го процентиля).
 // Видео хранится в IndexedDB этого браузера (никуда не загружается); метаданные - в state.diary.
 // вопросы для живой речи: человек думает и отвечает, а не читает. В «до» и «после» одни и те же - сравнение честное
-const DIARY_Q = ['Как тебя зовут и чем ты занимаешься?', 'Расскажи самый смешной случай за последнее время.', 'Что бы ты делал, если бы завтра был свободный день?', 'Чего ты хочешь от своего голоса?'];
-const DIARY_QSEC = 20;
-const DIARY_MAX = 120;
+export const DIARY_Q = ['Как тебя зовут и чем ты занимаешься?', 'Расскажи самый смешной случай за последнее время.', 'Что бы ты делал, если бы завтра был свободный день?', 'Чего ты хочешь от своего голоса?'];
+export const DIARY_QSEC = 20;
+export const DIARY_MAX = 120;
 // --- IndexedDB для видео
-function idb() { return new Promise((ok, bad) => { const r = indexedDB.open('vpb', 1); r.onupgradeneeded = () => r.result.createObjectStore('videos'); r.onsuccess = () => ok(r.result); r.onerror = () => bad(r.error); }); }
-async function idbDo(mode, f) { const db = await idb(); return new Promise((ok, bad) => { const tx = db.transaction('videos', mode), st = tx.objectStore('videos'); const r = f(st); tx.oncomplete = () => ok(r && r.result); tx.onerror = () => bad(tx.error); }); }
-const vidPut = (id, blob) => idbDo('readwrite', st => st.put(blob, id));
-const vidGet = id => idbDo('readonly', st => st.get(id));
-const vidDel = id => idbDo('readwrite', st => st.delete(id));
-const diaryList = () => (state.diary ||= []);
-const dateRu = s => { const [y, m, d] = s.slice(0, 10).split('-').map(Number); return d + ' ' + MONTHS[m - 1]; };
-const daysSince = d => daysBetween(d.slice(0, 10), ymd());
+export function idb() { return new Promise((ok, bad) => { const r = indexedDB.open('vpb', 1); r.onupgradeneeded = () => r.result.createObjectStore('videos'); r.onsuccess = () => ok(r.result); r.onerror = () => bad(r.error); }); }
+export async function idbDo(mode, f) { const db = await idb(); return new Promise((ok, bad) => { const tx = db.transaction('videos', mode), st = tx.objectStore('videos'); const r = f(st); tx.oncomplete = () => ok(r && r.result); tx.onerror = () => bad(tx.error); }); }
+export const vidPut = (id, blob) => idbDo('readwrite', st => st.put(blob, id));
+export const vidGet = id => idbDo('readonly', st => st.get(id));
+export const vidDel = id => idbDo('readwrite', st => st.delete(id));
+export const diaryList = () => (state.diary ||= []);
+export const dateRu = s => { const [, m, d] = s.slice(0, 10).split('-').map(Number); return d + ' ' + MONTHS[m - 1]; };
+export const daysSince = d => daysBetween(d.slice(0, 10), ymd());
 // метрика речи по кадрам тона (чистая функция, тест: tests/sim_diary.py)
-function speechStats(ms) {
+export function speechStats(ms) {
   const v = ms.filter(m => m != null).sort((a, b) => a - b);
   if (v.length < 120) return null; // меньше ~2 с голоса - не считаем
   const q = p => v[Math.min(v.length - 1, Math.floor(p * (v.length - 1)))];
   return { med: Math.round(q(.5) * 10) / 10, p10: Math.round(q(.1) * 10) / 10, p90: Math.round(q(.9) * 10) / 10 };
 }
-let DY = null;
-function diaryStop() {
+export let DY = null;
+export function diaryStop() {
   if (!DY) return; cancelAnimationFrame(DY.raf); clearInterval(DY.tick);
   if (DY.rec) { DY.rec.stop(); DY.rec = null; }
   if (DY.mic) { DY.mic.getTracks().forEach(t => t.stop()); DY.mic = null; afterMic(); }
   if (DY.playing) { DY.playing.forEach(x => { try { x.pause(); } catch (e) { } }); DY.playing = null; }
-  busy = false;
+  setBusy(false);
 }
 // подсказка на «Сегодня»
-function diaryTodayItem() {
+export function diaryTodayItem() {
   if (!CAM_OK) return '';
   const L = diaryList(), last = L[L.length - 1];
   if (!L.length) return `<button class="item" onclick="go('diary')"><div class="dot near">🎬</div><div class="t"><b>Запиши голос «до»</b><span class="small muted">Полторы минуты на камеру: ответь на 4 вопроса. Через месяц сравнишь и не узнаешь свой голос</span></div><span class="muted">›</span></button>`;
@@ -39,7 +48,7 @@ function diaryTodayItem() {
   if (d >= 30) return `<button class="item" onclick="go('diary')"><div class="dot near">🎬</div><div class="t"><b>Прошёл месяц: запиши голос «после»</b><span class="small muted">Последнее видео ${fmtDay(last.date.slice(0, 10)).toLowerCase()}. Сравни, как изменился голос</span></div><span class="muted">›</span></button>`;
   return '';
 }
-function viewDiary() {
+export function viewDiary() {
   diaryStop(); DY = { mode: 'idle' };
   afterHooks.push(diaryDraw);
   const L = diaryList();
@@ -51,14 +60,14 @@ function viewDiary() {
     <div class="sec"><h2>Мои записи</h2>${L.length ? L.slice().reverse().map(diaryItemHTML).join('') : '<div class="card small muted">Пока нет записей.</div>'}
     <p class="tiny muted">Видео хранятся только в этом браузере на телефоне. Safari может стереть данные сайта, если долго не заходить, поэтому сохрани важные видео в Фото кнопкой «Поделиться». Приложение с экрана «Домой» так не стирает.</p></div>`;
 }
-const pitchTxt = s => s ? `${noteShort(s.med)} (${noteFull(s.med).split(' (')[0].toLowerCase()})` : 'мало речи для замера';
-function diaryItemHTML(e) {
+export const pitchTxt = s => s ? `${noteShort(s.med)} (${noteFull(s.med).split(' (')[0].toLowerCase()})` : 'мало речи для замера';
+export function diaryItemHTML(e) {
   const idx = diaryList().indexOf(e), first = idx === 0;
   return `<div class="card stack" style="margin-bottom:10px"><div class="row between"><b>${first ? 'До' : 'После'} · ${dateRu(e.date)}</b><span class="tiny muted">${Math.round(e.dur)} с</span></div>
     <div class="small">Средняя высота речи: <b>${pitchTxt(e.stats)}</b>${e.stats ? ` · разброс интонаций ${Math.round(e.stats.p90 - e.stats.p10)} ${plural(Math.round(e.stats.p90 - e.stats.p10), 'полутон', 'полутона', 'полутонов')}` : ''}</div>
     <div class="row wrap" style="gap:8px"><button class="btn ghost" style="flex:1;min-height:40px" onclick="diaryPlay('${e.id}')">${ICON.play} Смотреть</button><button class="btn ghost" style="flex:1;min-height:40px" onclick="diaryShare('${e.id}')">Поделиться</button><button class="btn ghost" style="min-height:40px;color:var(--bad)" onclick="diaryDel('${e.id}')">Удалить</button></div></div>`;
 }
-function diaryCompareHTML(a, b) {
+export function diaryCompareHTML(a, b) {
   const d = daysBetween(a.date.slice(0, 10), b.date.slice(0, 10));
   let m = '';
   if (a.stats && b.stats) {
@@ -70,7 +79,7 @@ function diaryCompareHTML(a, b) {
   return `<div class="card sec stack"><h3>Сравнение: ${d} ${plural(d, 'день', 'дня', 'дней')}</h3>${m}${best ? `<div class="small">Длинный звук: лучший ${best.sec.toFixed(1)} с</div>` : ''}
     <button class="btn" onclick="diaryMakeCompare()">🎬 Собрать видео «до и после»</button><div id="dycmp" class="small muted"></div></div>`;
 }
-function diaryDraw() {
+export function diaryDraw() {
   const box = $('#dybox'); if (!box || !DY || !CAM_OK) return;
   const L = diaryList(), next = L.length ? 'после' : 'до';
   if (DY.mode === 'idle') {
@@ -90,16 +99,16 @@ function diaryDraw() {
   }
 }
 // следующий вопрос; после последнего - конец записи
-function diaryNextQ() {
+export function diaryNextQ() {
   if (!DY || DY.mode !== 'rec') return;
   if (DY.q >= DIARY_Q.length - 1) return diaryRecStop();
   DY.q++; DY.qT = performance.now();
   if ($('#dyq')) $('#dyq').textContent = DIARY_Q[DY.q]; if ($('#dyqn')) $('#dyqn').textContent = DY.q + 1;
 }
-async function diaryRec() {
+export async function diaryRec() {
   if (!(await camStart(true))) { toast('Нет доступа к камере'); return; }
   let mic; try { mic = await openMic(); } catch (e) { toast('Нет доступа к микрофону'); return; }
-  DY = { mode: 'rec', mic, ms: [], t0: performance.now(), q: 0, qT: performance.now() }; busy = true;
+  DY = { mode: 'rec', mic, ms: [], t0: performance.now(), q: 0, qT: performance.now() }; setBusy(true);
   $('#campv')?.remove();
   const L = diaryList(), title = `${L.length ? 'после' : 'до'} · ${dateRu(ymd())}`;
   const T = micTap(mic), hist = [];
@@ -124,38 +133,38 @@ async function diaryRec() {
   };
   loop();
 }
-async function diaryRecStop() {
+export async function diaryRecStop() {
   if (!DY || DY.mode !== 'rec') return;
   DY.mode = 'saving'; cancelAnimationFrame(DY.raf); camPending();
   const dur = (performance.now() - DY.t0) / 1000, stats = speechStats(DY.ms), rec = DY.rec; DY.rec = null;
   const { blob, ext } = await rec.stop();
   if (DY.mic) { DY.mic.getTracks().forEach(t => t.stop()); DY.mic = null; afterMic(); }
-  camOff(); busy = false;
+  camOff(); setBusy(false);
   const id = 'd' + Date.now();
   try { await vidPut(id, blob); } catch (e) { toast('Не получилось сохранить видео в памяти браузера'); }
   diaryList().push({ id, date: nowLocal(), dur: Math.round(dur), stats, ext }); save();
   render();
   diaryPlay(id, true);
 }
-async function diaryBlob(id) { try { return await vidGet(id); } catch (e) { return null; } }
-async function diaryPlay(id, fresh) {
+export async function diaryBlob(id) { try { return await vidGet(id); } catch (e) { return null; } }
+export async function diaryPlay(id, fresh) {
   const b = await diaryBlob(id); if (!b) { toast('Видео не найдено: браузер мог его стереть'); return; }
   const e = diaryList().find(x => x.id === id), url = URL.createObjectURL(b);
   CAM.clips.push({ blob: b, url, title: 'Голос', autoSave: !!fresh, date: e ? e.date : nowLocal(), ext: (e && e.ext) || (b.type.includes('mp4') ? 'mp4' : 'webm') });
   camShow(CAM.clips[CAM.clips.length - 1]);
 }
-async function diaryShare(id) {
+export async function diaryShare(id) {
   const b = await diaryBlob(id); if (!b) { toast('Видео не найдено'); return; }
   CAM.clips.push({ blob: b, url: URL.createObjectURL(b), date: nowLocal(), ext: b.type.includes('mp4') ? 'mp4' : 'webm' });
   camShare(CAM.clips.length - 1);
 }
-async function diaryDel(id) {
+export async function diaryDel(id) {
   if (!confirm('Удалить это видео? Его нельзя будет вернуть.')) return;
   try { await vidDel(id); } catch (e) { }
   state.diary = diaryList().filter(x => x.id !== id); save(); render();
 }
 // видео сравнения: сначала «ДО», потом «ПОСЛЕ», с плашками; звук - декодированная дорожка каждого видео
-async function diaryMakeCompare() {
+export async function diaryMakeCompare() {
   const L = diaryList(), a = L[0], b = L[L.length - 1], out = $('#dycmp');
   const [ba, bb] = [await diaryBlob(a.id), await diaryBlob(b.id)];
   if (!ba || !bb) { if (out) out.textContent = 'Одно из видео не найдено: браузер мог его стереть.'; return; }
@@ -188,3 +197,11 @@ async function diaryMakeCompare() {
   const clip = { blob, url: URL.createObjectURL(blob), title: 'До и после', date: nowLocal(), ext };
   CAM.clips.push(clip); camShow(clip);
 }
+
+
+
+
+
+
+// установщики для моста window (переходный период, см. main.js)
+export function __set_DY(v) { DY = v; }

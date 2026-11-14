@@ -1,9 +1,19 @@
+import { VA } from '../core/analysis.js';
+import { BASE_MIN, MIC_DIRECT, ac, afterMic, base, noteFull, noteShort, openMic, stopAll, strictOct, tone } from '../core/audio.js';
+import { afterHooks, go, render } from '../core/router.js';
+import { save, state } from '../core/store.js';
+import { toast } from '../core/ui.js';
+import { $, ICON, addDays, nowLocal, plural, setBusy, ymd } from '../core/util.js';
+import { camOn, camRecStop, camRecording, camSession, camStart, camToggleHTML } from './cam.js';
+import { rangeStep } from './range.js';
+import { lastRange } from './register.js';
+
 // ===== Распевка дня: маршрут #warmup =====
 // Два режима: «Вместе» - поёшь с пианино; «Повтори за мной» - пианино играет фразу, потом тишина,
 // ты повторяешь, микрофон слушает только в тишине (пианино в замер не попадает).
 // Границы - замеренный диапазон (state.range). В спуске вниз одна тональность «за краем» (на полутон ниже низа):
 // если там чисто удержишь новую ноту (правило замера, rangeStep), предложим записать новый низ.
-const WU_STEPS = [
+export const WU_STEPS = [
   { id: 'breath', title: 'Дыхание', how: 'Вдох носом на 4 счёта, выдох на «с-с-с» на 6. Плечи не поднимаются, живот мягкий.', kind: 'breath', cycles: 4 },
   { id: 'trill', title: 'Губная трель', how: 'Губы расслаблены, «бррр» на звук. Если трель не идёт, придержи щёки пальцами.', pat: [0, 2, 4, 5, 7, 5, 4, 2, 0], from: 'mid', dir: 1, n: 6 },
   { id: 'hum', title: 'Мычание', how: '«М» с сомкнутыми губами и свободной челюстью. Почувствуй, как щекочет губы и нос.', pat: [0, 4, 7, 4, 0], from: 'mid', dir: 1, n: 5 },
@@ -13,7 +23,7 @@ const WU_STEPS = [
   { id: 'low', title: 'Спуск вниз', how: 'Сверху вниз на «а», мягко. Внизу не дави: лучше тише, чем с хрипом.', pat: [7, 5, 4, 2, 0], from: 'low', dir: -1, n: 6, edge: true },
 ];
 // тональности упражнения: чистая функция (тест: tests/sim_warmup.py)
-function warmupKeys(step, b, range) {
+export function warmupKeys(step, b, range) {
   const span = Math.max(...step.pat) - Math.min(...step.pat);
   const lo = range ? range.lo : b - 2, hi = range ? range.hi : b + 12;
   const fits = k => k + Math.min(...step.pat) >= lo && k + Math.max(...step.pat) <= hi;
@@ -27,7 +37,7 @@ function warmupKeys(step, b, range) {
   return keys;
 }
 // оценка одной тональности по кадрам ответа: какие ноты фразы спеты чисто (±50 центов, не меньше 0.15 с)
-function wuScore(pat, key, frames, strict) {
+export function wuScore(pat, key, frames, strict) {
   const notes = [...new Set(pat.map(x => key + x))], got = new Map(notes.map(n => [n, 0]));
   for (let i = 1; i < frames.length; i++) {
     const f = frames[i], m = f.m; if (m == null) continue;
@@ -39,33 +49,33 @@ function wuScore(pat, key, frames, strict) {
   const hit = notes.map(n => got.get(n) >= .15);
   return { notes, hit, n: hit.filter(Boolean).length, ok: hit.filter(Boolean).length >= Math.ceil(notes.length * .8) };
 }
-function warmupPlan() {
+export function warmupPlan() {
   const r = lastRange();
   return WU_STEPS.map(s => s.pat ? { ...s, keys: warmupKeys(s, base(), r) } : s).filter(s => !s.pat || s.keys.length);
 }
-let WU = null;
-const WU_BPM = 110;
-const wuMode = () => MIC_DIRECT && (state.settings.wuMode || 'echo') === 'echo' ? 'echo' : 'along';
-function wuKeySec(s, mode) { const b = 60 / WU_BPM; return mode === 'echo' ? (2 + s.pat.length + 1) * b + s.pat.length * b + 1.2 : (s.pat.length + 3) * b; }
-function wuStepSec(s, mode = wuMode()) { return s.kind === 'breath' ? s.cycles * 10 : s.kind === 'timer' ? s.sec : s.keys.length * wuKeySec(s, mode); }
-const warmupMin = () => Math.max(1, Math.round(warmupPlan().reduce((a, s) => a + wuStepSec(s), 0) / 60));
-const doneToday = () => (state.warmups || []).some(w => w.date.slice(0, 10) === ymd());
-function warmupStreak() {
+export let WU = null;
+export const WU_BPM = 110;
+export const wuMode = () => MIC_DIRECT && (state.settings.wuMode || 'echo') === 'echo' ? 'echo' : 'along';
+export function wuKeySec(s, mode) { const b = 60 / WU_BPM; return mode === 'echo' ? (2 + s.pat.length + 1) * b + s.pat.length * b + 1.2 : (s.pat.length + 3) * b; }
+export function wuStepSec(s, mode = wuMode()) { return s.kind === 'breath' ? s.cycles * 10 : s.kind === 'timer' ? s.sec : s.keys.length * wuKeySec(s, mode); }
+export const warmupMin = () => Math.max(1, Math.round(warmupPlan().reduce((a, s) => a + wuStepSec(s), 0) / 60));
+export const doneToday = () => (state.warmups || []).some(w => w.date.slice(0, 10) === ymd());
+export function warmupStreak() {
   const days = new Set((state.warmups || []).map(w => w.date.slice(0, 10)));
   let n = 0, d = ymd(); if (!days.has(d)) d = addDays(d, -1);
   while (days.has(d)) { n++; d = addDays(d, -1); }
   return n;
 }
 // пауза шага: звук и таймеры, микрофон остаётся
-function wuPause() { if (!WU) return; clearTimeout(WU.timer); clearInterval(WU.tick); (WU.timers || []).forEach(clearTimeout); WU.timers = []; stopAll(); WU.playing = false; WU.win = null; }
+export function wuPause() { if (!WU) return; clearTimeout(WU.timer); clearInterval(WU.tick); (WU.timers || []).forEach(clearTimeout); WU.timers = []; stopAll(); WU.playing = false; WU.win = null; }
 // полная остановка (уход с экрана): ещё и микрофон
-function warmupStop() {
+export function warmupStop() {
   if (!WU) return; wuPause(); cancelAnimationFrame(WU.raf);
   if (WU.stream) { WU.stream.getTracks().forEach(t => t.stop()); WU.stream = null; afterMic(); }
-  busy = false;
+  setBusy(false);
 }
-function setWuMode(m) { state.settings.wuMode = m; save(); render(); }
-function viewWarmup() {
+export function setWuMode(m) { state.settings.wuMode = m; save(); render(); }
+export function viewWarmup() {
   warmupStop();
   WU = { i: 0, plan: warmupPlan(), playing: false, res: {}, R: { fr: [], lo: null, hi: null }, timers: [] };
   afterHooks.push(warmupDraw); afterHooks.push(() => { if (camOn()) camStart(); });
@@ -78,11 +88,11 @@ function viewWarmup() {
     <p class="tiny muted" style="margin:6px 0 0">${r ? `Границы - твой замер ${noteShort(r.lo)} - ${noteShort(r.hi)}. В спуске вниз последняя тональность на полутон ниже: попробуй, но не дави.` : `Диапазон не замерен, поэтому держусь рядом с ${noteShort(base())}. <a href="#range">Замерить</a>, чтобы распевка шла по твоим границам.`}</p>
     <div id="wubox" class="sec"></div>`;
 }
-function wuResultsHTML(s) {
+export function wuResultsHTML(s) {
   const rs = WU.res[s.id]; if (!rs || !rs.length) return '';
   return `<div class="row wrap" style="gap:6px">${rs.map(x => `<span class="chip ${x.ok ? 'ok' : x.n ? 'near' : 'bad'}">${noteShort(x.key)}${x.edge ? ' за краем' : ''}: ${x.n}/${x.notes.length}</span>`).join('')}</div>`;
 }
-function warmupDraw() {
+export function warmupDraw() {
   const box = $('#wubox'); if (!box || !WU) return;
   if (WU.i >= WU.plan.length) {
     const all = Object.values(WU.res).flat(), ok = all.filter(x => x.ok).length, r = lastRange();
@@ -102,11 +112,11 @@ function warmupDraw() {
     <div id="wures">${wuResultsHTML(s)}</div>
     <div class="row"><button class="btn" style="flex:1" id="wuplay" onclick="warmupPlay()">${WU.playing ? ICON.stop + ' Пауза' : ICON.play + ' Начать'}</button><button class="btn ghost" onclick="warmupNext()">Дальше ›</button></div></div>`;
 }
-function wuSaveRange(lo, hi) {
+export function wuSaveRange(lo, hi) {
   (state.range ||= []).push({ date: nowLocal(), lo, hi, from: 'warmup' }); save();
   toast(`Записал: ${noteShort(lo)} - ${noteShort(hi)}`); go('range');
 }
-function warmupNext() {
+export function warmupNext() {
   wuPause(); WU.i++;
   if (WU.i >= WU.plan.length) {
     const all = Object.values(WU.res).flat();
@@ -118,10 +128,10 @@ function warmupNext() {
   warmupDraw(); if (WU.i < WU.plan.length) WU.timers.push(setTimeout(warmupPlay, 300));
 }
 // микрофон для режима «Повтори за мной»: открывается один раз на всю распевку
-async function wuEnsureMic(forCam) {
+export async function wuEnsureMic(forCam) {
   if (WU.stream) return true;
   let stream; try { stream = await openMic(); } catch (e) { if (!forCam) { toast('Нет доступа к микрофону. Распевка пойдёт без проверки.'); state.settings.wuMode = 'along'; save(); } return false; }
-  const c = ac(); WU.stream = stream; busy = true;
+  const c = ac(); WU.stream = stream; setBusy(true);
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const loop = () => {
@@ -140,8 +150,8 @@ async function wuEnsureMic(forCam) {
   return true;
 }
 // карточка для видео: шаг и текущая нота
-const wuPanel = () => { const s = WU && WU.plan[WU.i]; return s ? { top: `Распевка · ${s.title}`, big: ($('#wunow') || {}).textContent || '', sub: ($('#wusub') || {}).textContent || '' } : { big: 'Распевка сделана!' }; };
-async function warmupPlay() {
+export const wuPanel = () => { const s = WU && WU.plan[WU.i]; return s ? { top: `Распевка · ${s.title}`, big: ($('#wunow') || {}).textContent || '', sub: ($('#wusub') || {}).textContent || '' } : { big: 'Распевка сделана!' }; };
+export async function warmupPlay() {
   if (!WU) return;
   if (WU.playing) { wuPause(); warmupDraw(); return; }
   // камера: микрофон распевки открываем сразу и пишем им видео до конца распевки
@@ -187,3 +197,11 @@ async function warmupPlay() {
   });
   WU.timer = setTimeout(() => { if (WU && WU.playing) warmupNext(); }, (t - t0 + .4) * 1000 / sp);
 }
+
+
+
+
+
+
+// установщики для моста window (переходный период, см. main.js)
+export function __set_WU(v) { WU = v; }

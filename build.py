@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""Собирает src/* в один index.html (корень = GitHub Pages) и копирует в www/ для iOS."""
+"""Собирает src/ (ES-модули через esbuild + app.css) в один index.html (корень = GitHub Pages) и копирует в www/ для iOS."""
 import os, shutil
 R = os.path.dirname(os.path.abspath(__file__)); S = lambda f: open(os.path.join(R, 'src', f), encoding='utf-8').read()
-css = S('app.css'); js = '\n'.join(S(f) for f in ['analysis.js', 'data.js', 'app.js', 'game.js', 'ball.js', 'learn.js', 'range.js', 'warmup.js', 'voice.js', 'cam.js', 'diary.js'])
+css = S('app.css')
+# ES-модули src/**/*.js собирает esbuild в один скрипт (точка входа src/main.js); нужен npm i (esbuild в devDependencies)
+import subprocess
+ESB = os.path.join(R, 'node_modules', '.bin', 'esbuild')
+if not os.path.exists(ESB): raise SystemExit('нет esbuild: выполни npm i')
+r = subprocess.run([ESB, os.path.join(R, 'src', 'main.js'), '--bundle', '--format=iife', '--target=safari14', '--charset=utf8', '--legal-comments=none', '--log-level=warning'], capture_output=True, text=True, encoding='utf-8')
+if r.returncode: raise SystemExit('esbuild: ' + r.stderr)
+js = r.stdout.replace('</script', '<\\/script')
 html = f'''<!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -15,10 +22,7 @@ html = f'''<!DOCTYPE html>
 <body><div class="app"><header class="top"><div class="brand"><div class="logo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></svg></div><b>Вокал под бокал</b></div>
 <div class="row" style="gap:8px"><button class="who" id="who" onclick="openProfiles()" aria-label="Кто поёт"></button><button class="iconbtn" aria-label="Настройки" onclick="openSettings()" id="gear"></button></div></header>
 <main id="view"></main></div><nav class="tabs" id="tabs"></nav>
-<script>{js}
-document.getElementById('gear').innerHTML = ICON.gear;
-start();
-</script></body></html>'''
+<script>{js}</script></body></html>'''
 open(os.path.join(R, 'index.html'), 'w', encoding='utf-8').write(html)
 os.makedirs(os.path.join(R, 'www'), exist_ok=True); shutil.copy(os.path.join(R, 'index.html'), os.path.join(R, 'www', 'index.html'))
 print('index.html:', len(html), 'байт')

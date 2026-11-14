@@ -1,6 +1,6 @@
 // Синтез «голоса» для тестов: гармоники, вибрато, скольжение между нотами, шум. Пишет WAV в tests/out/
 const fs = require('fs'), path = require('path');
-const VA = require('../src/analysis.js');
+const { VA } = require('../src/core/analysis.js');
 const sr = 44100, OUT = path.join(__dirname, 'out');
 function synth(notes) { // notes: [{midi, dur, gap}]
   const total = notes.reduce((a, n) => a + n.dur + (n.gap || 0), 0) + 0.5;

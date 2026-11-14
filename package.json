@@ -10,9 +10,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@capacitor-community/media": "^9.1.0",
     "@capacitor/cli": "^8.6.0",
     "@capacitor/core": "^8.6.0",
-    "@capacitor/ios": "^8.6.0",
-    "@capacitor-community/media": "^9.1.0"
+    "@capacitor/ios": "^8.6.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12",
+    "eslint": "^9.39.5",
+    "globals": "^15.15.0"
   }
 }

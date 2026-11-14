@@ -1,13 +1,18 @@
+import { MIC_DIRECT, afterMic, openMic } from '../core/audio.js';
+import { profName, save, state } from '../core/store.js';
+import { sheet, toast } from '../core/ui.js';
+import { $, busy, nowLocal } from '../core/util.js';
+
 // ===== Камера: снять себя во время уровня и поделиться видео =====
 // Видео 9:16 (720x1280): сверху фронтальная камера (зеркально) на 2/3, снизу игра на 1/3, внизу плашка с адресом сайта.
 // Звук - копия дорожки микрофона игры (голос и пианино из динамика). После финиша ещё 2.5 с крупный итог - для реакции.
 // Видео живёт только в памяти телефона; наружу уходит, только если человек сам нажмёт «Поделиться» или «Сохранить».
-const CAM = { stream: null, video: null, rec: null, clips: [] };
-const CAM_OK = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder && HTMLCanvasElement.prototype.captureStream) && MIC_DIRECT;
-const camOn = () => CAM_OK && !!state.settings.cam;
+export const CAM = { stream: null, video: null, rec: null, clips: [] };
+export const CAM_OK = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder && HTMLCanvasElement.prototype.captureStream) && MIC_DIRECT;
+export const camOn = () => CAM_OK && !!state.settings.cam;
 // звук для видео: свой отдельный движок, его дорожка начинается с нуля вместе с видео.
 // Копия дорожки микрофона на iOS несёт отметки времени от включения телефона - видео получалось длиной в сотни часов.
-function camAudio(micStream) {
+export function camAudio(micStream) {
   if (!micStream || !micStream.getAudioTracks().length) return { tracks: [], close() { } };
   try {
     const x = new (window.AudioContext || window.webkitAudioContext)(), dest = x.createMediaStreamDestination();
@@ -16,19 +21,19 @@ function camAudio(micStream) {
     return { tracks: dest.stream.getAudioTracks(), close() { try { x.close(); } catch (e) { } } };
   } catch (e) { return { tracks: [], close() { } }; }
 }
-function camMime() {
+export function camMime() {
   for (const m of ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'])
     if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
   return '';
 }
 // переключатель на экранах уровней
-function camToggleHTML() {
+export function camToggleHTML() {
   if (!CAM_OK) return '';
   return `<label class="check sec" style="margin-top:10px;padding:10px 12px"><input type="checkbox" ${camOn() ? 'checked' : ''} onchange="camSet(this.checked)"><span class="small"><b>🎥 Снимать себя на видео.</b> Камера пишет тебя, пока поёшь, а снизу - игру или упражнение. Потом можно посмотреть и отправить друзьям. Видео остаётся только у тебя в телефоне.</span></label>
     <div id="camerr" class="small" style="color:var(--bad)"></div>`;
 }
-async function camSet(on) { state.settings.cam = !!on; save(); if (on) await camStart(); else camOff(); }
-async function camStart(force) {
+export async function camSet(on) { state.settings.cam = !!on; save(); if (on) await camStart(); else camOff(); }
+export async function camStart(force) {
   if ((!camOn() && !force) || CAM.stream) return !!CAM.stream;
   try {
     CAM.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } }, audio: false });
@@ -44,16 +49,16 @@ async function camStart(force) {
   return true;
 }
 // камеру выключаем при уходе с экрана (render) и по переключателю; идущая запись сначала дописывается
-function camOff() {
+export function camOff() {
   if (CAM.rec && CAM.rec.state !== 'finished') camRecStop(null, true);
   if (CAM.stream) CAM.stream.getTracks().forEach(t => t.stop());
   CAM.stream = null; $('#campv')?.remove(); CAM.video = null;
   if (CAM.mic) { CAM.mic.getTracks().forEach(t => t.stop()); CAM.mic = null; afterMic(); }
 }
-const camRecording = () => !!(CAM.rec && CAM.rec.state === 'rec');
+export const camRecording = () => !!(CAM.rec && CAM.rec.state === 'rec');
 // запись: canvasSel - селектор холста игры ИЛИ функция-карточка () => ({ top, big, sub }) для упражнений;
 // title - подпись сверху, micStream - поток микрофона
-function camRecStart(canvasSel, title, micStream) {
+export function camRecStart(canvasSel, title, micStream) {
   if (!camOn() || !CAM.stream || !CAM.video || (CAM.rec && CAM.rec.state === 'rec')) return;
   const W = 720, H = 1280, out = document.createElement('canvas'); out.width = W; out.height = H;
   const g = out.getContext('2d'), vs = out.captureStream(30);
@@ -90,7 +95,7 @@ function camRecStart(canvasSel, title, micStream) {
   mr.start(); // одним куском: так Safari правильно пишет длительность mp4
 }
 // стоп: outro - крупный итог на 2.5 с перед концом видео
-function camRecStop(outro, now) {
+export function camRecStop(outro, now) {
   const R = CAM.rec; if (!R || R.state !== 'rec') return;
   R.state = 'stopping'; R.outro = outro || null;
   if (outro && !now) camPending();
@@ -98,7 +103,7 @@ function camRecStop(outro, now) {
   if (now || !outro) end(); else setTimeout(end, 2500);
 }
 // карточка упражнения в нижней трети видео: подпись шага, крупный текст (нота, слог, скороговорка), строка под ним
-function camPanel(g, W, y, h, p) {
+export function camPanel(g, W, y, h, p) {
   g.fillStyle = '#FAF6F0'; camRound(g, 16, y, W - 32, h, 22); g.fill();
   g.textAlign = 'center'; g.fillStyle = '#7A6E66'; g.font = '700 26px Manrope, system-ui, sans-serif';
   if (p.top) g.fillText(String(p.top).slice(0, 40), W / 2, y + 46);
@@ -112,23 +117,23 @@ function camPanel(g, W, y, h, p) {
   if (p.sub) { g.fillStyle = '#C8573A'; g.font = '700 26px Manrope, system-ui, sans-serif'; g.fillText(String(p.sub).slice(0, 48), W / 2, y + h - 24); }
 }
 // микрофон для записи в упражнениях (там, где своего нет): открывается один раз на сессию, закрывается в camOff
-async function camMic() {
+export async function camMic() {
   if (CAM.mic && CAM.mic.getAudioTracks().some(t => t.readyState === 'live')) return CAM.mic;
   try { CAM.mic = await openMic(); } catch (e) { CAM.mic = null; }
   return CAM.mic;
 }
 // начать запись сессии упражнения, если включена камера: panel - функция карточки
-async function camSession(title, panel, mic) {
+export async function camSession(title, panel, mic) {
   if (!camOn() || camRecording()) return false;
   if (!CAM.stream && !(await camStart())) return false;
   const m = mic || await camMic(); if (!m) return false;
   camRecStart(panel, (profName() ? profName() + ' · ' : '') + title, m);
   return camRecording();
 }
-function camRound(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+export function camRound(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 // общий кадр: камера на весь экран (зеркально), подпись сверху, плашка бренда снизу, крупный итог (outro)
 // camH - высота области камеры (по умолчанию весь кадр над плашкой)
-function camFrame(g, W, H, title, outro, camH = H - 96) {
+export function camFrame(g, W, H, title, outro, camH = H - 96) {
   g.fillStyle = '#1B1714'; g.fillRect(0, 0, W, H);
   const v = CAM.video;
   if (v && v.videoWidth) {
@@ -148,21 +153,21 @@ function camFrame(g, W, H, title, outro, camH = H - 96) {
   g.textAlign = 'left';
 }
 // перенос текста по словам на холсте; возвращает число строк
-function camWrap(g, text, x, y, maxW, lh, draw = true) {
+export function camWrap(g, text, x, y, maxW, lh, draw = true) {
   const words = text.split(' '); let line = '', n = 0;
   for (const w of words) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > maxW && line) { if (draw) g.fillText(line, x, y + n * lh); n++; line = w; } else line = t; }
   if (line) { if (draw) g.fillText(line, x, y + n * lh); n++; }
   return n;
 }
 // окно видео открывается сразу после финиша, пока файл дописывается (итог 2.5 с + сборка файла)
-function camPending() {
+export function camPending() {
   sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
     <div id="campend" style="aspect-ratio:9/16;max-height:60vh;margin:0 auto;border-radius:14px;background:#1B1714;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px">
       <div class="spin"></div><b>Видео дописывается...</b><span class="small" style="opacity:.75">Ещё пара секунд: в конце видео твой итог.</span></div>`);
 }
 // iPhone-приложение: сохранить сразу в Фото (плагин @capacitor-community/media)
-const camNative = () => !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Media);
-async function camSaveNative(clip) {
+export const camNative = () => !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Media);
+export async function camSaveNative(clip) {
   if (!camNative()) return false;
   try {
     const data = await new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(clip.blob); });
@@ -171,7 +176,7 @@ async function camSaveNative(clip) {
     return true;
   } catch (e) { const el = $('#camsaved'); if (el) el.textContent = 'Не получилось сохранить в Фото. Разреши доступ: Настройки iPhone → Вокал под бокал → Фото.'; return false; }
 }
-function camShow(clip) {
+export function camShow(clip) {
   const i = CAM.clips.indexOf(clip), nat = camNative();
   sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
     <video src="${clip.url}" controls playsinline preload="metadata" style="width:100%;max-height:60vh;border-radius:14px;background:#000"></video>
@@ -182,7 +187,7 @@ function camShow(clip) {
     <div class="tiny muted">Видео есть только у тебя в телефоне. Если не сохранить, после закрытия страницы оно пропадёт.</div>`);
   if (nat && !clip.saved && clip.autoSave !== false) camSaveNative(clip);
 }
-async function camShare(i) {
+export async function camShare(i) {
   const c = CAM.clips[i]; if (!c) return;
   const file = c.file || (c.file = new File([c.blob], `vocal-pod-bokal.${c.ext}`, { type: c.blob.type }));
   const text = 'Вокал под бокал: попробуй попасть в ноты голосом https://nchurashov.github.io/vocal/';
@@ -195,7 +200,7 @@ async function camShare(i) {
 
 // общий рекордер холста: draw(g, W, H) на каждом кадре, audioTracks - дорожки звука. stop() -> Promise<{blob, ext}>
 // audio: массив дорожек или поток микрофона (MediaStream) - тогда звук идёт через camAudio
-function recCanvas(draw, audio = [], W = 720, H = 1280) {
+export function recCanvas(draw, audio = [], W = 720, H = 1280) {
   const au = audio instanceof MediaStream ? camAudio(audio) : { tracks: audio, close() { } }, audioTracks = au.tracks;
   const out = document.createElement('canvas'); out.width = W; out.height = H;
   const g = out.getContext('2d'), vs = out.captureStream(30), tracks = [...vs.getVideoTracks(), ...audioTracks];

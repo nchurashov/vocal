@@ -1,6 +1,16 @@
+import { VA } from '../core/analysis.js';
+import { MIC_DIRECT, ac, afterMic, base, click, openMic, stopAll, strictOct, tone } from '../core/audio.js';
+import { afterHooks } from '../core/router.js';
+import { profName, save, state } from '../core/store.js';
+import { toast } from '../core/ui.js';
+import { $, ICON, esc, nowLocal, setBusy } from '../core/util.js';
+import { camOn, camRecStart, camRecStop, camStart, camToggleHTML } from './cam.js';
+import { octLock, octaveHint } from './register.js';
+import { lastAudio, setLastAudio } from '../trainer/recorder.js';
+
 // ===== Игра «Попади в ноту» =====
 // notes: [полутон от базовой ноты | null (пауза), доли]
-const GAME_LEVELS = [
+export const GAME_LEVELS = [
   { n: 1, title: 'Одна нота', hint: 'Тяни одну ноту ровно', notes: [[0, 4], [null, 2], [0, 4], [null, 2], [0, 4]], bpm: 60, tol: 80 },
   { n: 2, title: 'Две ноты', hint: 'Шаг на тон вверх и обратно', notes: [[0, 3], [null, 1], [2, 3], [null, 1], [0, 3], [null, 1], [2, 3], [null, 1], [0, 4]], bpm: 66, tol: 80 },
   { n: 3, title: 'Три ступени', hint: 'Лесенка из трёх нот', notes: [[0, 2], [2, 2], [4, 3], [null, 1], [4, 2], [2, 2], [0, 4]], bpm: 66, tol: 80 },
@@ -14,20 +24,20 @@ const GAME_LEVELS = [
   { n: 11, title: 'Октава', hint: 'Самый большой скачок', notes: [[0, 2], [12, 3], [null, 1], [7, 2], [4, 2], [0, 4]], bpm: 72, tol: 40 },
   { n: 12, title: 'Финал', hint: 'Всё вместе и быстрее', notes: [[0, 1], [4, 1], [7, 1], [9, 2], [7, 1], [5, 1], [4, 1], [2, 1], [4, 1], [7, 2], [12, 2], [7, 1], [4, 1], [0, 3]], bpm: 92, tol: 40 },
 ];
-const STAR_AT = [50, 70, 85];
-const starsFor = acc => STAR_AT.filter(s => acc >= s).length;
-const starStr = (k, big) => [0, 1, 2].map(i => `<span style="color:${i < k ? 'var(--near)' : 'var(--line)'}${big ? ';font-size:34px' : ''}">★</span>`).join('');
+export const STAR_AT = [50, 70, 85];
+export const starsFor = acc => STAR_AT.filter(s => acc >= s).length;
+export const starStr = (k, big) => [0, 1, 2].map(i => `<span style="color:${i < k ? 'var(--near)' : 'var(--line)'}${big ? ';font-size:34px' : ''}">★</span>`).join('');
 
-function gameTimeline(lv) {
+export function gameTimeline(lv) {
   const b = 60 / lv.bpm; let t = 0; const tl = [];
   for (const [s, beats] of lv.notes) { if (s != null) tl.push({ rel: s, start: t, end: t + beats * b * .96, in: 0, tot: 0, done: false }); t += beats * b; }
   return { tl, D: t };
 }
-function gameState() { state.game ||= { best: {}, plays: [] }; return state.game; }
-const gameUnlocked = n => n === 1 || (gameState().best[n - 1]?.stars || 0) >= 1;
+export function gameState() { state.game ||= { best: {}, plays: [] }; return state.game; }
+export const gameUnlocked = n => n === 1 || (gameState().best[n - 1]?.stars || 0) >= 1;
 
 // ----- Список уровней -----
-function viewGame() {
+export function viewGame() {
   const g = gameState(), total = Object.values(g.best).reduce((a, x) => a + x.stars, 0);
   let h = `<button class="back" onclick="go('ball')">${ICON.back} Шарик</button><h1>Попади в ноту</h1><p class="muted" style="margin:6px 0 0">Ноты плывут справа налево. Голос рисует точку: держи её внутри полосы ноты. Набери 50%, чтобы открыть следующий уровень.</p>
     <div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">★ ${total} из ${GAME_LEVELS.length * 3}</span><span class="pill">Пройдено: ${Object.values(g.best).filter(x => x.stars >= 1).length} из ${GAME_LEVELS.length}</span></div>
@@ -43,14 +53,14 @@ function viewGame() {
 }
 
 // ----- Экран уровня -----
-let G = null;
-function gameStop() {
+export let G = null;
+export function gameStop() {
   if (!G) return;
   G.stopped = true; cancelAnimationFrame(G.raf);
   if (G.stream) G.stream.getTracks().forEach(t => t.stop());
-  stopAll(); G = null; busy = false;
+  stopAll(); G = null; setBusy(false);
 }
-function viewGameLevel(n) {
+export function viewGameLevel(n) {
   const lv = GAME_LEVELS.find(l => l.n === n);
   if (!lv) return '<div class="empty">Уровень не найден</div>';
   if (!gameUnlocked(n)) return `<button class="back" onclick="go('game')">${ICON.back} Уровни</button><div class="note">🔒 Сначала пройди уровень ${n - 1} хотя бы на одну звезду.</div>`;
@@ -63,7 +73,7 @@ function viewGameLevel(n) {
   afterHooks.push(() => gameSetup(lv)); afterHooks.push(() => { if (camOn()) camStart(); });
   return h;
 }
-function gameSetup(lv) {
+export function gameSetup(lv) {
   const { tl, D } = gameTimeline(lv);
   const cv = $('#gcv');
   G = { lv, tl, D, cv, ctx: cv.getContext('2d'), trail: [], combo: 0, maxCombo: 0, pops: [], mode: 'idle', voice: null };
@@ -86,7 +96,7 @@ function gameSetup(lv) {
     gameTake(await f.arrayBuffer());
   }));
 }
-function gameResize() {
+export function gameResize() {
   const cv = G.cv, w = cv.parentElement.clientWidth, h = Math.round(Math.min(380, Math.max(260, w * .62))), dpr = window.devicePixelRatio || 1;
   cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + 'px'; cv.style.height = h + 'px';
   G.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); G.W = w; G.H = h;
@@ -95,8 +105,8 @@ function gameResize() {
   const css = getComputedStyle(document.documentElement), v = k => css.getPropertyValue(k).trim();
   G.col = { line: v('--line'), muted: v('--muted'), ink: v('--ink'), accent: v('--accent'), ok: v('--ok'), bad: v('--bad'), near: v('--near'), card: v('--card') };
 }
-const fold = (rel, target) => rel - 12 * Math.round((rel - target) / 12);
-function gameDraw(now) {
+export const fold = (rel, target) => rel - 12 * Math.round((rel - target) / 12);
+export function gameDraw(now) {
   const { ctx, W, H, col, tl } = G, nowX = W * .26, pps = (W - nowX) / 3.6;
   const X = t => nowX + (t - now) * pps, semiH = (H - 24) / (G.hi - G.lo), Y = r => 12 + (G.hi - r) * semiH;
   ctx.clearRect(0, 0, W, H);
@@ -135,33 +145,33 @@ function gameDraw(now) {
   if (G.mode === 'live') { ctx.fillText(acc + '%', 12, 22); if (G.combo > 1) { ctx.fillStyle = col.accent; ctx.fillText('серия ×' + G.combo, 12, 42); } }
   if (now < 0 && G.mode !== 'idle') { ctx.font = '800 44px Lora, serif'; ctx.textAlign = 'center'; ctx.fillStyle = col.accent; ctx.fillText(String(Math.ceil(-now)), W / 2, H / 2 + 14); ctx.textAlign = 'left'; }
 }
-function roundRect(ctx, x, y, w, h, r) { r = Math.max(0, Math.min(r, w / 2, h / 2)); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
-function noteScore(n) { return n.tot > 0 ? Math.min(1, (n.in / n.tot) / .8) : 0; }
+export function roundRect(ctx, x, y, w, h, r) { r = Math.max(0, Math.min(r, w / 2, h / 2)); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+export function noteScore(n) { return n.tot > 0 ? Math.min(1, (n.in / n.tot) / .8) : 0; }
 
-function gameCountIn() {
+export function gameCountIn() {
   const c = ac(), b = 60 / G.lv.bpm, first = G.tl[0].rel, t = c.currentTime + .1;
   stopAll(); tone(base() + first, t, 1.2);
   for (let i = 0; i < 3; i++) click(t + 1.5 + i * b, i === 0);
   return t + 1.5 + 3 * b;
 }
 // ----- Просмотр с подсказкой -----
-function gamePreview() {
+export function gamePreview() {
   if (G.mode === 'live') return;
-  const lv = G.lv, c = ac(); G.keepRes = true; gameReset(); G.mode = 'preview';
+  const c = ac(); G.keepRes = true; gameReset(); G.mode = 'preview';
   const t0 = gameCountIn();
   G.tl.forEach(n => tone(base() + n.rel, t0 + n.start, n.end - n.start));
   const loop = () => { if (!G || G.stopped || G.mode !== 'preview') return; const now = c.currentTime - t0; gameDraw(now); if (now < G.D + .5) G.raf = requestAnimationFrame(loop); else { G.mode = 'idle'; gameDraw(-1.5); } };
   loop();
 }
-function gameReset() { cancelAnimationFrame(G.raf); stopAll(); G.tl.forEach(n => Object.assign(n, { in: 0, tot: 0, done: false, score: 0 })); G.trail = []; G.pops = []; G.combo = 0; G.maxCombo = 0; G.voice = null; G.oct = null; G.octBuf = []; G.devs = null; if (!G.keepRes) $('#gres').innerHTML = ''; G.keepRes = false; }
+export function gameReset() { cancelAnimationFrame(G.raf); stopAll(); G.tl.forEach(n => Object.assign(n, { in: 0, tot: 0, done: false, score: 0 })); G.trail = []; G.pops = []; G.combo = 0; G.maxCombo = 0; G.voice = null; G.oct = null; G.octBuf = []; G.devs = null; if (!G.keepRes) $('#gres').innerHTML = ''; G.keepRes = false; }
 
 // ----- Живая игра -----
-async function gameLive() {
+export async function gameLive() {
   if (G.mode === 'live') return;
   let stream;
   try { stream = await openMic(); }
   catch (e) { $('#gres').innerHTML = '<div class="note" style="margin-top:10px"><b>Нет доступа к микрофону.</b><br>1. Если открыл ссылку из Telegram или другого приложения, нажми «Открыть в Safari» (или скопируй ссылку в Safari).<br>2. В Safari нажми «аА» слева от адреса → «Настройки веб-сайта» → «Микрофон» → «Разрешить», потом обнови страницу.<br>3. Если не помогло: Настройки iPhone → Приложения → Safari → Микрофон → «Спросить» или «Разрешить».</div>'; return; }
-  const c = ac(); gameReset(); G.mode = 'live'; G.stream = stream; busy = true;
+  const c = ac(); gameReset(); G.mode = 'live'; G.stream = stream; setBusy(true);
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const t0 = gameCountIn(); let last = c.currentTime - t0;
@@ -181,7 +191,7 @@ async function gameLive() {
   loop();
 }
 // шаг живой игры (общий для микрофона и теста sim_game.py): rel - спетая высота в полутонах от базовой ноты или null
-function gameStep(now, dt, rel) {
+export function gameStep(now, dt, rel) {
   const act = G.tl.find(n => now >= n.start && now < n.end);
   const near = act || G.tl.find(n => n.start > now) || G.tl[G.tl.length - 1];
   G.voice = rel == null ? null : octLock(G, rel, near.rel, !!act && now > act.start + .1);
@@ -198,10 +208,10 @@ function gameStep(now, dt, rel) {
     G.pops.push({ t: now, x: Math.min(W - 60, nowX + 70), y: 34, good, text: good ? (n.score >= .95 ? 'Идеально!' : 'Есть!') : 'Мимо' });
   }
 }
-function gameFinish(aborted) {
+export function gameFinish(aborted) {
   if (!G) return;
   cancelAnimationFrame(G.raf); if (G.stream) G.stream.getTracks().forEach(t => t.stop()); G.stream = null; afterMic();
-  const wasLive = G.mode === 'live'; G.mode = 'idle'; busy = false;
+  const wasLive = G.mode === 'live'; G.mode = 'idle'; setBusy(false);
   if (wasLive) { const sc = G.tl.map(n => n.done ? n.score : noteScore(n)); camRecStop(aborted ? '' : Math.round(100 * sc.reduce((a, x) => a + x, 0) / sc.length) + '% нот', aborted); }
   const b = $('#glive'); if (b) { b.innerHTML = ICON.play + ' Играть ещё раз'; b.onclick = () => gameLive(); }
   if (aborted) { gameReset(); gameDraw(-1.5); return; }
@@ -210,16 +220,16 @@ function gameFinish(aborted) {
 }
 
 // ----- Попытка записью -----
-async function gameTake(arrayBuf) {
-  gameReset(); busy = true;
+export async function gameTake(arrayBuf) {
+  gameReset(); setBusy(true);
   $('#gres').innerHTML = '<p class="muted small">Слушаю попытку...</p>';
   let audio;
   try { audio = await new Promise((ok, bad) => { const p = ac().decodeAudioData(arrayBuf, ok, bad); if (p && p.then) p.then(ok, bad); }); }
-  catch (e) { busy = false; $('#gres').innerHTML = '<div class="note" style="margin-top:10px">Не получилось прочитать файл. Подойдут видео с телефона или аудио m4a, mp3, wav.</div>'; return; }
+  catch (e) { setBusy(false); $('#gres').innerHTML = '<div class="note" style="margin-top:10px">Не получилось прочитать файл. Подойдут видео с телефона или аудио m4a, mp3, wav.</div>'; return; }
   setTimeout(() => {
     const chs = []; const len = Math.min(audio.length, audio.sampleRate * 60);
     for (let k = 0; k < audio.numberOfChannels; k++) chs.push(audio.getChannelData(k).subarray(0, len));
-    const a = VA.analyzeSamples(chs, audio.sampleRate); busy = false; lastAudio = audio;
+    const a = VA.analyzeSamples(chs, audio.sampleRate); setBusy(false); setLastAudio(audio);
     if (!a.segs.length) { $('#gres').innerHTML = '<div class="note" style="margin-top:10px">Не слышу в записи голоса. Пой громче и ближе к телефону, на «ма» или «ла».</div>'; return; }
     const ref = G.tl.map(n => ({ midi: base() + n.rel, beats: 1 }));
     const ev = VA.evaluate(ref, a.segs, false, strictOct()), tol = G.lv.tol;
@@ -232,14 +242,14 @@ async function gameTake(arrayBuf) {
     gameReplay();
   }, 30);
 }
-function gameReplay() {
+export function gameReplay() {
   const c = ac(), t0 = c.currentTime + .2; G.mode = 'replay';
   const loop = () => { if (!G || G.stopped || G.mode !== 'replay') return; const now = c.currentTime - t0 - 1; gameDraw(now); if (now < G.D) G.raf = requestAnimationFrame(loop); else { G.mode = 'idle'; } };
   loop();
 }
 
 // ----- Итог -----
-function gameResult(scores, mode) {
+export function gameResult(scores, mode) {
   const lv = G.lv, acc = Math.round(100 * scores.reduce((a, s) => a + s, 0) / scores.length), st = starsFor(acc);
   const g = gameState(), prev = g.best[lv.n], wasOpen = gameUnlocked(lv.n + 1);
   const hits = scores.filter(s => s >= .5).length;
@@ -262,3 +272,11 @@ function gameResult(scores, mode) {
   if (opened) toast(`Уровень ${lv.n + 1} открыт!`);
 }
 window.addEventListener('resize', () => { if (G && G.mode === 'idle') { gameResize(); gameDraw(-1.5); } });
+
+
+
+
+
+
+// установщики для моста window (переходный период, см. main.js)
+export function __set_G(v) { G = v; }

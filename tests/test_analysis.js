@@ -1,5 +1,5 @@
 // Юнит-тест распознавания нот: node tests/test_analysis.js
-const VA = require('../src/analysis.js'), { synth, sr } = require('./synth.js');
+const { VA } = require('../src/core/analysis.js'), { synth, sr } = require('./synth.js');
 const base = 48, semis = [0, 2, 4, 5, 7, 5, 4, 2, 0], ref = semis.map(s => ({ midi: base + s, beats: 1 }));
 let fail = 0;
 const check = (name, cond, info) => { console.log((cond ? 'OK   ' : 'FAIL ') + name + (info ? '  ' + info : '')); if (!cond) fail++; };

@@ -14,6 +14,7 @@ jobs:
         with: { node-version: 22 }
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
+      - run: npm ci   # esbuild (сборка модулей) и ESLint (границы модулей)
       - run: pip install playwright pillow
       - run: python -m playwright install --with-deps chromium
       - name: Тесты

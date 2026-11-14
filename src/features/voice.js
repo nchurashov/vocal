@@ -1,24 +1,34 @@
+import { VA } from '../core/analysis.js';
+import { MIC_DEAD, MIC_DIRECT, ac, afterMic, base, click, levelBar, micTap, noteShort, openMic, setLevel, stopAll, tone } from '../core/audio.js';
+import { afterHooks } from '../core/router.js';
+import { save, state } from '../core/store.js';
+import { toast } from '../core/ui.js';
+import { $, ICON, esc, nowLocal, plural, setBusy, ymd } from '../core/util.js';
+import { CAM, camOn, camRecStop, camRecording, camSession, camStart, camToggleHTML } from './cam.js';
+import { lastRange } from './register.js';
+import { warmupKeys } from './warmup.js';
+
 // ===== Голос и речь: актёрские и логопедические упражнения. Маршруты #voice и #voice-<id> =====
 // Виды шагов: timer (таймер), beat (метроном, слоги/текст по щелчку), text (скороговорки/фразы по очереди),
 // piano (пианино играет фразы по тональностям), mpt (замер: длинный звук на «а»), exhale (замер: выдох на «с»).
 // Замеры честные: считаем только время, пока микрофон слышит голос (mpt) или шум выдоха (exhale), паузы до 0.6 с допускаются.
-const TWISTERS = [
+export const TWISTERS = [
   'Шла Саша по шоссе и сосала сушку', 'Карл у Клары украл кораллы, а Клара у Карла украла кларнет', 'На дворе трава, на траве дрова',
   'Ехал Грека через реку, видит Грека: в реке рак', 'От топота копыт пыль по полю летит', 'Курил турка трубку, клевала курка крупку',
   'Сшит колпак не по-колпаковски, вылит колокол не по-колоколовски', 'Бык тупогуб, тупогубенький бычок, у быка бела губа была тупа',
   'Четыре чёрненьких чумазеньких чертёнка чертили чёрными чернилами чертёж', 'Мама мыла Милу мылом, Мила мыло не любила',
   'Расскажите про покупки. Про какие про покупки? Про покупки, про покупки, про покупочки мои', 'Ткёт ткач ткани на платки Тане',
 ];
-const PHRASES = ['Мама мыла раму', 'Утро было тихим и тёплым', 'Я говорю спокойно и уверенно', 'Вечером мы пойдём гулять по набережной',
+export const PHRASES = ['Мама мыла раму', 'Утро было тихим и тёплым', 'Я говорю спокойно и уверенно', 'Вечером мы пойдём гулять по набережной',
   'Ветер гнал по небу лёгкие облака', 'Моё имя звучит ровно и свободно'];
 // сочетания «три согласных + гласная» (как КПТИ, ГДБИ, РЛМИ): каждый ряд проходит 10 гласных
-const CL_VOW = ['И', 'Э', 'А', 'О', 'У', 'Ы', 'Е', 'Я', 'Ё', 'Ю'];
-const CL_HARD = ['ПТК', 'ПКТ', 'ТПК', 'ТКП', 'КПТ', 'КТП', 'БДГ', 'БГД', 'ДБГ', 'ДГБ', 'ГБД', 'ГДБ'];
-const CL_SOFT = ['РЛМ', 'РМЛ', 'ЛРМ', 'МЛР', 'НРЛ', 'ПТР', 'ПКР', 'КТР', 'ДБР', 'ГДР', 'ШТР', 'ЗДР', 'ВЗЖ', 'ФСШ'];
+export const CL_VOW = ['И', 'Э', 'А', 'О', 'У', 'Ы', 'Е', 'Я', 'Ё', 'Ю'];
+export const CL_HARD = ['ПТК', 'ПКТ', 'ТПК', 'ТКП', 'КПТ', 'КТП', 'БДГ', 'БГД', 'ДБГ', 'ДГБ', 'ГБД', 'ГДБ'];
+export const CL_SOFT = ['РЛМ', 'РМЛ', 'ЛРМ', 'МЛР', 'НРЛ', 'ПТР', 'ПКР', 'КТР', 'ДБР', 'ГДР', 'ШТР', 'ЗДР', 'ВЗЖ', 'ФСШ'];
 // ряды на сегодня: n рядов подряд по кругу, каждый день следующие
-function clRows(list, n) { const d = Math.floor(Date.now() / 864e5), off = (d * n) % list.length; return Array.from({ length: n }, (_, k) => list[(off + k) % list.length]); }
-const clSyl = rows => rows.flatMap(r => CL_VOW.map(v => r + v));
-const VOICE_SETS = [
+export function clRows(list, n) { const d = Math.floor(Date.now() / 864e5), off = (d * n) % list.length; return Array.from({ length: n }, (_, k) => list[(off + k) % list.length]); }
+export const clSyl = rows => rows.flatMap(r => CL_VOW.map(v => r + v));
+export const VOICE_SETS = [
   { id: 'relax', icon: '🧘', title: 'Снять зажимы', desc: 'Лицо, челюсть, шея, язык. Свободный голос начинается с расслабленных мышц.', steps: [
     { t: 'Зевок', how: 'Сладко зевни с открытым ртом. Почувствуй, как поднимается нёбо и опускается гортань. На выдохе лёгкий вздох голосом. 4 раза.', sec: 40 },
     { t: 'Массаж лица', how: 'Кончиками пальцев разомни лоб, виски, скулы и жевательные мышцы у ушей. Челюсть висит свободно.', sec: 45 },
@@ -89,34 +99,34 @@ const VOICE_SETS = [
     { t: 'Замер: длинный звук', how: 'Тяни «а-а-а» на удобной ноте ровно и спокойно, сколько получится.', kind: 'mpt' },
   ] },
 ];
-const voiceSet = id => VOICE_SETS.find(s => s.id === id);
-function voiceState() { state.voice ||= { done: [], rec: { mpt: [], exhale: [] } }; state.voice.rec ||= { mpt: [], exhale: [] }; return state.voice; }
+export const voiceSet = id => VOICE_SETS.find(s => s.id === id);
+export function voiceState() { state.voice ||= { done: [], rec: { mpt: [], exhale: [] } }; state.voice.rec ||= { mpt: [], exhale: [] }; return state.voice; }
 // следующий комплекс по кругу: после последнего сделанного
-function voiceNext() { const d = voiceState().done; if (!d.length) return VOICE_SETS[0]; const i = VOICE_SETS.findIndex(s => s.id === d[d.length - 1].id); return VOICE_SETS[(i + 1) % VOICE_SETS.length]; }
-const voiceDoneToday = () => voiceState().done.some(x => x.date.slice(0, 10) === ymd());
-const stepSec = s => s.sec || (s.kind === 'text' ? s.n * 25 : s.kind === 'piano' ? 50 : s.kind === 'mpt' || s.kind === 'exhale' ? 40 : 30);
-const setMin = set => Math.max(1, Math.round(set.steps.reduce((a, s) => a + stepSec(s), 0) / 60));
-const recBest = k => { const r = voiceState().rec[k] || []; return r.length ? r.reduce((a, x) => x.sec > a.sec ? x : a) : null; };
-const recLast = k => { const r = voiceState().rec[k] || []; return r[r.length - 1] || null; };
+export function voiceNext() { const d = voiceState().done; if (!d.length) return VOICE_SETS[0]; const i = VOICE_SETS.findIndex(s => s.id === d[d.length - 1].id); return VOICE_SETS[(i + 1) % VOICE_SETS.length]; }
+export const voiceDoneToday = () => voiceState().done.some(x => x.date.slice(0, 10) === ymd());
+export const stepSec = s => s.sec || (s.kind === 'text' ? s.n * 25 : s.kind === 'piano' ? 50 : s.kind === 'mpt' || s.kind === 'exhale' ? 40 : 30);
+export const setMin = set => Math.max(1, Math.round(set.steps.reduce((a, s) => a + stepSec(s), 0) / 60));
+export const recBest = k => { const r = voiceState().rec[k] || []; return r.length ? r.reduce((a, x) => x.sec > a.sec ? x : a) : null; };
+export const recLast = k => { const r = voiceState().rec[k] || []; return r[r.length - 1] || null; };
 // секундомер звука (чистая функция, тест: tests/sim_voice.py): идёт, пока active; паузы до 0.6 с не обрывают
-function phonStep(P, now, active) {
+export function phonStep(P, now, active) {
   if (P.done) return P;
   if (active) { if (P.start == null) P.start = now; P.last = now; }
   else if (P.start != null && now - P.last > .6) P.done = true;
   P.sec = P.start == null ? 0 : P.last - P.start;
   return P;
 }
-let VS = null;
-function voiceStop() {
+export let VS = null;
+export function voiceStop() {
   if (!VS) return; clearInterval(VS.tick); clearTimeout(VS.timer); (VS.timers || []).forEach(clearTimeout); VS.timers = []; stopAll(); cancelAnimationFrame(VS.raf);
   if (VS.stream) { if (VS.stream !== CAM.mic) { VS.stream.getTracks().forEach(t => t.stop()); afterMic(); } VS.stream = null; }
-  VS.playing = false; busy = false;
+  VS.playing = false; setBusy(false);
 }
-function recLine(k, name) {
+export function recLine(k, name) {
   const b = recBest(k), l = recLast(k);
   return `<div class="row between small"><span>${name}</span><span>${b ? `<b>${b.sec.toFixed(1)} с</b> <span class="muted">лучший${l && l !== b ? `, последний ${l.sec.toFixed(1)} с` : ''}</span>` : '<span class="muted">ещё не замерял</span>'}</span></div>`;
 }
-function viewVoice() {
+export function viewVoice() {
   const v = voiceState(), nx = voiceNext(), days = new Set(v.done.map(x => x.date.slice(0, 10))).size;
   let h = `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Голос и речь</h1>
     <p class="muted" style="margin:6px 0 0">Актёрские и логопедические упражнения: расслабить лицо и горло, поставить дыхание, сделать голос звучнее и ниже, речь чёткой и плавной. По 4-6 минут, лучше каждый день.</p>
@@ -127,7 +137,7 @@ function viewVoice() {
   h += VOICE_SETS.map(s => { const n = v.done.filter(x => x.id === s.id).length; return `<button class="item" onclick="go('voice-${s.id}')"><div class="dot ear">${s.icon}</div><div class="t"><b>${s.title}</b><span class="small muted">${setMin(s)} мин · ${s.steps.length} ${plural(s.steps.length, 'упражнение', 'упражнения', 'упражнений')}${n ? ` · сделан ${n} ${plural(n, 'раз', 'раза', 'раз')}` : ''}</span></div><span class="muted">›</span></button>`; }).join('');
   return h + '</div>';
 }
-function viewVoiceSet(id) {
+export function viewVoiceSet(id) {
   voiceStop();
   const set = voiceSet(id); if (!set) return '<div class="empty">Комплекс не найден</div>';
   VS = { set, i: 0, playing: false, timers: [], tw: null };
@@ -137,14 +147,14 @@ function viewVoiceSet(id) {
     <p class="muted" style="margin:6px 0 0">${esc(set.desc)} Около ${setMin(set)} мин.</p>${set.note ? `<p class="tiny muted" style="margin:6px 0 0">${esc(set.note)}</p>` : ''}${camToggleHTML()}
     <div id="vsbox" class="sec"></div>`;
 }
-function vsList(s) {
+export function vsList(s) {
   if (!VS.tw || VS.tw.step !== VS.i) {
     const src = s.list === 'twisters' ? TWISTERS : PHRASES, off = (Math.floor(Date.now() / 864e5) * s.n) % src.length;
     VS.tw = { step: VS.i, items: Array.from({ length: Math.min(s.n, src.length) }, (_, k) => src[(off + k) % src.length]), k: 0 };
   }
   return VS.tw;
 }
-function voiceDraw() {
+export function voiceDraw() {
   const box = $('#vsbox'); if (!box || !VS) return;
   const set = VS.set;
   if (VS.i >= set.steps.length) {
@@ -165,15 +175,15 @@ function voiceDraw() {
     ${meas && !MIC_DIRECT ? '<div class="note small">Для замера нужен живой микрофон: открой сайт в Safari или Chrome. Упражнение можно сделать и без замера.</div>' : ''}
     <div class="row">${meas && !MIC_DIRECT ? '' : `<button class="btn" style="flex:1" id="vsplay" onclick="voicePlay()">${startLbl}</button>`}<button class="btn ghost" ${meas && !MIC_DIRECT ? 'style="flex:1"' : ''} onclick="voiceNextStep()">Дальше ›</button></div></div>`;
 }
-function voiceNextStep() {
+export function voiceNextStep() {
   voiceStop(); VS.i++; VS.result = null; VS.resultText = '';
   if (VS.i >= VS.set.steps.length) { voiceState().done.push({ date: nowLocal(), id: VS.set.id }); if (state.voice.done.length > 500) state.voice.done.shift(); save(); camRecStop(`${VS.set.title} ✓`); }
   voiceDraw();
 }
 // карточка для видео: комплекс, шаг и то, что сейчас крупно на экране (слог, скороговорка, секунды)
-const vsPanel = () => { if (!VS) return {}; const s = VS.set.steps[VS.i]; if (!s) return { top: VS.set.title, big: 'Готово! ✓' };
+export const vsPanel = () => { if (!VS) return {}; const s = VS.set.steps[VS.i]; if (!s) return { top: VS.set.title, big: 'Готово! ✓' };
   return { top: `${VS.set.title} · ${s.t}`, big: ($('#vstext') || $('#vsnow') || {}).textContent || s.t, sub: ($('#vssub') || {}).textContent || '' }; };
-async function voicePlay() {
+export async function voicePlay() {
   if (!VS) return;
   if (camOn() && !camRecording()) await camSession(`Голос и речь · ${VS.set.title}`, vsPanel);
   const s = VS.set.steps[VS.i], sp = window.VS_SPEED || 1;
@@ -202,9 +212,9 @@ async function voicePlay() {
   VS.tick = setInterval(() => { left--; say(left + ' с'); if (left <= 0) voiceNextStep(); }, 1000 / sp);
 }
 // замер: длинный звук (голос, по высоте тона) или выдох на «с» (шум выше фона)
-async function voiceMeasure(s) {
+export async function voiceMeasure(s) {
   let stream; try { stream = camRecording() && CAM.mic ? CAM.mic : await openMic(); } catch (e) { toast('Нет доступа к микрофону'); return; }
-  VS.stream = stream; VS.playing = true; busy = true; VS.result = null; VS.resultText = ''; voiceDraw();
+  VS.stream = stream; VS.playing = true; setBusy(true); VS.result = null; VS.resultText = ''; voiceDraw();
   const T = micTap(stream), t0 = performance.now() / 1000, floor = [], P = VS.P = { start: null, last: 0, sec: 0, done: false };
   const say = (a, b) => { if ($('#vsnow')) $('#vsnow').textContent = a; if ($('#vssub')) $('#vssub').textContent = b; };
   const loop = () => {
@@ -222,7 +232,7 @@ async function voiceMeasure(s) {
   };
   loop();
 }
-function voiceMeasureDone(s, sec) {
+export function voiceMeasureDone(s, sec) {
   voiceStop(); VS.P = null;
   if (sec < 1) { VS.result = null; VS.resultText = 'Не услышал звука. Попробуй громче и ближе к телефону.'; voiceDraw(); return; }
   const prev = recBest(s.kind);
@@ -231,3 +241,11 @@ function voiceMeasureDone(s, sec) {
   VS.measured = `${s.kind === 'mpt' ? 'Длинный звук' : 'Выдох на «с»'}: ${sec.toFixed(1)} с. ${VS.resultText}`;
   voiceDraw();
 }
+
+
+
+
+
+
+// установщики для моста window (переходный период, см. main.js)
+export function __set_VS(v) { VS = v; }

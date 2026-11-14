@@ -1,3 +1,15 @@
+import { VA } from '../core/analysis.js';
+import { MIC_DIRECT, ac, afterMic, base, click, master, noteShort, openMic, stopAll, strictOct, tone } from '../core/audio.js';
+import { afterHooks, render } from '../core/router.js';
+import { profName, save, state } from '../core/store.js';
+import { toast } from '../core/ui.js';
+import { $, ICON, esc, nowLocal, setBusy } from '../core/util.js';
+import { camOn, camRecStart, camRecStop, camStart, camToggleHTML } from './cam.js';
+import { roundRect, starStr } from './game.js';
+import { lastRange, octLock, octaveHint } from './register.js';
+import { doneToday, warmupMin } from './warmup.js';
+import { lastAudio, setLastAudio } from '../trainer/recorder.js';
+
 // ===== Игра «Шарик»: пой ноту, чтобы пролететь в окно =====
 // walls: [полутон, длина тоннеля в долях, пауза после в долях]
 // 10 глав по 10 заданий = 100 заданий. Глава = одна тема (интервал или приём), задания = та же тема от разных нот:
@@ -5,7 +17,7 @@
 // Каждое задание ставится в ту октаву, где помещается в окно голоса: замеренный грудной диапазон или [-7, +12] от базовой ноты.
 // Если нота ни в какую октаву не помещается, её место занимает задание вразнобой. Задания детерминированы (сид = номер).
 // walls: [полутон от базовой ноты, длина тоннеля в долях, пауза после в долях]
-const BALL_CHAPTERS = [
+export const BALL_CHAPTERS = [
   { title: 'Одна нота', goal: 'Держи ровно одну ноту. В каждом задании своя высота: до, ре, ми...', kind: 'hold', bpm: [58, 70] },
   { title: 'Секунда', goal: 'Соседние ступени: шаг вверх и обратно от разных нот', kind: 'int', deg: 1, bpm: [60, 72] },
   { title: 'Терция', goal: 'Через ступень: до-ми, ре-фа, ми-соль...', kind: 'int', deg: 2, bpm: [60, 72] },
@@ -17,22 +29,22 @@ const BALL_CHAPTERS = [
   { title: 'Мелодии', goal: 'Ноты подряд без пауз: короткие мелодии от разных нот', kind: 'melody', deg: 4, bpm: [62, 78] },
   { title: 'Октава', goal: 'Та же нота, только выше: до-до, ре-ре, ми-ми...', kind: 'int', deg: 7, bpm: [56, 70] },
 ];
-const DEG_SEMI = d => 12 * Math.floor(d / 7) + [0, 2, 4, 5, 7, 9, 11][((d % 7) + 7) % 7];
-const DEG_NAME = ['до', 'ре', 'ми', 'фа', 'соль', 'ля', 'си'];
-function ballRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+export const DEG_SEMI = d => 12 * Math.floor(d / 7) + [0, 2, 4, 5, 7, 9, 11][((d % 7) + 7) % 7];
+export const DEG_NAME = ['до', 'ре', 'ми', 'фа', 'соль', 'ля', 'си'];
+export function ballRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 // окно голоса в полутонах от базовой ноты
-function ballWindow() {
+export function ballWindow() {
   const r = typeof lastRange === 'function' ? lastRange() : null, b = typeof base === 'function' ? base() : 48;
   if (r) { const lo = r.lo - b, hi = (r.chestHi ?? r.hi) - b; if (hi - lo >= 7) return [Math.max(-12, lo), Math.min(19, hi)]; }
   return [-7, 12];
 }
 // корень задания: ступень dg (0 = до) в октаве, где вся фраза (от 0 до top ступеней вверх) помещается в окно; null - не помещается
-function ballRoot(dg, top, W) {
+export function ballRoot(dg, top, W) {
   for (const oct of [0, -1, 1]) { const r = DEG_SEMI(dg) + 12 * oct, hi = DEG_SEMI(dg + top) + 12 * oct; if (r >= W[0] && hi <= W[1]) return { dg: dg + 7 * oct, r }; }
   return null;
 }
 // фраза темы от корня (в ступенях от корня)
-function ballPhrase(C, R, n) {
+export function ballPhrase(C, R, n) {
   const out = [];
   if (C.kind === 'hold') { for (let k = 0; k < n; k++) out.push(0); return out; }
   if (C.kind === 'int') { for (let k = 0; k < n; k++) out.push(k === 0 ? 0 : out[k - 1] === 0 ? C.deg : (R() < .6 ? 0 : C.deg)); return out; }
@@ -43,7 +55,7 @@ function ballPhrase(C, R, n) {
   for (let k = 1; k < n; k++) { const cand = [cur - 2, cur - 1, cur + 1, cur + 2].filter(x => x >= 0 && x <= C.deg); cur = k === n - 1 ? 0 : cand[Math.floor(R() * cand.length)]; out.push(cur); }
   return out;
 }
-function ballGen(ci, ti, W) {
+export function ballGen(ci, ti, W) {
   const C = BALL_CHAPTERS[ci], exam = ti === 9, d = ti / 9, R = ballRng((ci + 1) * 1000 + ti + 7);
   const top = C.kind === 'hold' ? 0 : C.deg, roots = [0, 1, 2, 3, 4, 5, 6].map(g => ballRoot(g, top, W)).filter(Boolean);
   const fixed = ti < 7 ? ballRoot(ti, top, W) : null; // задания 1-7: от до, ре, ми, фа, соль, ля, си
@@ -54,7 +66,7 @@ function ballGen(ci, ti, W) {
     ballPhrase(C, R, n).forEach(g => walls.push(DEG_SEMI(fixed.dg + g) + (fixed.r - DEG_SEMI(fixed.dg))));
   } else {
     // вразнобой: короткие фразы от разных корней
-    let k = 0; while (walls.length < n) { const rt = roots[Math.floor(R() * roots.length)] || { dg: 0, r: 0 }; ballPhrase(C, R, C.kind === 'hold' ? 2 : C.kind === 'int' ? 2 : 3).forEach(g => { if (walls.length < n) walls.push(DEG_SEMI(rt.dg + g)); }); k++; }
+    while (walls.length < n) { const rt = roots[Math.floor(R() * roots.length)] || { dg: 0, r: 0 }; ballPhrase(C, R, C.kind === 'hold' ? 2 : C.kind === 'int' ? 2 : 3).forEach(g => { if (walls.length < n) walls.push(DEG_SEMI(rt.dg + g)); }); }
   }
   const out = walls.map((s, k) => {
     const jump = k ? Math.abs(s - walls[k - 1]) : 0;
@@ -65,20 +77,19 @@ function ballGen(ci, ti, W) {
   const from = fixed ? `от ${DEG_NAME[ti]}` : 'вразнобой';
   return { n: ci * 10 + ti + 1, ch: ci, task: ti + 1, exam, from, title: exam ? `Экзамен: ${C.title.toLowerCase()}` : `${C.title} ${from}`, hint: C.goal, bpm, guide, walls: out };
 }
-let BALL_LEVELS = [];
-function ballRebuild() { const W = ballWindow(); BALL_LEVELS = BALL_CHAPTERS.flatMap((_, ci) => Array.from({ length: 10 }, (_, ti) => ballGen(ci, ti, W))); return BALL_LEVELS; }
-ballRebuild();
+export let BALL_LEVELS = [];
+export function ballRebuild() { const W = ballWindow(); BALL_LEVELS = BALL_CHAPTERS.flatMap((_, ci) => Array.from({ length: 10 }, (_, ti) => ballGen(ci, ti, W))); return BALL_LEVELS; }
 // v3: 100 заданий (главы по интервалам, задания от разных нот). Старые рекорды уходят в архив (номера уровней теперь значат другое)
-const ballState = () => { state.ball ||= { best: {}, plays: [] }; if (state.ball.v !== 3) { state.ballOld = state.ball; state.ball = { v: 3, best: {}, plays: [] }; } return state.ball; };
-const PRESETS = [['Простой', 40], ['Средний', 20], ['Сложный', 10]];
-const ballTol = () => Math.max(1, Math.min(50, Math.round(state.settings.tol || 40)));
-const tolZone = t => t >= 30 ? 'простой' : t >= 15 ? 'средний' : t >= 6 ? 'сложный' : 'экстрим';
+export const ballState = () => { state.ball ||= { best: {}, plays: [] }; if (state.ball.v !== 3) { state.ballOld = state.ball; state.ball = { v: 3, best: {}, plays: [] }; } return state.ball; };
+export const PRESETS = [['Простой', 40], ['Средний', 20], ['Сложный', 10]];
+export const ballTol = () => Math.max(1, Math.min(50, Math.round(state.settings.tol || 40)));
+export const tolZone = t => t >= 30 ? 'простой' : t >= 15 ? 'средний' : t >= 6 ? 'сложный' : 'экстрим';
 // рекорд уровня с учётом ширины окошка: уже окошко = ценнее
-const bestTol = (b, n) => b.tol || (BALL_LEVELS.find(l => l.n === n) || {}).tol || 40;
-const rank = (stars, pct, tol) => stars >= 1 ? 1e5 + (60 - tol) * 1000 + stars * 100 + pct : pct;
-function setTol(v, rerender) { state.settings.tol = Math.max(1, Math.min(50, +v)); save(); if (rerender) render(); }
-function tolLabel(t) { return `±${t} центов · ${tolZone(t)}${t <= 5 ? ' (нужен очень ровный голос)' : ''}`; }
-function diffSeg() {
+export const bestTol = (b, n) => b.tol || (BALL_LEVELS.find(l => l.n === n) || {}).tol || 40;
+export const rank = (stars, pct, tol) => stars >= 1 ? 1e5 + (60 - tol) * 1000 + stars * 100 + pct : pct;
+export function setTol(v, rerender) { state.settings.tol = Math.max(1, Math.min(50, +v)); save(); if (rerender) render(); }
+export function tolLabel(t) { return `±${t} центов · ${tolZone(t)}${t <= 5 ? ' (нужен очень ровный голос)' : ''}`; }
+export function diffSeg() {
   const t = ballTol();
   return `<div class="card sec stack" style="padding:14px"><div class="row between"><span class="small"><b>Точность попадания</b></span><span class="small" id="tolLbl">${tolLabel(t)}</span></div>
     <input type="range" min="1" max="50" step="1" value="${t}" style="width:100%;accent-color:var(--accent)" aria-label="Точность попадания в центах"
@@ -87,15 +98,15 @@ function diffSeg() {
     <div class="row wrap" style="gap:6px">${PRESETS.map(([n, v]) => `<button class="btn ${t === v ? 'soft' : 'ghost'}" style="min-height:36px;padding:6px 12px;flex:1" onclick="setTol(${v},true)">${n} ±${v}</button>`).join('')}</div></div>`;
 }
 // закрепление, а не везение: следующее задание - с 2 звёзд (80% стен), новая глава - только после экзамена на 3 звезды (без ударов)
-const BALL_NEED = n => (n % 10 === 0 ? 3 : 2);
-const ballDone = n => (ballState().best[n]?.stars || 0) >= BALL_NEED(n);
-const ballUnlocked = n => n === 1 || ballDone(n - 1);
-const ballNextLbl = n => { const l = BALL_LEVELS[n - 1]; return !l ? '' : l.task === 1 ? `Глава ${l.ch + 1}` : l.exam ? 'Экзамен' : `Задание ${l.task}`; };
-const ballNextN = () => (BALL_LEVELS.find(l => ballUnlocked(l.n) && !ballDone(l.n)) || BALL_LEVELS[BALL_LEVELS.length - 1]).n;
-let ballOpenCh = null;
-const ballStarsFor = (pct, lives) => lives <= 0 ? 0 : pct >= 100 ? 3 : pct >= 80 ? 2 : pct >= 60 ? 1 : 0;
+export const BALL_NEED = n => (n % 10 === 0 ? 3 : 2);
+export const ballDone = n => (ballState().best[n]?.stars || 0) >= BALL_NEED(n);
+export const ballUnlocked = n => n === 1 || ballDone(n - 1);
+export const ballNextLbl = n => { const l = BALL_LEVELS[n - 1]; return !l ? '' : l.task === 1 ? `Глава ${l.ch + 1}` : l.exam ? 'Экзамен' : `Задание ${l.task}`; };
+export const ballNextN = () => (BALL_LEVELS.find(l => ballUnlocked(l.n) && !ballDone(l.n)) || BALL_LEVELS[BALL_LEVELS.length - 1]).n;
+export let ballOpenCh = null;
+export const ballStarsFor = (pct, lives) => lives <= 0 ? 0 : pct >= 100 ? 3 : pct >= 80 ? 2 : pct >= 60 ? 1 : 0;
 
-function viewBall() {
+export function viewBall() {
   const g = ballState(), total = Object.values(g.best).reduce((a, x) => a + x.stars, 0);
   let h = `<h1>Шарик</h1><p class="muted" style="margin:6px 0 0">Шарик катится по дорожке, впереди стены с окнами. Пой ноту, и шарик поднимется на её высоту: чем выше окно, тем выше нота. Сначала отдельные ноты, потом тоннели и мелодии.</p>
     <button class="item sec" style="margin-top:14px" onclick="go('warmup')"><div class="dot rhythm">${doneToday() ? '✓' : '♪'}</div><div class="t"><b>${doneToday() ? 'Распевка сегодня сделана' : 'Сначала распевка'}</b><span class="small muted">${doneToday() ? 'Голос разогрет, можно играть' : `Около ${warmupMin()} мин, чтобы голос не устал и ноты брались легче`}</span></div><span class="muted">›</span></button>
@@ -125,14 +136,14 @@ function viewBall() {
   return h;
 }
 
-let B = null;
-function ballStop() {
+export let B = null;
+export function ballStop() {
   if (!B) return;
   B.stopped = true; cancelAnimationFrame(B.raf);
   if (B.stream) B.stream.getTracks().forEach(t => t.stop());
-  stopAll(); B = null; busy = false;
+  stopAll(); B = null; setBusy(false);
 }
-function viewBallLevel(n) {
+export function viewBallLevel(n) {
   const lv = BALL_LEVELS.find(l => l.n === n);
   if (!lv) return '<div class="empty">Уровень не найден</div>';
   if (!ballUnlocked(n)) return `<button class="back" onclick="go('ball')">${ICON.back} Уровни</button><div class="note">🔒 Сначала пройди ${n % 10 === 1 ? 'экзамен прошлой главы без единого удара (3 звезды)' : 'предыдущее задание на 2 звезды'}.</div>`;
@@ -147,13 +158,13 @@ function viewBallLevel(n) {
     <div id="bctl" class="stack" style="margin-top:12px"></div><div id="bnote"></div><div id="bres"></div>`;
 }
 
-function ballBestHTML(lv) {
+export function ballBestHTML(lv) {
   const best = ballState().best[lv.n]; if (!best) return '';
   const next = lv.n < BALL_LEVELS.length && ballUnlocked(lv.n + 1);
   return `<div class="card row between wrap" style="margin-top:12px;gap:8px;padding:12px 14px"><div><div class="tiny muted">Твой рекорд сохранён</div><b>${starStr(best.stars)} ${best.pct}% стен при ±${bestTol(best, lv.n)}</b></div>
     ${next ? `<button class="btn soft" style="min-height:40px" onclick="go('ball-${lv.n + 1}')">${ballNextLbl(lv.n + 1)} →</button>` : ''}</div>`;
 }
-function ballBuild(lv) {
+export function ballBuild(lv) {
   const b = 60 / lv.bpm; let t = 0; const walls = [];
   lv.walls.forEach(([s, len, gap], i) => {
     // окно для смены ноты: если нота идёт сразу за другой, тоннель начинается чуть позже её начала
@@ -165,7 +176,7 @@ function ballBuild(lv) {
   // соседние тоннели без паузы склеиваются визуально
   return { walls, D: t };
 }
-function ballSetup(lv) {
+export function ballSetup(lv) {
   const { walls, D } = ballBuild(lv), cv = $('#bcv');
   B = { lv, walls, D, cv, ctx: cv.getContext('2d'), mode: 'idle', y: null, vy: 0, lives: 3, trail: [], parts: [], voice: null, guide: lv.guide };
   { const t = [...new Set(walls.map(w => w.rel))]; B.dupName = new Set(t.map(r => VA.noteName(base() + r))).size < t.length; }
@@ -183,7 +194,7 @@ function ballSetup(lv) {
   $('#blive')?.addEventListener('click', () => ballLive());
   document.querySelectorAll('.bfile').forEach(inp => inp.addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; e.target.value = ''; ballTake(await f.arrayBuffer()); }));
 }
-function ballResize() {
+export function ballResize() {
   const cv = B.cv, w = cv.parentElement.clientWidth, h = Math.round(Math.min(460, Math.max(300, w * .85))), dpr = window.devicePixelRatio || 1;
   cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + 'px'; cv.style.height = h + 'px';
   B.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); B.W = w; B.H = h;
@@ -193,12 +204,12 @@ function ballResize() {
   B.bx = w * .24; B.r = 10; B.pps = Math.max(110, w * .3) * B.lv.bpm / 60 / 1.6;
   if (B.y == null) B.y = B.floor - B.r;
 }
-const bY = r => B.floor - (r - B.lo) * B.semi;
-const bRel = y => B.lo + (B.floor - y) / B.semi;
-function ballGap(w) { return Math.max(1.5, ballTol() / 100 * B.semi); }
+export const bY = r => B.floor - (r - B.lo) * B.semi;
+export const bRel = y => B.lo + (B.floor - y) / B.semi;
+export function ballGap(w) { return Math.max(1.5, ballTol() / 100 * B.semi); }
 
 // ----- Отрисовка -----
-function ballDraw(now) {
+export function ballDraw(now) {
   const { ctx, W, H, floor } = B, X = t => B.bx + (t - now) * B.pps;
   // небо
   const sky = ctx.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#2B2F5E'); sky.addColorStop(.6, '#C8573A'); sky.addColorStop(1, '#F2B266');
@@ -262,7 +273,7 @@ function ballDraw(now) {
 }
 
 // ----- Физика и правила (общие для живой игры, демо и попытки) -----
-function ballStep(now, dt, voiceRel) {
+export function ballStep(now, dt, voiceRel) {
   // привязка октавы к ближайшей стене
   const next = B.walls.find(w => now < w.t1 + .1) || B.walls[B.walls.length - 1];
   B.voice = voiceRel == null ? null : octLock(B, voiceRel, next.rel, now >= next.t0 + .1 && now <= next.t1);
@@ -295,23 +306,23 @@ function ballStep(now, dt, voiceRel) {
     }
   }
 }
-function buzz() { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.type = 'sawtooth'; o.frequency.value = 90; g.gain.setValueAtTime(.12, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .25); o.connect(g).connect(master); o.start(); o.stop(c.currentTime + .3); }
-function ballReset(keepResult) { cancelAnimationFrame(B.raf); stopAll(); B.walls.forEach(w => Object.assign(w, { crashed: false, passed: false, inT: 0, outT: 0 })); B.lives = 3; B.trail = []; B.parts = []; B.voice = null; B.oct = null; B.octBuf = []; B.y = B.floor - B.r; B.vy = 0; B.banner = null; B.devs = null; $('#bnote').innerHTML = ''; if (!keepResult) $('#bres').innerHTML = ''; }
-function ballSchedule(t0, withMelody) {
+export function buzz() { const c = ac(), o = c.createOscillator(), g = c.createGain(); o.type = 'sawtooth'; o.frequency.value = 90; g.gain.setValueAtTime(.12, c.currentTime); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + .25); o.connect(g).connect(master); o.start(); o.stop(c.currentTime + .3); }
+export function ballReset(keepResult) { cancelAnimationFrame(B.raf); stopAll(); B.walls.forEach(w => Object.assign(w, { crashed: false, passed: false, inT: 0, outT: 0 })); B.lives = 3; B.trail = []; B.parts = []; B.voice = null; B.oct = null; B.octBuf = []; B.y = B.floor - B.r; B.vy = 0; B.banner = null; B.devs = null; $('#bnote').innerHTML = ''; if (!keepResult) $('#bres').innerHTML = ''; }
+export function ballSchedule(t0, withMelody) {
   const b = 60 / B.lv.bpm;
   B.walls.forEach((w, i) => {
     if (withMelody) tone(base() + w.rel, t0 + w.t0, w.t1 - w.t0, .2);
     else if (B.guide && (i === 0 || B.walls[i - 1].t1 < w.t0 - .01)) tone(base() + w.rel, t0 + w.t0 - 1.4 * b, .35, .12);
   });
 }
-function ballCountIn() {
+export function ballCountIn() {
   const c = ac(), b = 60 / B.lv.bpm, t = c.currentTime + .1;
   stopAll(); tone(base() + B.walls[0].rel, t, 1.1);
   for (let i = 0; i < 3; i++) click(t + 1.4 + i * b, i === 0);
   return t + 1.4 + 3 * b + 1.5 * b; // запас на подлёт к первой стене
 }
 // демо: автопилот поёт правильные ноты
-function ballRun(mode) {
+export function ballRun(mode) {
   if (B.mode === 'live') return;
   const c = ac(); ballReset(true); B.mode = mode;
   const t0 = ballCountIn(); ballSchedule(t0, true);
@@ -326,12 +337,12 @@ function ballRun(mode) {
   };
   loop();
 }
-async function ballLive() {
+export async function ballLive() {
   if (B.mode === 'live') { ballFinish(true); return; }
   let stream;
   try { stream = await openMic(); }
   catch (e) { $('#bres').innerHTML = '<div class="note" style="margin-top:10px"><b>Нет доступа к микрофону.</b><br>1. Если открыл ссылку из Telegram или другого приложения, нажми «Открыть в Safari» (или скопируй ссылку в Safari).<br>2. В Safari нажми «аА» слева от адреса → «Настройки веб-сайта» → «Микрофон» → «Разрешить», потом обнови страницу.<br>3. Если не помогло: Настройки iPhone → Приложения → Safari → Микрофон → «Спросить» или «Разрешить».</div>'; return; }
-  const c = ac(); ballReset(); B.mode = 'live'; B.stream = stream; busy = true;
+  const c = ac(); ballReset(); B.mode = 'live'; B.stream = stream; setBusy(true);
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const t0 = ballCountIn(); ballSchedule(t0, false);
@@ -350,27 +361,27 @@ async function ballLive() {
   };
   loop();
 }
-function ballFinish(aborted) {
+export function ballFinish(aborted) {
   if (!B) return;
   cancelAnimationFrame(B.raf); if (B.stream) B.stream.getTracks().forEach(t => t.stop()); B.stream = null; afterMic();
-  const mode = B.mode; B.mode = 'idle'; busy = false;
+  const mode = B.mode; B.mode = 'idle'; setBusy(false);
   if (mode === 'live') camRecStop(aborted ? '' : `${B.walls.filter(w => w.passed).length} из ${B.walls.length} стен`, aborted);
   const btn = $('#blive'); if (btn) btn.innerHTML = ICON.play + ' Играть ещё раз';
   if (aborted) { ballReset(); ballDraw(-2); return; }
   ballResult(mode === 'replay' ? 'take' : 'live');
 }
 // попытка записью: шарик летит по спетым нотам
-async function ballTake(arrayBuf) {
-  ballReset(); busy = true;
+export async function ballTake(arrayBuf) {
+  ballReset(); setBusy(true);
   $('#bres').innerHTML = '<p class="muted small">Слушаю попытку...</p>';
   let audio;
   try { audio = await new Promise((ok, bad) => { const p = ac().decodeAudioData(arrayBuf, ok, bad); if (p && p.then) p.then(ok, bad); }); }
-  catch (e) { busy = false; $('#bres').innerHTML = '<div class="note" style="margin-top:10px">Не получилось прочитать файл. Подойдут видео с телефона или аудио m4a, mp3, wav.</div>'; return; }
+  catch (e) { setBusy(false); $('#bres').innerHTML = '<div class="note" style="margin-top:10px">Не получилось прочитать файл. Подойдут видео с телефона или аудио m4a, mp3, wav.</div>'; return; }
   setTimeout(() => {
     const chs = [], len = Math.min(audio.length, audio.sampleRate * 60);
     for (let k = 0; k < audio.numberOfChannels; k++) chs.push(audio.getChannelData(k).subarray(0, len));
-    const a = VA.analyzeSamples(chs, audio.sampleRate); lastAudio = audio;
-    if (!a.segs.length) { busy = false; $('#bres').innerHTML = '<div class="note" style="margin-top:10px">Не слышу в записи голоса. Пой громче и ближе к телефону, на «ма» или «ла».</div>'; return; }
+    const a = VA.analyzeSamples(chs, audio.sampleRate); setLastAudio(audio);
+    if (!a.segs.length) { setBusy(false); $('#bres').innerHTML = '<div class="note" style="margin-top:10px">Не слышу в записи голоса. Пой громче и ближе к телефону, на «ма» или «ла».</div>'; return; }
     const ev = VA.evaluate(B.walls.map(w => ({ midi: base() + w.rel, beats: (w.t1 - w.t0) * B.lv.bpm / 60 })), a.segs, false, strictOct());
     const sung = ev.notes.map(r => r.dev == null ? null : r.ref - base() + r.dev / 100);
     B.devs = ev.notes.map(r => r.dev);
@@ -387,7 +398,7 @@ async function ballTake(arrayBuf) {
     loop();
   }, 30);
 }
-function ballResult(mode) {
+export function ballResult(mode) {
   const lv = B.lv, passed = B.walls.filter(w => w.passed).length, total = B.walls.length;
   const pct = Math.round(100 * passed / total), st = ballStarsFor(pct, B.lives);
   const g = ballState(), bm = g.best, prev = bm[lv.n], wasOpen = ballUnlocked(lv.n + 1), tol = ballTol();
@@ -412,3 +423,13 @@ function ballResult(mode) {
   if (opened) toast(`${ballNextLbl(lv.n + 1)} открыто!`);
 }
 window.addEventListener('resize', () => { if (B && B.mode === 'idle') { ballResize(); ballDraw(-2); } });
+
+
+
+
+
+
+// установщики для моста window (переходный период, см. main.js)
+export function __set_BALL_LEVELS(v) { BALL_LEVELS = v; }
+export function __set_ballOpenCh(v) { ballOpenCh = v; }
+export function __set_B(v) { B = v; }

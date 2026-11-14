@@ -1,5 +1,6 @@
+
 // ===== Анализ записи: высота тона, ноты, сравнение с эталоном =====
-const VA = (() => {
+export const VA = (() => {
   const A4 = 440;
   const hzToMidi = f => 69 + 12 * Math.log2(f / A4);
   const midiToHz = m => A4 * Math.pow(2, (m - 69) / 12);
@@ -245,4 +246,3 @@ const VA = (() => {
 
   return { livePitch, hzToMidi, midiToHz, median, noteName, analyzeSamples, segment, track, evaluate, evaluateTaps, align };
 })();
-if (typeof module !== 'undefined') module.exports = VA;

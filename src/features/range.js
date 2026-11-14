@@ -1,8 +1,18 @@
+import { VA } from '../core/analysis.js';
+import { BASE_MAX, BASE_MIN, MIC_DEAD, MIC_DIRECT, afterMic, base, levelBar, micTap, noteFull, noteShort, openMic, setLevel } from '../core/audio.js';
+import { pianoBand, pianoMark, pianoSVG } from '../core/piano.js';
+import { afterHooks, go, render } from '../core/router.js';
+import { profName, save, state } from '../core/store.js';
+import { toast } from '../core/ui.js';
+import { $, ICON, fmtDay, nowLocal, plural, setBusy } from '../core/util.js';
+import { camOn, camRecStart, camRecStop, camRecording, camStart, camToggleHTML } from './cam.js';
+import { lastRange } from './register.js';
+
 // ===== Замер диапазона: маршрут #range =====
 // Засчитываются только ноты, удержанные ровно RANGE_HOLD секунд (разброс не больше полутона)
-let RG = null;
-const RANGE_HOLD = .8;
-function rangeStep(R, now, m) {
+export let RG = null;
+export const RANGE_HOLD = .8;
+export function rangeStep(R, now, m) {
   R.fr.push({ t: now, m }); while (R.fr.length && now - R.fr[0].t > RANGE_HOLD) R.fr.shift();
   R.cur = m;
   if (now - R.fr[0].t < RANGE_HOLD - .05) return null;
@@ -16,33 +26,33 @@ function rangeStep(R, now, m) {
   R.held = n; R.heldT = now; return n;
 }
 // куда работать после замера: считаем по грудному голосу (фальцет в уровни не берём)
-function rangeChoices(lo, hi, chestHi) {
+export function rangeChoices(lo, hi, chestHi) {
   const ch = chestHi == null ? hi : chestHi, span = ch - lo;
   if (span < 12) return [[lo, false, 'Весь диапазон', 'подойдёт любая октава'], [lo, true, 'Строго в моей октаве', 'октавой выше или ниже не засчитается']];
   return [[lo + Math.round((span - 12) / 2), false, 'В середине', 'удобно, подойдёт любая октава'], [lo, true, 'Нижний регистр', 'засчитается только эта октава'],
     [ch - 12, true, 'Верхний регистр', chestHi == null ? 'засчитается только эта октава' : 'до верха грудного голоса, только эта октава']];
 }
 // отметка перехода: во время замера - «сейчас перешёл в фальцет», после - нажатием на клавишу
-function rangeMarkBreak() {
+export function rangeMarkBreak() {
   if (!RG || RG.hi == null) { toast('Сначала удержи хотя бы одну ноту грудным голосом'); return; }
   RG.chestHi = RG.hi; toast('Отметил: грудной голос до ' + noteShort(RG.hi));
   const el = $('#rgchest'); if (el) el.textContent = noteShort(RG.chestHi);
   RG.bandKey = null;
 }
-function rangeSetBreak(m) {
+export function rangeSetBreak(m) {
   if (!RG || RG.mode !== 'result') return;
   m = Math.max(RG.lo, Math.min(RG.hi, m));
   RG.chestHi = m >= RG.hi ? null : m;
   const last = lastRange(); if (last && last.lo === RG.lo && last.hi === RG.hi) { if (RG.chestHi == null) delete last.chestHi; else last.chestHi = RG.chestHi; save(); }
   rangeDraw();
 }
-function rangeStop() {
+export function rangeStop() {
   if (!RG) return;
   cancelAnimationFrame(RG.raf);
   if (RG.stream) { RG.stream.getTracks().forEach(t => t.stop()); RG.stream = null; afterMic(); }
-  RG.mode = RG.mode === 'live' ? 'idle' : RG.mode; busy = false;
+  RG.mode = RG.mode === 'live' ? 'idle' : RG.mode; setBusy(false);
 }
-function viewRange() {
+export function viewRange() {
   if (!RG || RG.mode === 'live') RG = { mode: 'idle', fr: [] };
   afterHooks.push(rangeDraw); afterHooks.push(() => { if (camOn()) camStart(); });
   const hist = state.range || [];
@@ -63,7 +73,7 @@ function viewRange() {
   }
   return h;
 }
-function rangeDraw() {
+export function rangeDraw() {
   const box = $('#rgbox'); if (!box || !RG) return;
   if (RG.mode === 'live') {
     box.innerHTML = `<div style="text-align:center"><div class="tiny muted">Сейчас</div><div id="rgcur" style="font:800 34px Lora,serif;min-height:44px">-</div><div id="rgcurru" class="small muted" style="min-height:20px"></div><div id="rgheld" class="small" style="min-height:20px;color:var(--ok)"></div></div>
@@ -90,12 +100,12 @@ function rangeDraw() {
   box.innerHTML = `${RG.err ? `<div class="note small">${RG.err}</div>` : ''}<button class="btn block" onclick="rangeStart()">${ICON.mic} Начать замер</button>
     <div class="tiny muted">Лучше в тишине. Не надо пищать или рычать ради рекорда: важна нота, которую поёшь свободно.</div>`;
 }
-async function rangeStart() {
+export async function rangeStart() {
   if (!MIC_DIRECT) { RG = { mode: 'idle', fr: [], err: 'Здесь нет живого микрофона. Открой сайт в Safari или Chrome.' }; rangeDraw(); return; }
   let stream;
   try { stream = await openMic(); }
   catch (e) { RG = { mode: 'idle', fr: [], err: '<b>Нет доступа к микрофону.</b> В Safari нажми «аА» слева от адреса → «Настройки веб-сайта» → «Микрофон» → «Разрешить», потом обнови страницу.' }; rangeDraw(); return; }
-  busy = true;
+  setBusy(true);
   RG = { mode: 'live', fr: [], stream, lo: null, hi: null };
   rangeDraw();
   const T = micTap(stream), hist = [];
@@ -120,7 +130,7 @@ async function rangeStart() {
   };
   loop();
 }
-function rangeDone() {
+export function rangeDone() {
   if (!RG) return;
   const { lo, hi } = RG, chestHi = RG.chestHi != null && RG.chestHi < RG.hi ? RG.chestHi : null;
   if (camRecording()) camRecStop(lo == null ? null : `${noteShort(lo)} - ${noteShort(hi)}`, lo == null);
@@ -131,8 +141,16 @@ function rangeDone() {
   RG = { mode: 'result', fr: [], lo, hi, chestHi };
   render();
 }
-function rangeWork(m, strict) {
+export function rangeWork(m, strict) {
   state.settings.base = Math.max(BASE_MIN, Math.min(BASE_MAX, m)); state.settings.strict = strict; state.settings.voiceSet = true; save();
   toast(`Готово: работаем от ${noteShort(base())}${strict ? ', только в этой октаве' : ''}`);
   go('ball');
 }
+
+
+
+
+
+
+// установщики для моста window (переходный период, см. main.js)
+export function __set_RG(v) { RG = v; }

@@ -4,12 +4,13 @@
 - нет опасных приёмов: eval, new Function, document.write, setTimeout со строкой;
 - нет внешних скриптов, кроме шрифтов Google (никаких сторонних библиотек без решения);
 - в текстах нет длинного тире (правило Кита: только дефис);
-- нет случайно закоммиченных ключей и паролей.
+- нет случайно закоммиченных ключей и паролей;
+- ESLint: каждый модуль импортирует всё, что использует, и ничего лишнего (eslint.config.mjs).
 Запуск: python3 tests/check_code.py"""
 import os, re, subprocess, sys, tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 fails = []
-src = {f: open(os.path.join(ROOT, 'src', f), encoding='utf-8').read() for f in os.listdir(os.path.join(ROOT, 'src')) if f.endswith(('.js', '.css'))}
+src = {os.path.relpath(os.path.join(d, f), os.path.join(ROOT, 'src')): open(os.path.join(d, f), encoding='utf-8').read() for d, _, fs in os.walk(os.path.join(ROOT, 'src')) for f in fs if f.endswith(('.js', '.css'))}
 html = open(os.path.join(ROOT, 'index.html'), encoding='utf-8').read()
 # 1. синтаксис собранного JS
 js = html[html.index('<script>') + 8:html.rindex('</script>')]
@@ -33,5 +34,11 @@ for f, s in src.items():
 # 5. ключи и пароли
 for f, s in src.items():
     if re.search(r'(api[_-]?key|secret|password|token)\s*[:=]\s*[\'"][^\'"]{8,}', s, re.I): fails.append(f'{f}: похоже на ключ или пароль в коде')
+# 6. ESLint (границы модулей)
+ESL = os.path.join(ROOT, 'node_modules', '.bin', 'eslint')
+if os.path.exists(ESL):
+    r = subprocess.run([ESL, 'src'], capture_output=True, text=True, cwd=ROOT)
+    if r.returncode: fails.append('ESLint:\n' + r.stdout.strip())
+else: fails.append('нет ESLint: выполни npm i')
 print('\n'.join(fails) if fails else 'OK: код без опасных приёмов, внешних скриптов и длинных тире')
 sys.exit(1 if fails else 0)
