@@ -1,11 +1,11 @@
 import { act, onChange } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
-import { BASE_MAX, BASE_MIN, base, noteFull, noteShort, strictOct } from '../core/audio.js';
+import { base, noteFull, noteShort, strictOct } from '../core/audio.js';
 import { pianoSVG } from '../core/piano.js';
 import { go, render } from '../core/router.js';
 import { save, state } from '../core/store.js';
 import { closeSheet } from '../core/ui.js';
-import { $, ICON } from '../core/util.js';
+import { $, BASE_MAX, BASE_MIN, ICON } from '../core/util.js';
 import { openSettings } from '../screens/settings.js';
 
 // ===== Высота работы и диапазон =====

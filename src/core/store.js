@@ -1,9 +1,62 @@
 import { render } from './router.js';
 import { toast } from './ui.js';
-import { $, busy } from './util.js';
+import { $, BASE_MAX, BASE_MIN, busy } from './util.js';
 
 // ===== Хранилище =====
-export const DEFAULT = () => ({ v: 1, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] } });
+// STATE_V - версия формата данных. Поменял структуру: подними версию и допиши шаг в MIGRATIONS,
+// тогда старый прогресс (из localStorage, облака или файла) перенесётся, а не сломается.
+export const STATE_V = 2;
+export const DEFAULT = () => ({ v: STATE_V, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] }, range: [], warmups: [] });
+export const MIGRATIONS = {
+  1: s => s, // v1 -> v2: формат стал версионным; поля, которых не было, добавит DEFAULT
+};
+// Поля со свободным текстом. Их можно хранить любыми, но выводить на экран ТОЛЬКО через esc().
+export const TEXT_KEYS = new Set(['text', 'note']);
+// Категории и оценки занятий (совпадают с CATS и RATINGS в data/exercises.js; ядро не импортирует data, сверку делает tests/sim_data.py)
+export const SESSION_CATS = ['ear', 'pitch', 'rhythm'], SESSION_RATINGS = [1, 2, 3];
+// Любые данные извне (localStorage, облако, импорт файла) проходят здесь: перенос версий и очистка.
+// Все поля сохраняются (и будущие тоже), но: строки со знаками разметки < > " ' ` \ вне TEXT_KEYS выкидываются,
+// числа только конечные, вложенность и длина списков ограничены. Так чужой файл не вставит код в страницу.
+export function normalizeState(raw) {
+  const isObj = x => !!x && typeof x === 'object' && !Array.isArray(x);
+  if (!isObj(raw)) throw new Error('Это не данные приложения');
+  let s = JSON.parse(JSON.stringify(raw)), v = Number.isInteger(s.v) ? s.v : 1;
+  if (v > STATE_V) throw new Error('Данные из более новой версии приложения. Обнови приложение.');
+  for (; v < STATE_V; v++) s = MIGRATIONS[v](s);
+  delete s.app; delete s.exported; // метки файла экспорта, не данные
+  const KEY = /^[\w.-]{1,60}$/, BAD = /[<>"'`\\]/;
+  const clean = (x, key, depth) => {
+    if (typeof x === 'number') return isFinite(x) ? x : undefined;
+    if (typeof x === 'boolean') return x;
+    if (typeof x === 'string') return TEXT_KEYS.has(key) ? x.slice(0, 5000) : (x.length <= 200 && !BAD.test(x) ? x : undefined);
+    if (depth > 8 || !x || typeof x !== 'object') return undefined;
+    if (Array.isArray(x)) return x.slice(-5000).map(e => clean(e, key, depth + 1)).filter(e => e !== undefined);
+    const o = {};
+    for (const [k, e] of Object.entries(x)) {
+      if (!KEY.test(k) || k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      const c = clean(e, k, depth + 1); if (c !== undefined) o[k] = c;
+    }
+    return o;
+  };
+  const c = clean(s, '', 0), out = DEFAULT();
+  for (const [k, e] of Object.entries(c)) {
+    const d = out[k];
+    if (d === undefined || (Array.isArray(d) ? Array.isArray(e) : isObj(d) ? isObj(e) : typeof d === typeof e)) out[k] = e;
+  }
+  out.v = STATE_V;
+  out.settings = Object.assign(DEFAULT().settings, out.settings);
+  const b = out.settings.base; out.settings.base = Number.isInteger(b) && b >= BASE_MIN && b <= BASE_MAX ? b : 48;
+  for (const g of ['game', 'ball']) { if (!isObj(out[g].best)) out[g].best = {}; if (!Array.isArray(out[g].plays)) out[g].plays = []; }
+  // Записи, по которым строятся уровни и история, без даты/оценки бесполезны и ломают экраны.
+  out.sessions = out.sessions.filter(x => isObj(x) && typeof x.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(x.date) && SESSION_RATINGS.includes(x.rating) && SESSION_CATS.includes(x.cat) && typeof x.id === 'string');
+  out.notes = out.notes.filter(x => isObj(x) && typeof x.text === 'string' && typeof x.id === 'string' && typeof x.date === 'string');
+  for (const k of ['range', 'warmups']) out[k] = out[k].filter(x => isObj(x) && typeof x.date === 'string');
+  return out;
+}
+// Всё, кроме истории занятий (её храним отдельным документом - она самая большая).
+export const stateDoc = () => { const { sessions: _sessions, ...rest } = state; return rest; };
+// Заменить данные текущего профиля (импорт из файла). Данные уже должны пройти normalizeState.
+export function replaceState(next) { state = next; save(); }
 export let state = DEFAULT();
 export const store = { mode: 'none', db: null, uid: null, timer: null, chain: Promise.resolve(), lastSessionsJSON: '', lastStateJSON: '' };
 // Профили: несколько человек на одном телефоне («Кто поёт?»). У каждого свой state в localStorage.
@@ -17,7 +70,8 @@ export const profName = () => (profCur().name || '').trim();
 export function profSave() { try { localStorage.setItem('vocal-profiles', JSON.stringify(PROF)); } catch (e) { } }
 export function loadState() {
   state = DEFAULT();
-  try { const raw = localStorage.getItem(profKey(PROF.cur)); if (raw) { state = Object.assign(DEFAULT(), JSON.parse(raw)); state.settings = Object.assign(DEFAULT().settings, state.settings || {}); store.mode = 'local'; } } catch (e) { }
+  try { const raw = localStorage.getItem(profKey(PROF.cur)); if (raw) { state = normalizeState(JSON.parse(raw)); store.mode = 'local'; } }
+  catch (e) { console.warn('state', e); try { localStorage.setItem(profKey(PROF.cur) + '-broken', localStorage.getItem(profKey(PROF.cur))); } catch (e2) { } }
 }
 loadState();
 export function save() {
@@ -28,7 +82,7 @@ export function save() {
 }
 export function pushDb() {
   const sJSON = JSON.stringify({ sessions: state.sessions });
-  const stJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball, range: state.range, warmups: state.warmups, voice: state.voice, diary: state.diary });
+  const stJSON = JSON.stringify(stateDoc());
   const root = 'data/users/' + store.uid;
   store.chain = store.chain.then(async () => {
     try {
@@ -53,10 +107,8 @@ export async function initDb() {
     const [a, b] = await Promise.all([db.doc(root + '/state').get(), db.doc(root + '/sessions').get()]);
     if (a.exists || b.exists) {
       const st = a.exists ? a.data() : {}, ss = b.exists ? b.data() : {};
-      state = Object.assign(DEFAULT(), JSON.parse(JSON.stringify(st)), { sessions: JSON.parse(JSON.stringify(ss.sessions || [])) });
-      state.settings = Object.assign(DEFAULT().settings, state.settings || {});
-      state.game ||= { best: {}, plays: [] }; state.ball ||= { best: {}, plays: [] };
-      store.lastStateJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball, range: state.range, warmups: state.warmups, voice: state.voice, diary: state.diary });
+      state = normalizeState(Object.assign({}, JSON.parse(JSON.stringify(st)), { sessions: JSON.parse(JSON.stringify(ss.sessions || [])) }));
+      store.lastStateJSON = JSON.stringify(stateDoc());
       store.lastSessionsJSON = JSON.stringify({ sessions: state.sessions });
       try { localStorage.setItem('vocal-practice', JSON.stringify(state)); } catch (e) { }
       store.mode = 'cloud';
@@ -79,6 +131,8 @@ export const saveText = () => store.mode === 'cloud' ? 'Данные сохра�
 
 // стереть прогресс текущего профиля, настройки оставить
 export function resetProgress() { state = Object.assign(DEFAULT(), { settings: state.settings }); save(); }
+
+
 
 
 

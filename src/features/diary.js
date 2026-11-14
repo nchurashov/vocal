@@ -207,5 +207,7 @@ export async function diaryMakeCompare() {
 
 
 
+
+
 // установщики для моста window (переходный период, см. main.js)
 export function __set_DY(v) { DY = v; }

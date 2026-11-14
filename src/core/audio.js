@@ -111,8 +111,6 @@ export const OCT_RU = ['субконтроктавы', 'контроктавы',
 export const LAT = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export function noteFull(m) { m = Math.round(m); const o = Math.floor(m / 12) - 1; return `${VA.noteName(m)} ${OCT_RU[o] || ''} (${LAT[m % 12]}${o})`; }
 export const noteShort = m => { m = Math.round(m); return LAT[m % 12] + (Math.floor(m / 12) - 1); };
-export const BASE_MIN = 36;
-export const BASE_MAX = 76;
 export function playNotes(notes, bpm, offset = 0) {
   stopAll(); const c = ac(), b = 60 / bpm; let t = c.currentTime + .08;
   for (const [s, beats] of notes) { tone(base() + s + offset, t, beats * b * .95); t += beats * b; }
@@ -137,6 +135,8 @@ export const MIC_DIRECT = (() => {
   const fp = document.permissionsPolicy || document.featurePolicy;
   return fp && fp.allowsFeature ? fp.allowsFeature('microphone') : true;
 })();
+
+
 
 
 

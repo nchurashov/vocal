@@ -38,5 +38,7 @@ export function editNote(id) { editingNote = id; render(); if (id) window.scroll
 
 
 
+
+
 // установщики для моста window (переходный период, см. main.js)
 export function __set_editingNote(v) { editingNote = v; }

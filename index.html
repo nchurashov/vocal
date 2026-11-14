@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-OdiOBrDk77m8E9c4Loq/c51fwWQPSlMe+lThsoBLYpM='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-Id2nn9rFeVO/KkoW3sui+IF1bDzQH94EtuRi9xRKEnY='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Вокал под бокал</title>
 <meta name="apple-mobile-web-app-title" content="Вокал под бокал"><meta name="description" content="Вокал под бокал: налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -501,8 +501,6 @@ details summary{cursor:pointer}
   var audio_exports = {};
   __export(audio_exports, {
     AC: () => AC,
-    BASE_MAX: () => BASE_MAX,
-    BASE_MIN: () => BASE_MIN,
     LAT: () => LAT,
     MIC_DEAD: () => MIC_DEAD,
     MIC_DIRECT: () => MIC_DIRECT,
@@ -547,20 +545,28 @@ details summary{cursor:pointer}
   var store_exports = {};
   __export(store_exports, {
     DEFAULT: () => DEFAULT,
+    MIGRATIONS: () => MIGRATIONS,
     PROF: () => PROF,
+    SESSION_CATS: () => SESSION_CATS,
+    SESSION_RATINGS: () => SESSION_RATINGS,
+    STATE_V: () => STATE_V,
+    TEXT_KEYS: () => TEXT_KEYS,
     __set_PROF: () => __set_PROF,
     __set_state: () => __set_state,
     initDb: () => initDb,
     loadState: () => loadState,
+    normalizeState: () => normalizeState,
     profCur: () => profCur,
     profKey: () => profKey,
     profName: () => profName,
     profSave: () => profSave,
     pushDb: () => pushDb,
+    replaceState: () => replaceState,
     resetProgress: () => resetProgress,
     save: () => save,
     saveText: () => saveText,
     state: () => state,
+    stateDoc: () => stateDoc,
     store: () => store,
     updateSaveBadge: () => updateSaveBadge
   });
@@ -595,6 +601,8 @@ details summary{cursor:pointer}
   var util_exports = {};
   __export(util_exports, {
     $: () => $,
+    BASE_MAX: () => BASE_MAX,
+    BASE_MIN: () => BASE_MIN,
     ICON: () => ICON,
     MONTHS: () => MONTHS,
     __set_busy: () => __set_busy,
@@ -655,6 +663,8 @@ details summary{cursor:pointer}
   function setBusy(v) {
     busy = !!v;
   }
+  var BASE_MIN = 36;
+  var BASE_MAX = 76;
   function __set_busy(v) {
     busy = v;
   }
@@ -681,7 +691,7 @@ details summary{cursor:pointer}
       console.warn("плохие data-args", name);
       return;
     }
-    if (withValue) args.unshift(el.type === "checkbox" ? el.checked : el.value);
+    if (withValue) args.unshift(el.type === "checkbox" ? el.checked : el.type === "file" ? el : el.value);
     fn(...args);
   }
   function initActions(root = document) {
@@ -741,6 +751,17 @@ details summary{cursor:pointer}
     render();
     window.scrollTo(0, 0);
   });
+  window.androidBack = () => {
+    if ($("#sheet")) {
+      $("#sheet").remove();
+      return true;
+    }
+    if (route === "today") return false;
+    if (busy && leaveHook) leaveHook();
+    if (history.length > 1) history.back();
+    else location.hash = "today";
+    return true;
+  };
   function start() {
     state.game ||= { best: {}, plays: [] };
     state.ball ||= { best: {}, plays: [] };
@@ -812,7 +833,64 @@ details summary{cursor:pointer}
   }
 
   // src/core/store.js
-  var DEFAULT = () => ({ v: 1, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] } });
+  var STATE_V = 2;
+  var DEFAULT = () => ({ v: STATE_V, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] }, range: [], warmups: [] });
+  var MIGRATIONS = {
+    1: (s) => s
+    // v1 -> v2: формат стал версионным; поля, которых не было, добавит DEFAULT
+  };
+  var TEXT_KEYS = /* @__PURE__ */ new Set(["text", "note"]);
+  var SESSION_CATS = ["ear", "pitch", "rhythm"];
+  var SESSION_RATINGS = [1, 2, 3];
+  function normalizeState(raw) {
+    const isObj = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+    if (!isObj(raw)) throw new Error("Это не данные приложения");
+    let s = JSON.parse(JSON.stringify(raw)), v = Number.isInteger(s.v) ? s.v : 1;
+    if (v > STATE_V) throw new Error("Данные из более новой версии приложения. Обнови приложение.");
+    for (; v < STATE_V; v++) s = MIGRATIONS[v](s);
+    delete s.app;
+    delete s.exported;
+    const KEY = /^[\w.-]{1,60}$/, BAD = /[<>"'`\\]/;
+    const clean = (x, key, depth) => {
+      if (typeof x === "number") return isFinite(x) ? x : void 0;
+      if (typeof x === "boolean") return x;
+      if (typeof x === "string") return TEXT_KEYS.has(key) ? x.slice(0, 5e3) : x.length <= 200 && !BAD.test(x) ? x : void 0;
+      if (depth > 8 || !x || typeof x !== "object") return void 0;
+      if (Array.isArray(x)) return x.slice(-5e3).map((e) => clean(e, key, depth + 1)).filter((e) => e !== void 0);
+      const o = {};
+      for (const [k, e] of Object.entries(x)) {
+        if (!KEY.test(k) || k === "__proto__" || k === "constructor" || k === "prototype") continue;
+        const c2 = clean(e, k, depth + 1);
+        if (c2 !== void 0) o[k] = c2;
+      }
+      return o;
+    };
+    const c = clean(s, "", 0), out = DEFAULT();
+    for (const [k, e] of Object.entries(c)) {
+      const d = out[k];
+      if (d === void 0 || (Array.isArray(d) ? Array.isArray(e) : isObj(d) ? isObj(e) : typeof d === typeof e)) out[k] = e;
+    }
+    out.v = STATE_V;
+    out.settings = Object.assign(DEFAULT().settings, out.settings);
+    const b = out.settings.base;
+    out.settings.base = Number.isInteger(b) && b >= BASE_MIN && b <= BASE_MAX ? b : 48;
+    for (const g of ["game", "ball"]) {
+      if (!isObj(out[g].best)) out[g].best = {};
+      if (!Array.isArray(out[g].plays)) out[g].plays = [];
+    }
+    out.sessions = out.sessions.filter((x) => isObj(x) && typeof x.date === "string" && /^\d{4}-\d{2}-\d{2}/.test(x.date) && SESSION_RATINGS.includes(x.rating) && SESSION_CATS.includes(x.cat) && typeof x.id === "string");
+    out.notes = out.notes.filter((x) => isObj(x) && typeof x.text === "string" && typeof x.id === "string" && typeof x.date === "string");
+    for (const k of ["range", "warmups"]) out[k] = out[k].filter((x) => isObj(x) && typeof x.date === "string");
+    return out;
+  }
+  var stateDoc = () => {
+    const { sessions: _sessions, ...rest } = state;
+    return rest;
+  };
+  function replaceState(next) {
+    state = next;
+    save();
+  }
   var state = DEFAULT();
   var store = { mode: "none", db: null, uid: null, timer: null, chain: Promise.resolve(), lastSessionsJSON: "", lastStateJSON: "" };
   var PROF = { list: [{ id: "p1", name: "" }], cur: "p1" };
@@ -838,11 +916,15 @@ details summary{cursor:pointer}
     try {
       const raw = localStorage.getItem(profKey(PROF.cur));
       if (raw) {
-        state = Object.assign(DEFAULT(), JSON.parse(raw));
-        state.settings = Object.assign(DEFAULT().settings, state.settings || {});
+        state = normalizeState(JSON.parse(raw));
         store.mode = "local";
       }
     } catch (e) {
+      console.warn("state", e);
+      try {
+        localStorage.setItem(profKey(PROF.cur) + "-broken", localStorage.getItem(profKey(PROF.cur)));
+      } catch (e2) {
+      }
     }
   }
   loadState();
@@ -858,7 +940,7 @@ details summary{cursor:pointer}
   }
   function pushDb() {
     const sJSON = JSON.stringify({ sessions: state.sessions });
-    const stJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball, range: state.range, warmups: state.warmups, voice: state.voice, diary: state.diary });
+    const stJSON = JSON.stringify(stateDoc());
     const root = "data/users/" + store.uid;
     store.chain = store.chain.then(async () => {
       try {
@@ -892,11 +974,8 @@ details summary{cursor:pointer}
       const [a, b] = await Promise.all([db.doc(root + "/state").get(), db.doc(root + "/sessions").get()]);
       if (a.exists || b.exists) {
         const st = a.exists ? a.data() : {}, ss = b.exists ? b.data() : {};
-        state = Object.assign(DEFAULT(), JSON.parse(JSON.stringify(st)), { sessions: JSON.parse(JSON.stringify(ss.sessions || [])) });
-        state.settings = Object.assign(DEFAULT().settings, state.settings || {});
-        state.game ||= { best: {}, plays: [] };
-        state.ball ||= { best: {}, plays: [] };
-        store.lastStateJSON = JSON.stringify({ v: state.v, settings: state.settings, srs: state.srs, notes: state.notes, game: state.game, ball: state.ball, range: state.range, warmups: state.warmups, voice: state.voice, diary: state.diary });
+        state = normalizeState(Object.assign({}, JSON.parse(JSON.stringify(st)), { sessions: JSON.parse(JSON.stringify(ss.sessions || [])) }));
+        store.lastStateJSON = JSON.stringify(stateDoc());
         store.lastSessionsJSON = JSON.stringify({ sessions: state.sessions });
         try {
           localStorage.setItem("vocal-practice", JSON.stringify(state));
@@ -1146,8 +1225,6 @@ details summary{cursor:pointer}
     m = Math.round(m);
     return LAT[m % 12] + (Math.floor(m / 12) - 1);
   };
-  var BASE_MIN = 36;
-  var BASE_MAX = 76;
   function playNotes(notes, bpm, offset = 0) {
     stopAll();
     const c = ac(), b = 60 / bpm;
@@ -1739,8 +1816,11 @@ details summary{cursor:pointer}
   // src/features/cam.js
   var cam_exports = {};
   __export(cam_exports, {
+    ALBUM: () => ALBUM,
     CAM: () => CAM,
     CAM_OK: () => CAM_OK,
+    GALLERY: () => GALLERY,
+    androidAlbum: () => androidAlbum,
     camAudio: () => camAudio,
     camFrame: () => camFrame,
     camMic: () => camMic,
@@ -1762,6 +1842,7 @@ details summary{cursor:pointer}
     camStart: () => camStart,
     camToggleHTML: () => camToggleHTML,
     camWrap: () => camWrap,
+    isAndroidApp: () => isAndroidApp,
     recCanvas: () => recCanvas
   });
   var CAM = { stream: null, video: null, rec: null, clips: [] };
@@ -2041,23 +2122,42 @@ details summary{cursor:pointer}
       <div class="spin"></div><b>Видео дописывается...</b><span class="small" style="opacity:.75">Ещё пара секунд: в конце видео твой итог.</span></div>`);
   }
   var camNative = () => !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Media);
+  var isAndroidApp = () => !!(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === "android");
+  var GALLERY = () => isAndroidApp() ? "Галерею" : "Фото";
+  var ALBUM = "Вокал под бокал";
+  async function androidAlbum(M) {
+    const base2 = (await M.getAlbumsPath()).path;
+    const find = async () => ((await M.getAlbums()).albums || []).find((a2) => a2.name === ALBUM && (!base2 || a2.identifier.startsWith(base2)));
+    let a = await find();
+    if (!a) {
+      await M.createAlbum({ name: ALBUM });
+      a = await find();
+    }
+    return a && a.identifier;
+  }
   async function camSaveNative(clip) {
     if (!camNative()) return false;
     try {
+      const M = window.Capacitor.Plugins.Media;
       const data = await new Promise((ok, bad) => {
         const r = new FileReader();
         r.onload = () => ok(r.result);
         r.onerror = bad;
         r.readAsDataURL(clip.blob);
       });
-      await window.Capacitor.Plugins.Media.saveVideo({ path: data });
+      const opt = { path: data };
+      if (isAndroidApp()) {
+        opt.albumIdentifier = await androidAlbum(M);
+        opt.fileName = "vokal-" + Date.now();
+      }
+      await M.saveVideo(opt);
       clip.saved = true;
       const el = $("#camsaved");
-      if (el) el.innerHTML = "✓ Сохранено в Фото";
+      if (el) el.innerHTML = "✓ Сохранено в " + GALLERY();
       return true;
     } catch (e) {
       const el = $("#camsaved");
-      if (el) el.textContent = "Не получилось сохранить в Фото. Разреши доступ: Настройки iPhone → Вокал под бокал → Фото.";
+      if (el) el.textContent = isAndroidApp() ? "Не получилось сохранить в Галерею. Нажми «Отправить» и сохрани видео оттуда." : "Не получилось сохранить в Фото. Разреши доступ: Настройки iPhone → Вокал под бокал → Фото.";
       return false;
     }
   }
@@ -2065,7 +2165,7 @@ details summary{cursor:pointer}
     const i = CAM.clips.indexOf(clip), nat = camNative();
     sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" ${act("closeSheet")}>×</button></div>
     <video src="${clip.url}" controls playsinline preload="metadata" style="width:100%;max-height:60vh;border-radius:14px;background:#000"></video>
-    ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? "✓ Сохранено в Фото" : "Сохраняю в Фото..."}</div>
+    ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? "✓ Сохранено в " + GALLERY() : "Сохраняю в " + GALLERY() + "..."}</div>
       <div class="row"><button class="btn" style="flex:1" ${act("camShare", i)}>Отправить</button></div>` : `<div class="row"><button class="btn" style="flex:1" ${act("camShare", i)}>📥 В Фото</button><button class="btn ghost" style="flex:1" ${act("camShare", i)}>Отправить</button></div>
       <div class="tiny muted">На iPhone откроется меню: выбери «Сохранить видео», и оно окажется в Фото. Сразу без меню сохраняет только приложение «Вокал под бокал».</div>`}
     <div class="tiny muted">Видео есть только у тебя в телефоне. Если не сохранить, после закрытия страницы оно пропадёт.</div>`);
@@ -2723,10 +2823,18 @@ details summary{cursor:pointer}
   // src/screens/settings.js
   var settings_exports = {};
   __export(settings_exports, {
+    __set_pendingImport: () => __set_pendingImport,
+    applyImport: () => applyImport,
     askReset: () => askReset,
     calibrate: () => calibrate,
+    cancelImport: () => cancelImport,
     copyData: () => copyData,
+    exportData: () => exportData,
+    exportJSON: () => exportJSON,
+    importFile: () => importFile,
+    importSummary: () => importSummary,
     openSettings: () => openSettings,
+    pendingImport: () => pendingImport,
     resetAll: () => resetAll
   });
   function openSettings() {
@@ -2736,6 +2844,9 @@ details summary{cursor:pointer}
     <button class="tap" id="calbtn" style="width:150px" disabled>Тап</button><div id="calmsg" class="small muted" style="text-align:center"></div>
     <button class="btn ghost" ${act("calibrate")}>Настроить: стучи в такт 8 щелчкам</button></div>
     <div class="card stack"><h3>Данные</h3><p class="small muted" style="margin:0" id="savebadge">${saveText()}</p>
+    <p class="small muted" style="margin:0">Сохрани прогресс в файл, чтобы не потерять его при удалении приложения или перенести на другое устройство. Сохраняется прогресс того, кто сейчас поёт.</p>
+    <button class="btn ghost" ${act("exportData")}>Сохранить прогресс в файл</button>
+    <label class="btn ghost" style="text-align:center">Загрузить прогресс из файла<input type="file" accept=".json,application/json" style="display:none" ${onChange("importFile")}></label>
     <button class="btn ghost" ${act("copyData")}>Скопировать мои данные</button>
     <button class="btn ghost" style="color:var(--bad)" ${act("askReset")}>Удалить всё и начать заново</button></div>`);
   }
@@ -2772,9 +2883,70 @@ details summary{cursor:pointer}
       $("#calmsg").textContent = `Готово: задержка ${ms} мс. Учту её в проверке ритма.`;
     }, (t0 + 8 * b - c.currentTime + 0.6) * 1e3);
   }
+  var exportJSON = () => JSON.stringify({ app: "vocal", exported: nowLocal(), ...state }, null, 1);
+  async function exportData() {
+    const name = `vocal-${ymd()}.json`, text = exportJSON();
+    try {
+      const file = new File([text], name, { type: "application/json" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "Прогресс Вокала" });
+        return;
+      }
+    } catch (e) {
+      if (e.name === "AbortError") return;
+    }
+    try {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5e3);
+      toast("Файл сохранён: " + name);
+    } catch (e) {
+      copyData();
+    }
+  }
+  var importSummary = (s) => `занятий: ${s.sessions.length}, заметок: ${s.notes.length}, замеров диапазона: ${s.range.length}, распевок: ${s.warmups.length}`;
+  var pendingImport = null;
+  async function importFile(input) {
+    const f = input.files && input.files[0];
+    input.value = "";
+    if (!f) return;
+    if (f.size > 5e6) {
+      toast("Файл слишком большой для прогресса");
+      return;
+    }
+    let data;
+    try {
+      const raw = JSON.parse(await f.text());
+      if (!raw || raw.app !== "vocal" && !Array.isArray(raw.sessions)) throw new Error("Это не файл прогресса Вокала");
+      data = normalizeState(raw);
+    } catch (e) {
+      toast(e instanceof SyntaxError ? "Файл повреждён или это не прогресс" : e.message);
+      return;
+    }
+    pendingImport = data;
+    sheet(`<h2>Загрузить прогресс?</h2><p class="muted">В файле: ${importSummary(data)}.</p>
+    <p class="muted">Сейчас: ${importSummary(state)}. Текущие данные заменятся данными из файла.</p>
+    <div class="row"><button class="btn ghost" style="flex:1" ${act("cancelImport")}>Отмена</button><button class="btn" style="flex:1" ${act("applyImport")}>Загрузить</button></div>`);
+  }
+  function cancelImport() {
+    pendingImport = null;
+    closeSheet();
+  }
+  function applyImport() {
+    if (!pendingImport) return;
+    replaceState(pendingImport);
+    pendingImport = null;
+    closeSheet();
+    render();
+    toast("Прогресс загружен");
+  }
   async function copyData() {
     try {
-      await navigator.clipboard.writeText(JSON.stringify(state, null, 1));
+      await navigator.clipboard.writeText(exportJSON());
       toast("Скопировано");
     } catch (e) {
       toast("Не получилось скопировать");
@@ -2788,6 +2960,9 @@ details summary{cursor:pointer}
     closeSheet();
     go("today");
     render();
+  }
+  function __set_pendingImport(v) {
+    pendingImport = v;
   }
 
   // src/features/register.js
@@ -5642,12 +5817,14 @@ details summary{cursor:pointer}
   onLeave(stopRecordingIfAny);
   registerActions({
     answerQuiz,
+    applyImport,
     askDelete,
     askReset,
     back,
     calibrate,
     camSet,
     camShare,
+    cancelImport,
     closeSheet,
     copyData,
     delNote,
@@ -5660,8 +5837,10 @@ details summary{cursor:pointer}
     diaryShare,
     doDelete,
     editNote,
+    exportData,
     go,
     goCloseSheet,
+    importFile,
     nextQuiz,
     openProfiles,
     openSettings,

@@ -31,5 +31,11 @@ export function setBusy(v) { busy = !!v; }
 
 
 
+
+// Границы базовой ноты (MIDI): C2..E5
+export const BASE_MIN = 36;
+export const BASE_MAX = 76;
+
+
 // установщики для моста window (переходный период, см. main.js)
 export function __set_busy(v) { busy = v; }

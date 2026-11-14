@@ -282,5 +282,7 @@ window.addEventListener('resize', () => { if (G && G.mode === 'idle') { gameResi
 
 
 
+
+
 // установщики для моста window (переходный период, см. main.js)
 export function __set_G(v) { G = v; }

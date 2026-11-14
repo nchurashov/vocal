@@ -1,11 +1,11 @@
 import { act } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
-import { BASE_MAX, BASE_MIN, MIC_DEAD, MIC_DIRECT, afterMic, base, levelBar, micTap, noteFull, noteShort, openMic, setLevel } from '../core/audio.js';
+import { MIC_DEAD, MIC_DIRECT, afterMic, base, levelBar, micTap, noteFull, noteShort, openMic, setLevel } from '../core/audio.js';
 import { pianoBand, pianoMark, pianoSVG } from '../core/piano.js';
 import { afterHooks, go, render } from '../core/router.js';
 import { profName, save, state } from '../core/store.js';
 import { toast } from '../core/ui.js';
-import { $, ICON, fmtDay, nowLocal, plural, setBusy } from '../core/util.js';
+import { $, BASE_MAX, BASE_MIN, ICON, fmtDay, nowLocal, plural, setBusy } from '../core/util.js';
 import { camOn, camRecStart, camRecStop, camRecording, camStart, camToggleHTML } from './cam.js';
 import { lastRange } from './register.js';
 
@@ -155,6 +155,8 @@ export function rangeWork(m, strict) {
 
 
 export function rangeNoFalsetto() { if (RG) rangeSetBreak(RG.hi); }
+
+
 
 
 

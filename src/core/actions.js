@@ -4,7 +4,7 @@ import { esc } from './util.js';
 // В разметке: <button ${act('go', 'ball')}> -> data-action="go" data-args='["ball"]'.
 // Один обработчик на всё приложение ищет действие в реестре (registerActions) и вызывает его с аргументами.
 // Вызвать с кнопки можно только зарегистрированное действие. Для полей ввода (data-change / data-input)
-// первым аргументом приходит значение поля (checked для галочек).
+// первым аргументом приходит значение поля (checked для галочек, сам элемент для выбора файла).
 
 export const ACTIONS = Object.create(null);
 export function registerActions(map) { for (const k of Object.keys(map)) ACTIONS[k] = map[k]; }
@@ -22,7 +22,7 @@ export function runAction(el, kind, withValue) {
   if (!fn) { console.warn('нет действия', name); return; }
   let args = [];
   try { args = JSON.parse(el.getAttribute('data-args') || '[]'); } catch (err) { console.warn('плохие data-args', name); return; }
-  if (withValue) args.unshift(el.type === 'checkbox' ? el.checked : el.value);
+  if (withValue) args.unshift(el.type === 'checkbox' ? el.checked : el.type === 'file' ? el : el.value);
   fn(...args);
 }
 export function initActions(root = document) {

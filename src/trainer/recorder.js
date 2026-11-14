@@ -120,6 +120,8 @@ export function playAudioLast() { if (!lastAudio) return; stopAll(); const s = a
 
 
 
+
+
 // установщики для моста window (переходный период, см. main.js)
 export function __set_rec(v) { rec = v; }
 export function __set_lastAudio(v) { lastAudio = v; }

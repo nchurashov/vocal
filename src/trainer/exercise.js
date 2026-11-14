@@ -188,6 +188,8 @@ export function playInterval(semi) { playQ({ seq: [[base(), 1], [base() + semi, 
 
 
 
+
+
 // установщики для моста window (переходный период, см. main.js)
 export function __set_run(v) { run = v; }
 export function __set_quiz(v) { quiz = v; }
