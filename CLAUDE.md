@@ -31,6 +31,7 @@
 - `build.py` - собирает ES-модули (esbuild, точка входа `src/main.js`) и `src/app.css` в один `index.html` (корень = сайт) и `www/index.html` (для iOS). Нужен `npm i` (esbuild, ESLint в devDependencies).
 - `ios/` - Xcode-проект (Capacitor 8, Swift Package Manager, без CocoaPods). Bundle id `ru.nchurashov.vocal`.
 - `android/` - Android-проект (Capacitor 8, тот же appId). Разрешения: микрофон, камера (AndroidManifest.xml). Кнопка «Назад»: `MainActivity.java` спрашивает `window.androidBack()` (router.js) - закрыть окошко, иначе прошлый экран, с «Сегодня» - выход. Видео сохраняется в Галерею, альбом «Вокал под бокал» (`camSaveNative`, на Android плагину нужен albumIdentifier).
+- `server/` - бэкенд прогресса (Node 22.13+, без библиотек, встроенный SQLite): вход через отдельного Telegram-бота (одноразовая ссылка `t.me/<бот>?start=<код>`, приложение ждёт токен), прогресс профилей с версиями (устаревшая запись -> 409, ничего не затирается), удаление аккаунта. `install.sh` - установка на сервер Кита (systemd в песочнице, nginx + certbot для `api.законныевыходные.рф`, ночные копии базы), инструкция - `server/README.md`. Клиент в приложении ещё не подключён.
 - `tests/` - тесты (см. ниже).
 
 ## Сборка и выкладка
@@ -52,6 +53,7 @@ Android: `npx cap sync android && cd android && ./gradlew assembleDebug` -> `and
 python3 tests/check_code.py      # синтаксис, нет eval/внешних скриптов/ключей/длинных тире, ESLint (импорты и слои)
 python3 tests/check_modules.py   # исходные модули грузятся нативно без ошибок порядка (esbuild прячет их как undefined); CSP блокирует чужой onclick
 node tests/test_analysis.js      # распознавание нот
+node tests/test_server.js        # сервер: вход через поддельный Telegram, прогресс, конфликт версий, чужие данные, лимиты, удаление аккаунта
 node tests/synth.js              # создаёт tests/out/sing.wav для теста интерфейса
 python3 tests/smoke_ui.py        # упражнения, запись с фейкового микрофона, история
 python3 tests/sim_ball.py        # честность «Шарика» на всех 100 заданиях, окно голоса, октава от всех нот, правила открытия

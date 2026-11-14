@@ -12,6 +12,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 fails = []
 src = {os.path.relpath(os.path.join(d, f), os.path.join(ROOT, 'src')): open(os.path.join(d, f), encoding='utf-8').read() for d, _, fs in os.walk(os.path.join(ROOT, 'src')) for f in fs if f.endswith(('.js', '.css'))}
 html = open(os.path.join(ROOT, 'index.html'), encoding='utf-8').read()
+# сервер: те же запреты на опасные приёмы и ключи в коде
+for f in ('server/server.js',):
+    t = open(os.path.join(ROOT, f), encoding='utf-8').read()
+    if re.search(r'\beval\s*\(|new\s+Function\s*\(', t): fails.append(f'{f}: eval / new Function')
+    if re.search(r'(BOT_TOKEN|api[_-]?key|secret|password)\s*[:=]\s*[\'"][^\'"]{8,}', t, re.I): fails.append(f'{f}: похоже на ключ в коде')
 # 1. синтаксис собранного JS
 js = html[html.index('<script>') + 8:html.rindex('</script>')]
 with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8') as t: t.write(js); tmp = t.name
