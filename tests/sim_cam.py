@@ -64,6 +64,10 @@ with sync_playwright() as p:
         if pg.evaluate("VS.i >= VS.set.steps.length"): break
         i0 = pg.evaluate("VS.i"); pg.click('#vsplay'); pg.wait_for_function(f"VS.i !== {i0}", timeout=20000)
     checked('голос и речь', n0)
+    # песня целиком: холст караоке пишется в видео, в конце итог со звёздами
+    n0 = clips(); pg.evaluate("state.settings.songMode = 'whole'; save()"); pg.goto(URL + '#song-b-twinkle'); pg.reload(); pg.wait_for_timeout(1200)
+    pg.click('#sgplay'); pg.wait_for_function("SG.phase === 'done'", timeout=60000); checked('песня целиком', n0)
+    pg.evaluate("state.settings.songMode = 'phrase'; save()")
     exid = pg.evaluate("EXERCISES.find(e => e.kind === 'sing').id")
     n0 = clips(); pg.goto(URL + '#ex-' + exid); pg.reload(); pg.wait_for_timeout(1200)
     pg.click('text=Записать с микрофона'); pg.wait_for_timeout(4000); pg.click('text=Остановить'); checked('упражнение с записью', n0)
