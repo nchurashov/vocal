@@ -6,7 +6,7 @@ import { afterHooks, go, render } from '../core/router.js';
 import { profName, save, state } from '../core/store.js';
 import { toast } from '../core/ui.js';
 import { $, BASE_MAX, BASE_MIN, ICON, fmtDay, nowLocal, plural, setBusy } from '../core/util.js';
-import { camOn, camRecStart, camRecStop, camRecording, camStart, camToggleHTML } from './cam.js';
+import { CAM, camOff, camOn, camRecStart, camRecStop, camRecording, camStart, camToggleHTML } from './cam.js';
 import { lastRange } from './register.js';
 
 // ===== Замер диапазона: маршрут #range =====
@@ -111,6 +111,7 @@ export async function rangeStart() {
   setBusy(true);
   RG = { mode: 'live', fr: [], stream, lo: null, hi: null };
   const T = micTap(stream), hist = [];
+  if (camOn()) await camStart(); // после прошлого замера камера выключена - включаем снова
   if (camOn()) camRecStart(() => ({ top: 'Замер диапазона', big: RG && RG.cur != null ? noteShort(RG.cur) : '...', sub: RG && RG.lo != null ? `низ ${noteShort(RG.lo)} · верх ${noteShort(RG.hi)}` : '' }), (profName() ? profName() + ' · ' : '') + 'Мой диапазон', stream);
   rangeDraw();
   // на телефоне блок замера ниже первого экрана: прокручиваем к нему, чтобы «Готово» (и стоп записи) было видно сразу
@@ -139,6 +140,9 @@ export function rangeDone() {
   if (!RG) return;
   const { lo, hi } = RG, chestHi = RG.chestHi != null && RG.chestHi < RG.hi ? RG.chestHi : null;
   if (camRecording()) camRecStop(lo == null ? null : `${noteShort(lo)} - ${noteShort(hi)}`, lo == null);
+  // запись кончилась - гасим превью камеры, чтобы не казалось, что съёмка идёт (видео дописывается и открывается само)
+  const off = () => { if (CAM.rec && CAM.rec.state !== 'finished') setTimeout(off, 300); else if (!RG || RG.mode !== 'live') camOff(); };
+  if (CAM.stream) off();
   rangeStop();
   if (lo == null) { RG = { mode: 'idle', fr: [], err: 'Не услышал ни одной удержанной ноты. Пой громче и держи каждую ноту секунду.' }; rangeDraw(); return; }
   (state.range ||= []).push({ date: nowLocal(), lo, hi, ...(chestHi != null ? { chestHi } : {}) }); if (state.range.length > 100) state.range.shift();

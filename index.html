@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-DZyYDjpy7uJQeVX+/gbqXF0cW/qppdSPekhvUE/8K6k='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-4J3P6piBfyjUfZ9hqF83wm6gVaS1SBx1GD/YBJDojts='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Вокал под бокал</title>
 <meta name="apple-mobile-web-app-title" content="Вокал под бокал"><meta name="description" content="Вокал под бокал: налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -3209,6 +3209,7 @@ details summary{cursor:pointer}
     setBusy(true);
     RG = { mode: "live", fr: [], stream, lo: null, hi: null };
     const T = micTap(stream), hist = [];
+    if (camOn()) await camStart();
     if (camOn()) camRecStart(() => ({ top: "Замер диапазона", big: RG && RG.cur != null ? noteShort(RG.cur) : "...", sub: RG && RG.lo != null ? `низ ${noteShort(RG.lo)} · верх ${noteShort(RG.hi)}` : "" }), (profName() ? profName() + " · " : "") + "Мой диапазон", stream);
     rangeDraw();
     const box = $("#rgbox");
@@ -3247,6 +3248,11 @@ details summary{cursor:pointer}
     if (!RG) return;
     const { lo, hi } = RG, chestHi = RG.chestHi != null && RG.chestHi < RG.hi ? RG.chestHi : null;
     if (camRecording()) camRecStop(lo == null ? null : `${noteShort(lo)} - ${noteShort(hi)}`, lo == null);
+    const off = () => {
+      if (CAM.rec && CAM.rec.state !== "finished") setTimeout(off, 300);
+      else if (!RG || RG.mode !== "live") camOff();
+    };
+    if (CAM.stream) off();
     rangeStop();
     if (lo == null) {
       RG = { mode: "idle", fr: [], err: "Не услышал ни одной удержанной ноты. Пой громче и держи каждую ноту секунду." };
