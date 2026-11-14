@@ -43,6 +43,13 @@ with sync_playwright() as p:
     try:
         pg.wait_for_function(f"SG.tries >= 1 && SG.k === {k}", timeout=30000)
         if pg.evaluate(f"(state.songs['b-twinkle'].ph[{k}] || 0) >= 80"): fails.append('по фразам: фальшь 0.7 полутона засчитана')
+        # итог фразы не первой: цвет у каждой ноты фразы (раньше индексы сдвигались и все ноты были бледными), линия голоса и подсказка
+        pg.wait_for_function(f"SG.tries >= 2 && SG.k === {k}", timeout=30000)  # первая попытка могла начаться до фальши, смотрим вторую
+        if not pg.evaluate(f"SG.res[{k}].hitNotes.length === phraseNotes(SG.s, {k}).length && SG.res[{k}].hitNotes.every(v => typeof v === 'boolean') && SG.res[{k}].hitNotes.filter(Boolean).length < 4"): fails.append('по фразам: итог не разложен по нотам фразы: ' + str(pg.evaluate(f"JSON.stringify(SG.res[{k}].hitNotes)")))
+        if not pg.evaluate(f"SG.res[{k}].tr.some(c => c.filter(v => v != null).length > 5)"): fails.append('по фразам: голос не записан по нотам для клавиш')
+        if 'выше на' not in pg.evaluate(f"SG.res[{k}].miss"): fails.append('по фразам: нет подсказки «выше на»: ' + pg.evaluate(f"SG.res[{k}].miss"))
+        svg = pg.evaluate("songKeys(phraseNotes(SG.s, %d), songTargets(phraseNotes(SG.s, %d)), 0, {hit: SG.res[%d].hit, tr: SG.res[%d].tr, final: true})" % (k, k, k, k))
+        if 'var(--bad)' not in svg or '<path' not in svg or 'Ля' not in svg: fails.append('клавиши фразы: нет красных нот, линии голоса или подписей клавиш')
     except Exception: fails.append('по фразам: после фальши фраза не повторилась (k=%s, %s)' % (pg.evaluate('SG.k'), pg.evaluate('SG.tries')))
     if 'Слышу' not in pg.inner_text('#sgbox') and 'Твоя очередь' not in pg.inner_text('#sgbox') and 'Слушай' not in pg.inner_text('#sgbox'): pass
     pg.goto(URL + '#songs'); pg.wait_for_timeout(400)
@@ -65,6 +72,7 @@ with sync_playwright() as p:
     # --- тональность: под низкий голос октавой ниже, кнопки сдвигают
     pg.evaluate("state.range = [{date: '2026-11-01T10:00:00', lo: 40, hi: 64}]; save()")
     pg.goto(URL + '#song-b-twinkle'); pg.wait_for_timeout(300)
+    if pg.evaluate("state.range.push({date: '2026-11-02T10:00:00', lo: 50, hi: 79, chestHi: 50}); const w = songWin(); state.range.pop(); w[1]") != 79: fails.append('случайный «фальцет» в самом низу замера сжал окно песни в одну ноту')
     if pg.evaluate("songShiftOf(songById('b-twinkle'))") != -12: fails.append('тональность под диапазон E2-E4 должна быть на октаву ниже')
     pg.click('button[title="Выше"]'); pg.wait_for_timeout(200)
     if pg.evaluate("state.songs['b-twinkle'].shift") != -11: fails.append('кнопка «Выше» не сдвинула на полутон')
