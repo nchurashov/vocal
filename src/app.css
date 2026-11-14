@@ -132,6 +132,7 @@ details summary{cursor:pointer}
 .pk-oct{font:600 4.2px Manrope,system-ui;fill:var(--muted)}
 .pk-sep{stroke:var(--line);stroke-width:.5}
 .pk-w.pk-in2{fill:color-mix(in srgb,var(--near) 28%,#fff)}.pk-b.pk-in2{fill:color-mix(in srgb,var(--near) 55%,#2B231E)}
+.camrec{position:fixed;left:0;top:0;width:2px;height:2px;opacity:.01;pointer-events:none;z-index:-1}
 .campv{position:fixed;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));width:84px;height:112px;border-radius:14px;object-fit:cover;transform:scaleX(-1);z-index:40;box-shadow:0 4px 16px rgba(0,0,0,.25);border:2px solid #fff;background:#000}
 .who{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:8px 12px;font-weight:700;font-size:13.5px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .inp{border:1px solid var(--line);border-radius:12px;padding:11px 12px;font:inherit;background:var(--card);color:var(--ink);min-width:0}

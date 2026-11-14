@@ -2,7 +2,8 @@ import { act, onChange } from '../core/actions.js';
 import { MIC_DIRECT, afterMic, openMic } from '../core/audio.js';
 import { profName, save, state } from '../core/store.js';
 import { sheet, toast } from '../core/ui.js';
-import { $, busy, nowLocal } from '../core/util.js';
+import { mp4Frozen, mp4Trim } from '../core/mp4.js';
+import { $, busy, esc, nowLocal } from '../core/util.js';
 
 // ===== Камера: снять себя во время уровня и поделиться видео =====
 // Видео 9:16 (720x1280): сверху фронтальная камера (зеркально) на 2/3, снизу игра на 1/3, внизу плашка с адресом сайта.
@@ -57,30 +58,58 @@ export function camOff() {
   if (CAM.mic) { CAM.mic.getTracks().forEach(t => t.stop()); CAM.mic = null; afterMic(); }
 }
 export const camRecording = () => !!(CAM.rec && CAM.rec.state === 'rec');
+// холст записи держим в документе (крошечный и прозрачный): Safari бывает перестаёт брать кадры с холста вне страницы
+export function camCanvas(W, H) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H; c.className = 'camrec'; c.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(c); return c;
+}
+// iPhone иногда перестаёт отдавать кадры: звук пишется дальше, а последний кадр висит до конца («видео зависло, звук идёт»).
+// Проверяем готовый mp4 и обрезаем по последнему живому кадру (без перекодирования). -> { blob, cut }
+export async function camFixFrozen(blob) {
+  if (!/mp4/.test(blob.type)) return { blob, cut: null };
+  try {
+    const u8 = new Uint8Array(await blob.arrayBuffer()), fz = mp4Frozen(u8);
+    if (!fz) return { blob, cut: null };
+    const t = mp4Trim(u8, fz.cut);
+    return { blob: t ? new Blob([t], { type: blob.type }) : blob, cut: { ...fz, trimmed: !!t } };
+  } catch (e) { return { blob, cut: null }; }
+}
+const mmss = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 // запись: canvasSel - селектор холста игры ИЛИ функция-карточка () => ({ top, big, sub }) для упражнений;
 // title - подпись сверху, micStream - поток микрофона
 export function camRecStart(canvasSel, title, micStream) {
   if (!camOn() || !CAM.stream || !CAM.video || (CAM.rec && CAM.rec.state === 'rec')) return;
-  const W = 720, H = 1280, out = document.createElement('canvas'); out.width = W; out.height = H;
+  const W = 720, H = 1280, out = camCanvas(W, H);
   const g = out.getContext('2d'), vs = out.captureStream(30);
   const tracks = [...vs.getVideoTracks()];
   const au = camAudio(micStream); tracks.push(...au.tracks);
   const ms = new MediaStream(tracks), mime = camMime(), chunks = [];
-  let mr; try { mr = new MediaRecorder(ms, mime ? { mimeType: mime, videoBitsPerSecond: 1600000 } : undefined); } catch (e) { return; }
-  const R = CAM.rec = { state: 'rec', mr, out, g, tracks, title, canvasSel, outro: null, t0: performance.now(), mime: mr.mimeType || mime || 'video/webm' };
+  let mr; try { mr = new MediaRecorder(ms, mime ? { mimeType: mime, videoBitsPerSecond: 1600000 } : undefined); } catch (e) { out.remove(); au.close(); return; }
+  const R = CAM.rec = { state: 'rec', mr, out, g, tracks, title, canvasSel, outro: null, t0: performance.now(), mime: mr.mimeType || mime || 'video/webm', ev: [] };
+  // журнал: что случилось во время записи (показываем, только если картинка оборвалась)
+  const log = e => { if (R.ev.length < 12) R.ev.push([(performance.now() - R.t0) / 1000, e]); };
+  const vt = vs.getVideoTracks()[0], ct = CAM.stream && CAM.stream.getVideoTracks()[0];
+  const on = [[vt, 'mute', 'холст перестал давать кадры'], [vt, 'ended', 'холст отключился'], [ct, 'mute', 'камера на паузе'], [ct, 'unmute', 'камера снова работает'], [ct, 'ended', 'камера выключилась']]
+    .filter(x => x[0]).map(([t, ev, txt]) => { const f = () => log(txt); t.addEventListener(ev, f); return () => t.removeEventListener(ev, f); });
+  // свернули приложение - iPhone всё равно остановит камеру и кодер: дописываем то, что есть, без замёрзшего хвоста
+  const vis = () => { if (document.visibilityState === 'hidden') { log('приложение свернулось'); camRecStop(null, true); } };
+  document.addEventListener('visibilitychange', vis);
+  mr.onerror = e => log('ошибка записи ' + ((e && e.error && e.error.name) || ''));
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-  mr.onstop = () => {
+  mr.onstop = async () => {
     R.state = 'finished'; cancelAnimationFrame(R.raf); tracks.forEach(t => t.stop()); au.close();
+    out.remove(); document.removeEventListener('visibilitychange', vis); on.forEach(f => f());
     if (CAM.mic && !busy) { CAM.mic.getTracks().forEach(t => t.stop()); CAM.mic = null; afterMic(); }
     if (!chunks.length || R.discard) return;
-    const blob = new Blob(chunks, { type: R.mime.split(';')[0] });
-    const clip = { blob, url: URL.createObjectURL(blob), title: R.title, outro: R.outro, date: nowLocal(), ext: R.mime.includes('mp4') ? 'mp4' : 'webm' };
+    const { blob, cut } = await camFixFrozen(new Blob(chunks, { type: R.mime.split(';')[0] }));
+    const clip = { blob, url: URL.createObjectURL(blob), title: R.title, outro: R.outro, date: nowLocal(), ext: R.mime.includes('mp4') ? 'mp4' : 'webm', cut: cut && { ...cut, ev: R.ev } };
     CAM.clips.push(clip); if (CAM.clips.length > 5) URL.revokeObjectURL(CAM.clips.shift().url);
     camShow(clip);
   };
   const draw = () => {
     if (R.state === 'finished') return;
     R.raf = requestAnimationFrame(draw);
+    const now = performance.now(); if (R.last && now - R.last > 1000) log(`экран не обновлялся ${((now - R.last) / 1000).toFixed(1)} с`); R.last = now;
     // камера сверху на 2/3, игра снизу на 1/3 (над плашкой бренда)
     const area = H - 96, camH = Math.round(area * .67);
     camFrame(g, W, H, R.title, R.outro, camH);
@@ -212,6 +241,8 @@ export function camShow(clip) {
   const i = CAM.clips.indexOf(clip), nat = camNative();
   sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" ${act('closeSheet')}>×</button></div>
     <video src="${clip.url}" controls playsinline preload="metadata" style="width:100%;max-height:60vh;border-radius:14px;background:#000"></video>
+    ${clip.cut ? `<div class="note small">Картинка оборвалась на ${mmss(clip.cut.cut)}: телефон перестал отдавать кадры, а звук писался дальше. ${clip.cut.trimmed ? 'Я обрезал видео по этому месту, чтобы не висел застывший кадр.' : ''}
+      <div class="tiny muted" style="margin-top:4px">Что было: ${(clip.cut.ev || []).length ? clip.cut.ev.map(([t, e]) => mmss(t) + ' ' + esc(e)).join(', ') : 'ничего не заметил'}. Запись длилась ${mmss(clip.cut.total)}.</div></div>` : ''}
     ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? '✓ Сохранено в ' + GALLERY() : 'Сохраняю в ' + GALLERY() + '...'}</div>
       <div class="row"><button class="btn" style="flex:1" ${act('camShare', i)}>Отправить</button></div>`
     : `<div class="row"><button class="btn" style="flex:1" ${act('camShare', i)}>📥 В Фото</button><button class="btn ghost" style="flex:1" ${act('camShare', i)}>Отправить</button></div>
@@ -234,7 +265,7 @@ export async function camShare(i) {
 // audio: массив дорожек или поток микрофона (MediaStream) - тогда звук идёт через camAudio
 export function recCanvas(draw, audio = [], W = 720, H = 1280) {
   const au = audio instanceof MediaStream ? camAudio(audio) : { tracks: audio, close() { } }, audioTracks = au.tracks;
-  const out = document.createElement('canvas'); out.width = W; out.height = H;
+  const out = camCanvas(W, H);
   const g = out.getContext('2d'), vs = out.captureStream(30), tracks = [...vs.getVideoTracks(), ...audioTracks];
   const mime = camMime(), chunks = [];
   const mr = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: 1600000 } : undefined);
@@ -242,7 +273,13 @@ export function recCanvas(draw, audio = [], W = 720, H = 1280) {
   let raf = 0, alive = true;
   const loop = () => { if (!alive) return; raf = requestAnimationFrame(loop); draw(g, W, H); };
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-  const done = new Promise(res => { mr.onstop = () => { alive = false; cancelAnimationFrame(raf); tracks.forEach(t => t.stop()); au.close(); res({ blob: new Blob(chunks, { type: real.split(';')[0] }), ext: real.includes('mp4') ? 'mp4' : 'webm' }); }; });
+  const done = new Promise(res => {
+    mr.onstop = async () => {
+      alive = false; cancelAnimationFrame(raf); tracks.forEach(t => t.stop()); au.close(); out.remove();
+      const { blob, cut } = await camFixFrozen(new Blob(chunks, { type: real.split(';')[0] }));
+      res({ blob, ext: real.includes('mp4') ? 'mp4' : 'webm', cut });
+    };
+  });
   loop(); mr.start();
   return { stop: () => { try { mr.stop(); } catch (e) { } return done; }, done };
 }

@@ -59,7 +59,27 @@ with sync_playwright() as p:
     exid = pg.evaluate("EXERCISES.find(e => e.kind === 'sing').id")
     n0 = clips(); pg.goto(URL + '#ex-' + exid); pg.reload(); pg.wait_for_timeout(1200)
     pg.click('text=Записать с микрофона'); pg.wait_for_timeout(4000); pg.click('text=Остановить'); checked('упражнение с записью', n0)
-    n0 = clips(); pg.goto(URL + '#range'); pg.reload(); pg.wait_for_timeout(1200); pg.click('text=Начать замер'); pg.wait_for_timeout(4000); pg.click('text=Готово'); checked('замер диапазона', n0)
+    n0 = clips(); pg.goto(URL + '#range'); pg.reload(); pg.wait_for_timeout(1200); pg.click('text=Начать замер'); pg.wait_for_timeout(4000)
+    if pg.evaluate("document.querySelectorAll('canvas.camrec').length") != 1: fails.append('холст записи не в документе (Safari теряет кадры с холста вне страницы)')
+    pg.click('text=Готово'); checked('замер диапазона', n0)
+    if pg.evaluate("document.querySelectorAll('canvas.camrec').length"): fails.append('холст записи не убран после записи')
+    # свернули приложение во время записи: запись дописывается сразу, без замёрзшего хвоста
+    n0 = clips(); pg.click('text=Замерить ещё раз'); pg.wait_for_timeout(3000)
+    pg.evaluate("Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState")
+    pg.wait_for_function("(b) => CAM.clips.length && CAM.clips[CAM.clips.length - 1].url !== b", arg=n0, timeout=10000)
+    if pg.evaluate("camRecording()"): fails.append('при сворачивании запись не остановилась')
+    pg.evaluate("closeSheet(); rangeDone()"); pg.wait_for_timeout(300); pg.evaluate("closeSheet()")
+    # iPhone перестал отдавать кадры, звук шёл дальше: файл обрезается по последнему живому кадру, в окне - объяснение
+    import base64
+    b64 = base64.b64encode(open(os.path.join(ROOT, 'tests', 'fixtures', 'frozen_tail.mp4'), 'rb').read()).decode()
+    r = pg.evaluate("""async (b64) => { const u = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const { blob, cut } = await camFixFrozen(new Blob([u], { type: 'video/mp4' }));
+      const clip = { blob, url: URL.createObjectURL(blob), title: 'тест', date: nowLocal(), ext: 'mp4', cut: cut && { ...cut, ev: [[2.1, 'камера на паузе']] } };
+      CAM.clips.push(clip); camShow(clip);
+      return { cut, size: blob.size, was: u.length, note: document.querySelector('#sheet .note')?.innerText || '' }; }""", b64)
+    if not (r['cut'] and r['cut']['trimmed'] and abs(r['cut']['cut'] - 2.12) < .05): fails.append(f'замёрзший хвост не найден: {r}')
+    if 'оборвалась на 0:02' not in r['note'] or '0:02 камера на паузе' not in r['note']: fails.append(f'нет объяснения в окне видео: {r["note"]}')
+    pg.evaluate("closeSheet()")
     pg.evaluate("state.settings.cam = false; save()")
     pg.goto(URL + '#today'); pg.wait_for_timeout(300)
     if pg.evaluate("!!CAM.stream || !!document.getElementById('campv')"): fails.append('камера не выключилась при уходе с уровня')

@@ -11,7 +11,7 @@
 
 | Слой | Папка | Можно импортировать |
 | --- | --- | --- |
-| Ядро | `src/core/` - util, audio, store, router, ui, piano, analysis | только `core/` |
+| Ядро | `src/core/` - util, audio, store, router, ui, piano, analysis, mp4 | только `core/` |
 | Данные | `src/data/` | только `core/` |
 | Тренажёр | `src/trainer/` - логика уровней, экраны упражнений, запись голоса | `core/`, `data/`, `features/` |
 | Функции | `src/features/` - ball, game, warmup, voice, range, diary, learn, cam, register | `core/`, `data/`, другие функции через их публичные функции |
