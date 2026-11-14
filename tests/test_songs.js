@@ -71,55 +71,55 @@ check('тональность: высокий голос - как есть', L.s
 const sh = L.songShift(tw, [50, 59]);
 check('тональность: узкое окно - сдвиг по полутону в середину', sh + 60 >= 50 && sh + 69 <= 59, sh);
 
-// --- честность проверки: имитация живого голоса по каждой фразе встроенных песен
-// singer: опоздание, скольжение, вибрато, сдвиг, темп певца, ошибки
+// --- честность караоке-игры: имитация живого голоса в такт (каждая фраза встроенных песен и каждая песня целиком)
+// певец: опоздание lat (с), скольжение glide, вибрато vib (полутона), сдвиг shift, ноты wrong - на тритон мимо
 function sing(notes, o) {
-  const fr = [], s0 = notes[0].t; let prev = null;
-  const ons = notes.map((n, i) => ({ m: (o.wrong && o.wrong.includes(i) ? n.m + 6 : n.m), t0: (n.t - s0) / o.speed, t1: (n.t - s0 + n.d) / o.speed }));
-  const end = ons[ons.length - 1].t1 + .5;
-  for (let t = -.3; t < end; t += 1 / 60) {
+  const fr = [], s0 = notes[0].t, tp = o.tempo || 1; let prev = null;
+  const ons = notes.map((n, i) => ({ m: (o.wrong && o.wrong.includes(i) ? n.m + 6 : n.m), t0: (n.t - s0) / tp, t1: (n.t - s0 + n.d) / tp }));
+  const end = ons[ons.length - 1].t1 + .6;
+  for (let t = -.5; t < end; t += 1 / 60) {
     let m = null;
-    for (const n of ons) if (t >= n.t0 + o.lat && t < n.t1 + o.lat - .05) {
-      const k = Math.min(1, (t - n.t0 - o.lat) / o.glide); const from = prev == null ? n.m : prev;
+    for (const n of ons) if (t >= n.t0 + o.lat && t < n.t1 + o.lat - .04) {
+      const k = Math.min(1, (t - n.t0 - o.lat) / o.glide), from = prev == null ? n.m : prev;
       m = from + (n.m - from) * k + o.vib * Math.sin(t * 2 * Math.PI * 5.5) + o.shift;
       if (t >= n.t1 + o.lat - .06) prev = n.m;
       break;
     }
-    if (o.drone != null) m = o.drone;
-    fr.push({ t: t + 100, m });
+    if (o.drone != null) m = o.drone + .1 * Math.sin(t * 30);
+    fr.push({ t, m: o.silent ? null : m });
   }
   return fr;
 }
-const FAIR = { 'вовремя': {}, 'опоздание 0.3 с': { lat: .3 }, 'медленнее в 1.3 раза': { speed: .77 }, 'быстрее в 1.25 раза': { speed: 1.25 }, 'октавой ниже': { shift: -12 }, 'октавой выше': { shift: 12 }, 'вибрато ±25 ц': { vib: .25 } };
-const UNFAIR = { 'фальшь +0.7 полутона': { shift: .7 }, 'тишина': { drone: null, silent: true }, 'одна нота на всю фразу': { droneFirst: true }, 'две ноты из каждых трёх мимо': { wrongMost: true } };
-for (const s of BUILTIN_SONGS) for (let k = 0; k < s.ph.length; k++) {
-  const notes = L.phraseNotes(s, k);
-  for (const [name, o0] of Object.entries(FAIR)) {
-    const o = { lat: .12, glide: .07, vib: .12, shift: 0, speed: 1, ...o0 };
-    const r = L.scoreSung(notes, sing(notes, o), false, 0, 1);
-    if (!r.ok) check(`${s.title}, фраза ${k + 1}, ${name}: должен пройти`, false, `${r.n}/${r.total}`);
+const FAIR = { 'вовремя': {}, 'опоздание 0.25 с': { lat: .25 }, 'раньше на 0.08 с': { lat: -.08 }, 'октавой ниже': { shift: -12 }, 'октавой выше': { shift: 12 }, 'вибрато ±30 ц': { vib: .3 }, 'медленный темп': { tempo: .75 } };
+const UNFAIR = { 'фальшь +0.7 полутона': { shift: .7 }, 'тишина': { silent: true }, 'одна нота на всё': { droneFirst: true }, 'две ноты из трёх мимо': { wrongMost: true }, 'опоздал на целую секунду': { lat: 1 } };
+const units = [];
+for (const s of BUILTIN_SONGS) { for (let k = 0; k < s.ph.length; k++) units.push([`${s.title}, фраза ${k + 1}`, L.phraseNotes(s, k)]); units.push([`${s.title} целиком`, s.notes]); }
+units.push(['караоке-файл целиком', song.notes]);
+let fairBad = 0, unfairBad = 0;
+for (const [name, notes] of units) {
+  for (const [nm, o0] of Object.entries(FAIR)) {
+    const o = { lat: .12, glide: .07, vib: .12, shift: 0, ...o0 };
+    const r = L.songGameFrames(notes, sing(notes, o), { tempo: o.tempo || 1 });
+    if (r.pct < 90) { fairBad++; check(`${name}, ${nm}: честный певец должен взять 90%+`, false, `${r.n}/${r.total}`); }
   }
-  for (const [name, o0] of Object.entries(UNFAIR)) {
-    const o = { lat: .12, glide: .07, vib: .1, shift: 0, speed: 1, ...o0 };
-    if (o0.droneFirst) o.drone = notes[0].m;
+  for (const [nm, o0] of Object.entries(UNFAIR)) {
+    const o = { lat: .12, glide: .07, vib: .1, shift: 0, ...o0 };
+    if (o0.droneFirst) { const cnt = {}; notes.forEach(n => cnt[n.m % 12] = (cnt[n.m % 12] || 0) + 1); o.drone = +Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0] + 60; }
     if (o0.wrongMost) o.wrong = notes.map((_, i) => i).filter(i => i % 3 !== 0);
-    let fr = sing(notes, o); if (o0.silent) fr = fr.map(f => ({ t: f.t, m: null }));
-    const r = L.scoreSung(notes, fr, false, 0, 1);
-    if (r.ok) check(`${s.title}, фраза ${k + 1}, ${name}: не должен пройти`, false, `${r.n}/${r.total}`);
+    const r = L.songGameFrames(notes, sing(notes, o), {});
+    if (r.ok) { unfairBad++; check(`${name}, ${nm}: не должен пройти`, false, `${r.n}/${r.total}`); }
   }
-  // строгий режим: октавой ниже не засчитывается
-  const r = L.scoreSung(notes, sing(notes, { lat: .12, glide: .07, vib: .1, shift: -12, speed: 1 }), true, 0, 1);
-  if (r.n) check(`${s.title}, фраза ${k + 1}: строго в октаве, октавой ниже не засчитывается`, false, `${r.n}/${r.total}`);
+  const r = L.songGameFrames(notes, sing(notes, { lat: .12, glide: .07, vib: .1, shift: -12 }), { strict: true });
+  if (r.n) check(`${name}: строго в октаве, октавой ниже не засчитывается`, false, `${r.n}/${r.total}`);
 }
-check('честность проверки на всех фразах встроенных песен', true);
-// сдвиг тональности: поёшь сдвинутую песню - засчитывается именно в ней
-{ const notes = L.phraseNotes(BUILTIN_SONGS[1], 0), fr = sing(notes, { lat: .1, glide: .07, vib: .1, shift: 3, speed: 1 });
-  check('сдвиг +3: спетое в новой тональности засчитано', L.scoreSung(notes, fr, false, 3, 1).ok);
-  check('сдвиг +3: спетое в старой тональности - нет', !L.scoreSung(notes, sing(notes, { lat: .1, glide: .07, vib: .1, shift: 0, speed: 1 }), false, 3, 1).ok); }
-// хвост ноты не перескакивает через следующую: «ля-си-ля», тянешь первую «ля» - засчитана только она
-{ const notes = [{ m: 69, t: 0, d: .5 }, { m: 71, t: .5, d: .5 }, { m: 69, t: 1, d: .5 }];
-  const fr = []; for (let t = 0; t < 1.6; t += 1 / 60) fr.push({ t, m: 69 });
-  const r = L.scoreSung(notes, fr, false, 0, 1); check('тянешь одну ноту - соседние не засчитаны', r.n === 1, `${r.n}/${r.total}`); }
+check(`честность игры: ${units.length} кусков, по ${Object.keys(FAIR).length} честных и ${Object.keys(UNFAIR).length} нечестных певцов`, !fairBad && !unfairBad);
+// сдвиг тональности: засчитывается песня в новой тональности, а не в старой
+{ const notes = L.phraseNotes(BUILTIN_SONGS[1], 0);
+  check('сдвиг +3: спетое в новой тональности засчитано', L.songGameFrames(notes, sing(notes, { lat: .1, glide: .07, vib: .1, shift: 3 }), { shift: 3 }).ok);
+  check('сдвиг +3: спетое в старой тональности - нет', !L.songGameFrames(notes, sing(notes, { lat: .1, glide: .07, vib: .1, shift: 0 }), { shift: 3 }).ok); }
+// звёзды и серия
+{ const notes = BUILTIN_SONGS[0].notes, r = L.songGameFrames(notes, sing(notes, { lat: .1, glide: .07, vib: .1, shift: 0 }), {});
+  check('чисто всю песню: 3 звезды и серия на все ноты', r.stars === 3 && r.best === notes.length, `${r.stars}★ серия ${r.best}`); }
 
 // --- чужой файл песни: без разметки и кода
 const bad = L.normalizeSong({ id: '<img>', title: 'x', notes: [] });

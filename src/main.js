@@ -137,6 +137,7 @@ registerActions({
   songDel: features_songs.songDel,
   songFile: features_songs.songFile,
   songGoPhrase: features_songs.songGoPhrase,
+  songListenAll: features_songs.songListenAll,
   songNext: features_songs.songNext,
   songPickTrack: features_songs.songPickTrack,
   songPlay: features_songs.songPlay,
