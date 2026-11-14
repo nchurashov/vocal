@@ -73,13 +73,24 @@ export function viewExerciseBase(ex) {
 export function practiceIntro(ex) {
   if (ex.kind === 'quiz') return `<h3>Тренировка с проверкой</h3><p class="small muted" style="margin:4px 0 12px">10 вопросов. После каждого ответа сразу видно, верно или нет.</p>${ex.quiz === 'interval' ? intervalRefs() : ''}<button class="btn block" ${act('startQuiz')}>${ICON.play} Начать</button>`;
   if (ex.kind === 'sing') return `<h3>Проверка по записи</h3><p class="small muted" style="margin:4px 0 12px">Спой и запиши себя. Приложение найдёт каждую ноту и покажет, верно она спета, близко или мимо.</p><div id="recbox"></div>`;
-  return `<h3>Проверка: отстучи ритм</h3><p class="small muted" style="margin:4px 0 12px">После 4 щелчков отсчёта стучи по кнопке (или пробелом). Хлопков в проверке не будет, только метроном.</p><div id="tapbox"></div>`;
+  return `<h3>Проверка: отстучи ритм</h3><p class="small muted" style="margin:4px 0 6px">После 4 щелчков отсчёта стучи по кнопке (или пробелом). Хлопков в проверке не будет, только метроном.</p><div class="info" style="margin-bottom:8px"><b>${esc(tapHint(ex))}</b></div><div id="tapbox"></div>`;
 }
-export function rhythmSVG(ex) {
+// что стучать: метроном щёлкает на каждую долю, а нажимать надо только по рисунку
+export function tapHint(ex) {
+  const n = ex.onsets.length, beats = Math.ceil(Math.max(...ex.onsets) + 1), bars = Math.ceil(beats / 4) * 4;
+  const taps = `${n} ${plural(n, 'нажатие', 'нажатия', 'нажатий')}`;
+  const whole = ex.onsets.every(o => o === Math.round(o));
+  if (whole && n === bars) return `Стучи на каждый щелчок - ${taps}.`;
+  if (whole && ex.onsets.every((o, i) => o === i * 2)) return `Стучи только на 1 и 3, через щелчок. На 2 и 4 пауза. Щелчков будет ${bars}, а нажатий всего ${n}.`;
+  if (ex.onsets.every((o, i) => o === i / 2)) return `Два нажатия на каждый щелчок - ${taps}.`;
+  return `Стучи рисунок с полоски (кружки), а не каждый щелчок - ${taps}.`;
+}
+export function rhythmSVG(ex, cursor = false) {
   const beats = Math.ceil(Math.max(...ex.onsets) + 1), bars = Math.ceil(beats / 4) * 4, W = 640, H = 46, bw = (W - 20) / bars;
   let s = `<svg class="roll" viewBox="0 0 ${W} ${H}">`;
   for (let i = 0; i <= bars; i++) s += `<line x1="${10 + i * bw}" x2="${10 + i * bw}" y1="8" y2="${H - 8}" stroke="var(--line)" stroke-width="${i % 4 === 0 ? 2 : 1}"/>`;
   ex.onsets.forEach(o => s += `<circle cx="${10 + o * bw + 4}" cy="${H / 2}" r="7" fill="var(--rhythm)"/>`);
+  if (cursor) s += `<line id="tapcur" x1="10" x2="10" y1="2" y2="${H - 2}" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" opacity="0"/>`;
   return s + '</svg>';
 }
 export function toggleCrit(on, i) { on ? run.crit.add(i) : run.crit.delete(i); }

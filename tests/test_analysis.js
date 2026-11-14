@@ -17,4 +17,10 @@ check('фальшь +70ц найдена', ev.notes[3].status === 'off' && ev.no
 check('пропуск ноты найден', ev.notes[6].status === 'missed');
 const r = VA.evaluateTaps([0, .5, 1, 1.5], [.03, .62, 1.2], 0);
 check('ритм: пропуск и опоздание', r.res[3].status === 'missed' && r.res[1].status === 'near');
+// «Хлопок через долю»: нужно 4 нажатия, а стучат на все 8 щелчков - это не 100%
+const bt = 60 / 70, tg = [0, 2, 4, 6].map(x => x * bt);
+const r2 = VA.evaluateTaps(tg, [0, 1, 2, 3, 4, 5, 6, 7].map(x => x * bt), 0);
+check('ритм: лишние нажатия снижают оценку', r2.extra === 4 && r2.score === 50 && r2.extraAt.length === 4, r2.score + '%, лишних ' + r2.extra);
+const r3 = VA.evaluateTaps(tg, tg.map(x => x + .02), 0);
+check('ритм: точно по рисунку = 100%', r3.extra === 0 && r3.score === 100, r3.score + '%');
 process.exit(fail ? 1 : 0);

@@ -231,7 +231,9 @@ export const VA = (() => {
     const ok = res.filter(r => r.status === 'ok').length, near = res.filter(r => r.status === 'near').length;
     const hit = res.filter(r => r.dev != null);
     const meanDev = hit.length ? Math.round(hit.reduce((a, r) => a + r.dev, 0) / hit.length) : 0;
-    return { res, score: Math.round(100 * (ok + 0.5 * near) / targets.length), extra: taps.length - used.size, meanDev };
+    // лишние нажатия снижают оценку: кто стучит на каждый щелчок там, где нужен рисунок, не получает 100%
+    const extraAt = taps.filter((_, k) => !used.has(k)).map(x => x - latency);
+    return { res, score: Math.round(100 * (ok + 0.5 * near) / (targets.length + extraAt.length)), extra: extraAt.length, extraAt, meanDev };
   }
 
   function livePitch(buf, sr) {
