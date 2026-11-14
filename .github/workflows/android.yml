@@ -1,6 +1,6 @@
 # Сборка APK для Android с постоянным ключом подписи.
 # main -> релиз «android» (постоянная ссылка для телефона), другие ветки -> пробный релиз «android-test».
-# Нужны секреты репозитория: ANDROID_KEYSTORE (ключ в base64) и ANDROID_KEYSTORE_PASSWORD.
+# Ключ подписи - android/vocal-release.p12.enc (зашифрован), пароль - секрет репозитория ANDROID_KEYSTORE_PASSWORD.
 name: android
 on:
   push:
@@ -25,22 +25,23 @@ jobs:
         with: { distribution: temurin, java-version: '21' }
       - name: Ключ подписи
         env:
-          KS: ${{ secrets.ANDROID_KEYSTORE }}
           KSP: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          if [ -z "$KS" ]; then echo "::error::Нет секрета ANDROID_KEYSTORE (Settings -> Secrets and variables -> Actions)"; exit 1; fi
-          # пробелы и переносы строк при копировании с телефона не мешают
-          printf %s "$KS" | tr -d ' \r\n\t' | base64 -d > "$RUNNER_TEMP/vocal.p12" \
-            || { echo "::error::ANDROID_KEYSTORE не читается: вставь всё содержимое ANDROID_KEYSTORE.txt целиком (${#KS} знаков, нужно 3528)"; exit 1; }
-          keytool -list -keystore "$RUNNER_TEMP/vocal.p12" -storetype pkcs12 -storepass "$KSP" -alias vocal > /dev/null \
-            || { echo "::error::Ключ прочитан, но пароль не подходит: проверь ANDROID_KEYSTORE_PASSWORD"; exit 1; }
+          if [ -z "$KSP" ]; then echo "::error::Нет секрета ANDROID_KEYSTORE_PASSWORD (Settings -> Secrets and variables -> Actions)"; exit 1; fi
+          KSP=$(printf %s "$KSP" | tr -d ' \r\n\t')
+          echo "::add-mask::$KSP"
+          echo "KSP=$KSP" >> "$GITHUB_ENV"
+          # ключ лежит в репозитории зашифрованным (AES-256), пароль - только в секрете
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in android/vocal-release.p12.enc -out "$RUNNER_TEMP/vocal.p12" -pass env:KSP \
+            || { echo "::error::Пароль не подходит (${#KSP} знаков, нужно 32): вставь в ANDROID_KEYSTORE_PASSWORD содержимое ANDROID_KEYSTORE_PASSWORD.txt"; exit 1; }
+          keytool -list -keystore "$RUNNER_TEMP/vocal.p12" -storetype pkcs12 -storepass "$KSP" -alias vocal > /dev/null
       - run: npm ci
       - run: python3 build.py
       - run: npx cap sync android
       - name: Сборка APK
         env:
           ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/vocal.p12
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ env.KSP }}
           VERSION_CODE: ${{ github.run_number }}
           VERSION_NAME: 1.0.${{ github.run_number }}
         run: |
