@@ -42,6 +42,12 @@ npx cap sync ios                 # www -> ios/App/App/public (нужен npm i)
 git add -A && git commit && git push   # сайт обновится через ~1 мин
 ```
 iPhone: на Маке открыть `ios/App/App.xcodeproj`, Signing -> Team (Apple ID), выбрать iPhone, ▶.
+iPhone из терминала (Personal Team Кита `MDPZD4YGD9`, телефон по кабелю, на нём включён Режим разработчика):
+```
+cd ios/App && xcodebuild -project App.xcodeproj -scheme App -destination 'id=<UDID>' DEVELOPMENT_TEAM=MDPZD4YGD9 -allowProvisioningUpdates -allowProvisioningDeviceRegistration build
+xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/Debug-iphoneos/App.app
+```
+UDID: `xcrun devicectl list devices`. Не обрезать вывод xcodebuild через `| head`: обрыв канала прерывает сборку - писать в файл.
 Android: `npx cap sync android && cd android && ./gradlew assembleDebug` -> `android/app/build/outputs/apk/debug/app-debug.apk` (ставится на телефон файлом).
 Нужны JDK 21 (`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`) и Android SDK в ~/Library/Android/sdk (`android/local.properties`, не в git). Эмулятор: AVD `vocal`; отладка WebView через `adb forward` + DevTools.
 Бесплатный Apple ID - приложение живёт 7 дней. Аккаунт разработчика ($99/год) - TestFlight.
@@ -88,7 +94,7 @@ python3 tests/sim_data.py        # перенос старых данных, э�
 ## Статус (ноябрь 2026)
 Готово: тренажёр (18 упражнений, оценка по мелодии, история, заметки), игры «Шарик» (10 глав по 10 заданий) и «Попади в ноту» (12 уровней), сайт, iOS-проект.
 Проверено на iPhone (Safari): видео себя в игре - работает, длительность верная после фикса `camAudio`.
-Не проверено на реальном iPhone: звук после микрофона в Safari, iOS-приложение (ещё не собиралось в Xcode).
+iOS-приложение поставлено на iPhone Кита 14.11.2026 (бесплатный Apple ID, до 21.11 - потом переустановить). Не проверено на реальном iPhone: звук после микрофона в Safari.
 Готово также: замер диапазона, выбор высоты работы, строгий режим октавы, распевка дня (с проверкой «Повтори за мной»), страница «Как устроены ноты» с клавиатурой, раздел «Голос и речь», видео себя во время игры (лицо + игра в углу), «Голос: до и после», название «Вокал под бокал» (сайт, iOS: capacitor.config.json appName и Info.plist CFBundleDisplayName).
 Замер Кита E2 - G5 настоящий (верх - фальцет). Грудной/фальцет теперь отмечается в замере.
 Идеи дальше: устойчивость ноты (дрожание в центах), отложенное повторение, пение на фоне аккорда, свои мелодии, синхронизация прогресса между устройствами, TestFlight.
