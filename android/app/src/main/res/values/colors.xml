@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="vocalBg">#FAF6F0</color>
+    <color name="colorPrimary">#FAF6F0</color>
+    <color name="colorPrimaryDark">#FAF6F0</color>
+    <color name="colorAccent">#C8573A</color>
+</resources>

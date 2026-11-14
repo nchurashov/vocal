@@ -696,6 +696,17 @@ details summary{cursor:pointer}
     render();
     window.scrollTo(0, 0);
   });
+  window.androidBack = () => {
+    if ($("#sheet")) {
+      $("#sheet").remove();
+      return true;
+    }
+    if (route === "today") return false;
+    if (busy && leaveHook) leaveHook();
+    if (history.length > 1) history.back();
+    else location.hash = "today";
+    return true;
+  };
   function start() {
     state.game ||= { best: {}, plays: [] };
     state.ball ||= { best: {}, plays: [] };
@@ -1704,6 +1715,7 @@ details summary{cursor:pointer}
     camStart: () => camStart,
     camToggleHTML: () => camToggleHTML,
     camWrap: () => camWrap,
+    isAndroidApp: () => isAndroidApp,
     recCanvas: () => recCanvas
   });
   var CAM = { stream: null, video: null, rec: null, clips: [] };
@@ -1983,23 +1995,42 @@ details summary{cursor:pointer}
       <div class="spin"></div><b>Видео дописывается...</b><span class="small" style="opacity:.75">Ещё пара секунд: в конце видео твой итог.</span></div>`);
   }
   var camNative = () => !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Media);
+  var isAndroidApp = () => !!(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === "android");
+  var GALLERY = () => isAndroidApp() ? "Галерею" : "Фото";
+  var ALBUM = "Вокал под бокал";
+  async function androidAlbum(M) {
+    const base2 = (await M.getAlbumsPath()).path;
+    const find = async () => ((await M.getAlbums()).albums || []).find((a2) => a2.name === ALBUM && (!base2 || a2.identifier.startsWith(base2)));
+    let a = await find();
+    if (!a) {
+      await M.createAlbum({ name: ALBUM });
+      a = await find();
+    }
+    return a && a.identifier;
+  }
   async function camSaveNative(clip) {
     if (!camNative()) return false;
     try {
+      const M = window.Capacitor.Plugins.Media;
       const data = await new Promise((ok, bad) => {
         const r = new FileReader();
         r.onload = () => ok(r.result);
         r.onerror = bad;
         r.readAsDataURL(clip.blob);
       });
-      await window.Capacitor.Plugins.Media.saveVideo({ path: data });
+      const opt = { path: data };
+      if (isAndroidApp()) {
+        opt.albumIdentifier = await androidAlbum(M);
+        opt.fileName = "vokal-" + Date.now();
+      }
+      await M.saveVideo(opt);
       clip.saved = true;
       const el = $("#camsaved");
-      if (el) el.innerHTML = "✓ Сохранено в Фото";
+      if (el) el.innerHTML = "✓ Сохранено в " + GALLERY();
       return true;
     } catch (e) {
       const el = $("#camsaved");
-      if (el) el.textContent = "Не получилось сохранить в Фото. Разреши доступ: Настройки iPhone → Вокал под бокал → Фото.";
+      if (el) el.textContent = isAndroidApp() ? "Не получилось сохранить в Галерею. Нажми «Отправить» и сохрани видео оттуда." : "Не получилось сохранить в Фото. Разреши доступ: Настройки iPhone → Вокал под бокал → Фото.";
       return false;
     }
   }
@@ -2007,7 +2038,7 @@ details summary{cursor:pointer}
     const i = CAM.clips.indexOf(clip), nat = camNative();
     sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
     <video src="${clip.url}" controls playsinline preload="metadata" style="width:100%;max-height:60vh;border-radius:14px;background:#000"></video>
-    ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? "✓ Сохранено в Фото" : "Сохраняю в Фото..."}</div>
+    ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? "✓ Сохранено в " + GALLERY() : "Сохраняю в " + GALLERY() + "..."}</div>
       <div class="row"><button class="btn" style="flex:1" onclick="camShare(${i})">Отправить</button></div>` : `<div class="row"><button class="btn" style="flex:1" onclick="camShare(${i})">📥 В Фото</button><button class="btn ghost" style="flex:1" onclick="camShare(${i})">Отправить</button></div>
       <div class="tiny muted">На iPhone откроется меню: выбери «Сохранить видео», и оно окажется в Фото. Сразу без меню сохраняет только приложение «Вокал под бокал».</div>`}
     <div class="tiny muted">Видео есть только у тебя в телефоне. Если не сохранить, после закрытия страницы оно пропадёт.</div>`);

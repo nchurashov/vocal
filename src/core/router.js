@@ -30,6 +30,15 @@ export function readHash() {
 }
 export function go(r) { if (busy && leaveHook) leaveHook(); location.hash = r; }
 window.addEventListener('hashchange', () => { route = readHash(); render(); window.scrollTo(0, 0); });
+// Кнопка «Назад» в Android-приложении (вызывает MainActivity.java): закрыть окошко, иначе прошлый экран.
+// false = мы на главном экране, приложение сворачивается как обычно.
+window.androidBack = () => {
+  if ($('#sheet')) { $('#sheet').remove(); return true; }
+  if (route === 'today') return false;
+  if (busy && leaveHook) leaveHook();
+  if (history.length > 1) history.back(); else location.hash = 'today';
+  return true;
+};
 export function start() { state.game ||= { best: {}, plays: [] }; state.ball ||= { best: {}, plays: [] }; route = readHash(); render(); initDb(); }
 
 export function render() {

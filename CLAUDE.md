@@ -3,7 +3,7 @@
 Название «Вокал под бокал» придумал Кит. Слоган: налей бокал и включи одно упражнение в день - через месяц ты не узнаешь свой голос.
 
 Личный проект Кита (nchurashov). Тренажёр вокала + игры, где голосом управляешь шариком.
-Живёт по ссылке https://nchurashov.github.io/vocal/ (GitHub Pages из ветки main, корень) и как iPhone-приложение (ios/, Capacitor).
+Живёт по ссылке https://nchurashov.github.io/vocal/ (GitHub Pages из ветки main, корень) и как приложения для iPhone (ios/) и Android (android/), оба на Capacitor.
 
 ## Как работать с Китом
 - Отвечать по-русски, тепло и коротко. Без длинных тире (—), только дефис (-). Без канцелярита.
@@ -30,6 +30,7 @@
 - `src/app.css` - стили.
 - `build.py` - собирает ES-модули (esbuild, точка входа `src/main.js`) и `src/app.css` в один `index.html` (корень = сайт) и `www/index.html` (для iOS). Нужен `npm i` (esbuild, ESLint в devDependencies).
 - `ios/` - Xcode-проект (Capacitor 8, Swift Package Manager, без CocoaPods). Bundle id `ru.nchurashov.vocal`.
+- `android/` - Android-проект (Capacitor 8, тот же appId). Разрешения: микрофон, камера (AndroidManifest.xml). Кнопка «Назад»: `MainActivity.java` спрашивает `window.androidBack()` (router.js) - закрыть окошко, иначе прошлый экран, с «Сегодня» - выход. Видео сохраняется в Галерею, альбом «Вокал под бокал» (`camSaveNative`, на Android плагину нужен albumIdentifier).
 - `tests/` - тесты (см. ниже).
 
 ## Сборка и выкладка
@@ -41,6 +42,8 @@ npx cap sync ios                 # www -> ios/App/App/public (нужен npm i)
 git add -A && git commit && git push   # сайт обновится через ~1 мин
 ```
 iPhone: на Маке открыть `ios/App/App.xcodeproj`, Signing -> Team (Apple ID), выбрать iPhone, ▶.
+Android: `npx cap sync android && cd android && ./gradlew assembleDebug` -> `android/app/build/outputs/apk/debug/app-debug.apk` (ставится на телефон файлом).
+Нужны JDK 21 (`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`) и Android SDK в ~/Library/Android/sdk (`android/local.properties`, не в git). Эмулятор: AVD `vocal`; отладка WebView через `adb forward` + DevTools.
 Бесплатный Apple ID - приложение живёт 7 дней. Аккаунт разработчика ($99/год) - TestFlight.
 
 ## Тесты (гонять перед каждым пушем)

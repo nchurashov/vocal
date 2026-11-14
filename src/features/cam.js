@@ -167,20 +167,34 @@ export function camPending() {
 }
 // iPhone-приложение: сохранить сразу в Фото (плагин @capacitor-community/media)
 export const camNative = () => !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Media);
+// Android-приложение: видео кладём в свой альбом «Вокал под бокал» в Галерее (без альбома плагин на Android не сохраняет)
+export const isAndroidApp = () => !!(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android');
+const GALLERY = () => isAndroidApp() ? 'Галерею' : 'Фото';
+const ALBUM = 'Вокал под бокал';
+async function androidAlbum(M) {
+  const base = (await M.getAlbumsPath()).path;
+  const find = async () => ((await M.getAlbums()).albums || []).find(a => a.name === ALBUM && (!base || a.identifier.startsWith(base)));
+  let a = await find();
+  if (!a) { await M.createAlbum({ name: ALBUM }); a = await find(); }
+  return a && a.identifier;
+}
 export async function camSaveNative(clip) {
   if (!camNative()) return false;
   try {
+    const M = window.Capacitor.Plugins.Media;
     const data = await new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(clip.blob); });
-    await window.Capacitor.Plugins.Media.saveVideo({ path: data });
-    clip.saved = true; const el = $('#camsaved'); if (el) el.innerHTML = '✓ Сохранено в Фото';
+    const opt = { path: data };
+    if (isAndroidApp()) { opt.albumIdentifier = await androidAlbum(M); opt.fileName = 'vokal-' + Date.now(); }
+    await M.saveVideo(opt);
+    clip.saved = true; const el = $('#camsaved'); if (el) el.innerHTML = '✓ Сохранено в ' + GALLERY();
     return true;
-  } catch (e) { const el = $('#camsaved'); if (el) el.textContent = 'Не получилось сохранить в Фото. Разреши доступ: Настройки iPhone → Вокал под бокал → Фото.'; return false; }
+  } catch (e) { const el = $('#camsaved'); if (el) el.textContent = isAndroidApp() ? 'Не получилось сохранить в Галерею. Нажми «Отправить» и сохрани видео оттуда.' : 'Не получилось сохранить в Фото. Разреши доступ: Настройки iPhone → Вокал под бокал → Фото.'; return false; }
 }
 export function camShow(clip) {
   const i = CAM.clips.indexOf(clip), nat = camNative();
   sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
     <video src="${clip.url}" controls playsinline preload="metadata" style="width:100%;max-height:60vh;border-radius:14px;background:#000"></video>
-    ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? '✓ Сохранено в Фото' : 'Сохраняю в Фото...'}</div>
+    ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? '✓ Сохранено в ' + GALLERY() : 'Сохраняю в ' + GALLERY() + '...'}</div>
       <div class="row"><button class="btn" style="flex:1" onclick="camShare(${i})">Отправить</button></div>`
     : `<div class="row"><button class="btn" style="flex:1" onclick="camShare(${i})">📥 В Фото</button><button class="btn ghost" style="flex:1" onclick="camShare(${i})">Отправить</button></div>
       <div class="tiny muted">На iPhone откроется меню: выбери «Сохранить видео», и оно окажется в Фото. Сразу без меню сохраняет только приложение «Вокал под бокал».</div>`}
