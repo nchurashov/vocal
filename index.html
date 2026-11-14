@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-l1XP0dC7B0uUgE22s/FgzzY0A+sWV7CnxLMY5gnVp0w='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
-<meta name="vpb-build" content="9755cfd1d0bb">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-uk/8J07GVMgeT0owYWfv0jyivFl+22Ue1R51pAVIgt8='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="vpb-build" content="ba4ffc274ec6">
 <title>Вокал под бокал</title>
 <meta name="apple-mobile-web-app-title" content="Вокал под бокал"><meta name="description" content="Вокал под бокал: налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1916,6 +1916,7 @@ details summary{cursor:pointer}
     camShow: () => camShow,
     camStart: () => camStart,
     camToggleHTML: () => camToggleHTML,
+    camUseVideo: () => camUseVideo,
     camWatch: () => camWatch,
     camWrap: () => camWrap,
     isAndroidApp: () => isAndroidApp,
@@ -1987,9 +1988,20 @@ details summary{cursor:pointer}
       await v.play();
     } catch (e) {
     }
+    camUseVideo(v);
+    camTrackLog(CAM.stream);
+    return true;
+  }
+  function camUseVideo(v) {
+    if (!v || !CAM.stream) return;
+    if (v.srcObject !== CAM.stream) v.srcObject = CAM.stream;
+    if (v.paused) {
+      const r = v.play();
+      if (r && r.catch) r.catch(() => {
+      });
+    }
     CAM.video = v;
     CAM.frameAt = performance.now();
-    camTrackLog(CAM.stream);
     if (v.requestVideoFrameCallback && !v._rvfc) {
       v._rvfc = true;
       const tick = () => {
@@ -1999,7 +2011,6 @@ details summary{cursor:pointer}
       };
       v.requestVideoFrameCallback(tick);
     }
-    return true;
   }
   function camLog(msg2) {
     const R = CAM.rec;
@@ -2433,12 +2444,26 @@ details summary{cursor:pointer}
     const mime = camMime(), chunks = [];
     const mr = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: 16e5 } : void 0);
     const real = mr.mimeType || mime || "video/webm";
-    let raf = 0, alive = true;
+    let raf = 0, alive = true, at = 0;
+    const frame = () => {
+      at = performance.now();
+      const v = CAM.video;
+      if (v && v.paused && CAM.stream) {
+        const r = v.play();
+        if (r && r.catch) r.catch(() => {
+        });
+      }
+      draw(g, W, H);
+    };
     const loop = () => {
       if (!alive) return;
       raf = requestAnimationFrame(loop);
-      draw(g, W, H);
+      frame();
     };
+    const iv = setInterval(() => {
+      if (!alive) return clearInterval(iv);
+      if (performance.now() - at > 150) frame();
+    }, 100);
     mr.ondataavailable = (e) => {
       if (e.data && e.data.size) chunks.push(e.data);
     };
@@ -2446,6 +2471,7 @@ details summary{cursor:pointer}
       mr.onstop = () => {
         alive = false;
         cancelAnimationFrame(raf);
+        clearInterval(iv);
         tracks.forEach((t) => t.stop());
         au.close();
         res({ blob: new Blob(chunks, { type: real.split(";")[0] }), ext: real.includes("mp4") ? "mp4" : "webm" });
@@ -5667,12 +5693,7 @@ details summary{cursor:pointer}
       <div id="dyq" style="font:700 21px Lora,serif;line-height:1.35;min-height:58px">${DIARY_Q[0]}</div>
       <div style="height:5px;background:var(--line);border-radius:3px;overflow:hidden"><i id="dyqbar" style="display:block;height:100%;width:0;background:var(--accent)"></i></div>
       <div class="row"><button class="btn ghost" style="flex:1" ${act("diaryNextQ")}>Следующий вопрос ›</button><button class="btn" style="flex:1" ${act("diaryRecStop")}>${ICON.stop} Готово</button></div></div>`;
-      const v = $("#dyprev");
-      if (v && CAM.stream) {
-        v.srcObject = CAM.stream;
-        v.play().catch(() => {
-        });
-      }
+      camUseVideo($("#dyprev"));
     }
   }
   function diaryNextQ() {

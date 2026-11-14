@@ -22,6 +22,8 @@ with sync_playwright() as p:
     for k in range(2):
         pg.goto(URL + '#diary'); pg.reload(); pg.wait_for_timeout(400)
         pg.click('text=Записать видео'); pg.wait_for_timeout(2500)
+        # кадры камеры для записи - из видимого превью на странице (из убранного iPhone перестаёт отдавать кадры: видео замирало на 10 с)
+        if not pg.evaluate("!!(CAM.video && CAM.video.isConnected && CAM.video.id === 'dyprev' && !CAM.video.paused)"): fails.append('запись «до» берёт камеру не из видимого превью: ' + str(pg.evaluate("CAM.video && [CAM.video.id, CAM.video.isConnected, CAM.video.paused]")))
         if k == 0:
             q0 = pg.inner_text('#dyq'); pg.click('text=Следующий вопрос'); pg.wait_for_timeout(300)
             if pg.inner_text('#dyq') == q0 or pg.evaluate("DY.q") != 1: fails.append('вопрос не переключился')
