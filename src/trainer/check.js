@@ -1,3 +1,4 @@
+import { act } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
 import { base } from '../core/audio.js';
 import { afterHooks, render } from '../core/router.js';
@@ -17,16 +18,16 @@ export function viewCheck() {
   let h = `<h1>Оценка по мелодии</h1><p class="muted" style="margin:6px 0 0">Спой короткую мелодию, и приложение по записи проверит каждую ноту: верно, близко или мимо.</p>`;
   h += `<div class="card sec">${best ? `<div class="small muted">Твоя оценка интонации по сохранённым проверкам</div><div style="font-family:Lora,serif;font-size:24px;font-weight:600">Уровень ${best.level}</div><div class="small muted">${esc(exById(best.ex).title)}: ${best.auto.score}% · ${fmtDay(best.date.slice(0, 10)).toLowerCase()}</div>` :
     `<div class="small muted">Твоя оценка интонации</div><div style="font-family:Lora,serif;font-size:22px;font-weight:600">Пока не определена</div><div class="small muted">${checks.length ? 'Ни одна сохранённая проверка пока не набрала 80%. Это нормально, это точка старта.' : 'Нет сохранённых проверок. Начни с мелодии 1.'}</div>`}</div>`;
-  h += `<div class="sec"><div class="seg">${MELODIES.map(m => `<button class="${melSel === m.id ? 'on' : ''}" onclick="melSel='${m.id}';render()">Уровень ${m.level}</button>`).join('')}</div></div>`;
+  h += `<div class="sec"><div class="seg">${MELODIES.map(m => `<button class="${melSel === m.id ? 'on' : ''}" ${act('selectMelody', m.id)}>Уровень ${m.level}</button>`).join('')}</div></div>`;
   const m = exById(melSel);
   setRun({ ex: m, auto: null, rating: null, crit: new Set() });
   h += `<div class="card sec"><h3>${esc(m.title)}</h3><div class="small muted">${esc(m.desc)} · от ноты ${VA.noteName(base())} (поменять в ⚙)</div>${rollSVG(m.notes)}
-    <div class="row wrap" style="margin-top:10px"><button class="btn" onclick="playNotes(exById('${m.id}').notes, exById('${m.id}').bpm)">${ICON.play} Послушать</button><button class="btn ghost" onclick="playNotes([exById('${m.id}').notes[0]], 60)">Первая нота</button></div>
+    <div class="row wrap" style="margin-top:10px"><button class="btn" ${act('playEx', m.id)}>${ICON.play} Послушать</button><button class="btn ghost" ${act('playExFirst', m.id)}>Первая нота</button></div>
     <ol class="steps" style="margin-top:16px"><li>Послушай мелодию 2 раза.</li><li>Возьми первую ноту и спой всю мелодию на «ма» или «ла», отделяя ноты.</li><li>Запиши или загрузи запись. Чем тише вокруг, тем точнее проверка.</li></ol></div>`;
   h += `<div class="card sec"><h3>Проверка</h3><div id="melrec" style="margin-top:10px"></div></div>`;
   h += `<div class="card sec stack hidden" id="melsave"><h3>Сохранить результат?</h3><div id="melverdict"></div>
     <textarea id="melnote" placeholder="Заметка: как себя чувствовал, что мешало (необязательно)"></textarea>
-    <button class="btn block" onclick="saveMelody()">Сохранить в историю</button>
+    <button class="btn block" ${act('saveMelody')}>Сохранить в историю</button>
     <div class="tiny muted">Сохраняется только то, что ты сам подтвердишь. Результат пойдёт в историю и в оценку уровня.</div></div>`;
   if (checks.length) h += `<div class="sec"><h2>Прошлые проверки</h2>${checks.slice(-6).reverse().map(sessionRow).join('')}</div>`;
   afterHooks.push(() => recorderUI($('#melrec'), () => exById(melSel), { anyKeyToggle: true, onResult: ev => {
@@ -54,6 +55,11 @@ export function saveMelody() {
 
 
 
+
+
+
+
+export function selectMelody(id) { melSel = id; render(); }
 
 
 

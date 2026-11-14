@@ -1,20 +1,22 @@
+import { act } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
 import { ac, click, stopAll } from '../core/audio.js';
-import { save, saveText, state } from '../core/store.js';
-import { sheet, toast } from '../core/ui.js';
+import { go, render } from '../core/router.js';
+import { resetProgress, save, saveText, state } from '../core/store.js';
+import { closeSheet, sheet, toast } from '../core/ui.js';
 import { $ } from '../core/util.js';
 import { registerCard } from '../features/register.js';
 
 // ===== Настройки =====
 export function openSettings() {
-  sheet(`<div class="row between"><h2>Настройки</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
+  sheet(`<div class="row between"><h2>Настройки</h2><button class="iconbtn" ${act('closeSheet')}>×</button></div>
     <p class="small muted" style="margin:0">От этой ноты строятся упражнения, мелодии и уровни игр. Выбирай ноту, на которой удобно петь «а» без напряжения.</p>${registerCard(true)}
     <div class="card stack"><h3>Задержка звука для ритма</h3><p class="small muted" style="margin:0">Нужна, если ты в Bluetooth-наушниках: звук приходит позже. Сейчас: ${state.settings.latency || 0} мс.</p>
     <button class="tap" id="calbtn" style="width:150px" disabled>Тап</button><div id="calmsg" class="small muted" style="text-align:center"></div>
-    <button class="btn ghost" onclick="calibrate()">Настроить: стучи в такт 8 щелчкам</button></div>
+    <button class="btn ghost" ${act('calibrate')}>Настроить: стучи в такт 8 щелчкам</button></div>
     <div class="card stack"><h3>Данные</h3><p class="small muted" style="margin:0" id="savebadge">${saveText()}</p>
-    <button class="btn ghost" onclick="copyData()">Скопировать мои данные</button>
-    <button class="btn ghost" style="color:var(--bad)" onclick="askReset()">Удалить всё и начать заново</button></div>`);
+    <button class="btn ghost" ${act('copyData')}>Скопировать мои данные</button>
+    <button class="btn ghost" style="color:var(--bad)" ${act('askReset')}>Удалить всё и начать заново</button></div>`);
 }
 export function calibrate() {
   const c = ac(), b = 60 / 90, t0 = c.currentTime + .3, taps = [], perf0 = performance.now(), ctx0 = c.currentTime;
@@ -31,4 +33,6 @@ export function calibrate() {
   }, (t0 + 8 * b - c.currentTime + .6) * 1000);
 }
 export async function copyData() { try { await navigator.clipboard.writeText(JSON.stringify(state, null, 1)); toast('Скопировано'); } catch (e) { toast('Не получилось скопировать'); } }
-export function askReset() { sheet(`<h2>Удалить всё?</h2><p class="muted">История, заметки и уровни будут стёрты. Это нельзя отменить.</p><div class="row"><button class="btn ghost" style="flex:1" onclick="closeSheet()">Отмена</button><button class="btn" style="flex:1;background:var(--bad)" onclick="state=Object.assign(DEFAULT(),{settings:state.settings});save();closeSheet();go('today');render()">Удалить</button></div>`); }
+export function askReset() { sheet(`<h2>Удалить всё?</h2><p class="muted">История, заметки и уровни будут стёрты. Это нельзя отменить.</p><div class="row"><button class="btn ghost" style="flex:1" ${act('closeSheet')}>Отмена</button><button class="btn" style="flex:1;background:var(--bad)" ${act('resetAll')}>Удалить</button></div>`); }
+
+export function resetAll() { resetProgress(); closeSheet(); go('today'); render(); }

@@ -34,7 +34,19 @@ for f, s in src.items():
 # 5. ключи и пароли
 for f, s in src.items():
     if re.search(r'(api[_-]?key|secret|password|token)\s*[:=]\s*[\'"][^\'"]{8,}', s, re.I): fails.append(f'{f}: похоже на ключ или пароль в коде')
-# 6. ESLint (границы модулей)
+# 6. кнопки: никаких onclick/onchange/oninput в разметке; каждое действие из разметки есть в реестре main.js и наоборот
+for f, t in src.items():
+    for m in re.finditer(r'\son(click|change|input|submit|keydown|pointerdown)=', t): fails.append(f'{f}:{t[:m.start()].count(chr(10)) + 1}: обработчик в разметке (нужно data-action)')
+used = set()
+for f, t in src.items():
+    used |= set(re.findall(r"\b(?:act|onChange|onInput)\(\s*'([A-Za-z_$][\w$]*)'", t)) | set(re.findall(r"onTap:\s*'([A-Za-z_$][\w$]*)'", t))
+used |= set(re.findall(r'data-action="(\w+)"', open(os.path.join(ROOT, 'build.py'), encoding='utf-8').read())) | {'pianoTap'}
+main = src.get('main.js', '')
+reg = re.search(r'registerActions\(\{(.*?)\}\);', main, re.S)
+registered = set(re.findall(r'^\s*(\w+):', reg.group(1), re.M)) if reg else set()
+for n in sorted(used - registered): fails.append(f'действие «{n}» есть в разметке, но не зарегистрировано в main.js')
+for n in sorted(registered - used): fails.append(f'действие «{n}» зарегистрировано, но нигде не используется')
+# 7. ESLint (границы модулей)
 ESL = os.path.join(ROOT, 'node_modules', '.bin', 'eslint')
 if os.path.exists(ESL):
     r = subprocess.run([ESL, 'src'], capture_output=True, text=True, cwd=ROOT)

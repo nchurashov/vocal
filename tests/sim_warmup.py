@@ -15,7 +15,7 @@ CHECK = """(([b, lo, hi]) => { const r = lo == null ? null : { lo, hi }, bad = [
   return bad; })"""
 fails = []
 with sync_playwright() as p:
-    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(viewport={'width': 390, 'height': 844})
+    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(bypass_csp=True, viewport={'width': 390, 'height': 844})
     errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.goto(URL + '#today'); pg.wait_for_timeout(300)
     for case in [[48, None, None], [60, None, None], [43, 43, 64], [48, 45, 62], [55, 50, 60], [36, 36, 50]]:

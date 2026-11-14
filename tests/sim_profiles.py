@@ -9,7 +9,7 @@ URL = 'file://' + os.path.join(ROOT, 'index.html')
 CHROME = os.environ.get('CHROME', '/usr/bin/google-chrome')
 fails = []
 with sync_playwright() as p:
-    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(viewport={'width': 390, 'height': 844})
+    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(bypass_csp=True, viewport={'width': 390, 'height': 844})
     errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.goto(URL + '#today'); pg.evaluate("localStorage.clear()")
     # старые данные без профилей

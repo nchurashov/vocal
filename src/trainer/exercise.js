@@ -1,5 +1,6 @@
+import { act, onChange } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
-import { ac, base, stopAll, tone } from '../core/audio.js';
+import { ac, base, playNotes, playRhythm, stopAll, tone } from '../core/audio.js';
 import { afterHooks, go } from '../core/router.js';
 import { save, state } from '../core/store.js';
 import { toast } from '../core/ui.js';
@@ -44,33 +45,33 @@ export function viewExerciseBase(ex) {
   if (!ex) return '<div class="empty">Упражнение не найдено</div>';
   const locked = !isUnlocked(ex);
   run = { ex, auto: null, rating: null, crit: new Set() };
-  let h = `<button class="back" onclick="go('exercises')">${ICON.back} Все упражнения</button>
+  let h = `<button class="back" ${act('go', 'exercises')}>${ICON.back} Все упражнения</button>
     <div class="row wrap" style="gap:6px"><span class="chip ${ex.cat}">${CATS[ex.cat].name}</span><span class="chip">Уровень ${ex.level}</span><span class="chip">${ex.min} мин</span></div>
     <h1 style="margin-top:10px">${esc(ex.title)}</h1><p class="muted" style="margin:6px 0 0">${esc(ex.goal)}</p>`;
   if (locked) h += `<div class="note sec">🔒 Это упражнение уровня ${ex.level}. Оно откроется после ${NEED_CONF} отметок «Уверенно» на уровне ${ex.level - 1} в разделе «${CATS[ex.cat].name}» за ${NEED_DAYS}+ дня. Можно прочитать, но в план оно пока не попадёт.</div>`;
   h += `<div class="card sec"><h3 style="margin-bottom:12px">Как делать</h3><ol class="steps">${ex.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol></div>`;
   // Пример
   h += `<div class="card sec"><h3>Пример</h3>`;
-  if (ex.kind === 'sing') h += `${rollSVG(ex.notes)}<div class="row wrap" style="margin-top:10px"><button class="btn" onclick="playNotes(exById('${ex.id}').notes, exById('${ex.id}').bpm)">${ICON.play} Послушать пример</button><button class="btn ghost" onclick="playNotes([exById('${ex.id}').notes[0]], 60)">Дать первую ноту</button></div>`;
-  else if (ex.kind === 'tap') h += `<p class="small muted" style="margin:6px 0 10px">Сначала 4 щелчка отсчёта, потом рисунок: хлопки поверх метронома. Темп ${ex.bpm} ударов в минуту.</p>${rhythmSVG(ex)}<div class="row wrap" style="margin-top:10px"><button class="btn" onclick="playRhythm(exById('${ex.id}'))">${ICON.play} Послушать пример</button><button class="btn ghost" onclick="stopAll()">${ICON.stop} Стоп</button></div>`;
-  else h += `<p class="small muted" style="margin:6px 0 10px">Так звучит один вопрос. В тренировке их будет 10.</p><button class="btn" onclick="quizSample('${ex.id}')">${ICON.play} Послушать пример</button>`;
+  if (ex.kind === 'sing') h += `${rollSVG(ex.notes)}<div class="row wrap" style="margin-top:10px"><button class="btn" ${act('playEx', ex.id)}>${ICON.play} Послушать пример</button><button class="btn ghost" ${act('playExFirst', ex.id)}>Дать первую ноту</button></div>`;
+  else if (ex.kind === 'tap') h += `<p class="small muted" style="margin:6px 0 10px">Сначала 4 щелчка отсчёта, потом рисунок: хлопки поверх метронома. Темп ${ex.bpm} ударов в минуту.</p>${rhythmSVG(ex)}<div class="row wrap" style="margin-top:10px"><button class="btn" ${act('playRhythmEx', ex.id)}>${ICON.play} Послушать пример</button><button class="btn ghost" ${act('stopAll')}>${ICON.stop} Стоп</button></div>`;
+  else h += `<p class="small muted" style="margin:6px 0 10px">Так звучит один вопрос. В тренировке их будет 10.</p><button class="btn" ${act('quizSample', `${ex.id}`)}>${ICON.play} Послушать пример</button>`;
   h += `</div>`;
   // Практика с проверкой
   h += `<div class="card sec" id="practice">${practiceIntro(ex)}</div>`;
   // Самопроверка
   h += `<div class="card sec"><h3>Проверь себя</h3><p class="small muted" style="margin:4px 0 6px">Отметь, что получилось. Это сохранится вместе с занятием.</p>
-    ${ex.criteria.map((c, i) => `<label class="check"><input type="checkbox" onchange="toggleCrit(${i},this.checked)"><span>${esc(c)}</span></label>`).join('')}</div>`;
+    ${ex.criteria.map((c, i) => `<label class="check"><input type="checkbox" ${onChange('toggleCrit', i)}><span>${esc(c)}</span></label>`).join('')}</div>`;
   // Отметка
   h += `<div class="card sec stack" id="ratebox"><h3>Как прошло?</h3><div id="ratehint" class="tiny muted"></div>
-    <div class="rate">${[3, 2, 1].map(r => `<button class="r${r}" data-r="${r}" onclick="setRating(${r})"><span>${RATINGS[r].emo}</span>${RATINGS[r].label}</button>`).join('')}</div>
+    <div class="rate">${[3, 2, 1].map(r => `<button class="r${r}" data-r="${r}" ${act('setRating', r)}><span>${RATINGS[r].emo}</span>${RATINGS[r].label}</button>`).join('')}</div>
     <textarea id="sessnote" placeholder="Заметка к занятию: что мешало, что помогло (необязательно)"></textarea>
-    <button class="btn block" id="savebtn" onclick="saveSession()" disabled>Сохранить занятие</button></div>`;
+    <button class="btn block" id="savebtn" ${act('saveSession')} disabled>Сохранить занятие</button></div>`;
   const hist = state.sessions.filter(s => s.ex === ex.id).slice(-5).reverse();
   if (hist.length) h += `<div class="sec"><h2>Прошлые занятия</h2>${hist.map(sessionRow).join('')}</div>`;
   return h;
 }
 export function practiceIntro(ex) {
-  if (ex.kind === 'quiz') return `<h3>Тренировка с проверкой</h3><p class="small muted" style="margin:4px 0 12px">10 вопросов. После каждого ответа сразу видно, верно или нет.</p>${ex.quiz === 'interval' ? intervalRefs() : ''}<button class="btn block" onclick="startQuiz()">${ICON.play} Начать</button>`;
+  if (ex.kind === 'quiz') return `<h3>Тренировка с проверкой</h3><p class="small muted" style="margin:4px 0 12px">10 вопросов. После каждого ответа сразу видно, верно или нет.</p>${ex.quiz === 'interval' ? intervalRefs() : ''}<button class="btn block" ${act('startQuiz')}>${ICON.play} Начать</button>`;
   if (ex.kind === 'sing') return `<h3>Проверка по записи</h3><p class="small muted" style="margin:4px 0 12px">Спой и запиши себя. Приложение найдёт каждую ноту и покажет, верно она спета, близко или мимо.</p><div id="recbox"></div>`;
   return `<h3>Проверка: отстучи ритм</h3><p class="small muted" style="margin:4px 0 12px">После 4 щелчков отсчёта стучи по кнопке (или пробелом). Хлопков в проверке не будет, только метроном.</p><div id="tapbox"></div>`;
 }
@@ -81,7 +82,7 @@ export function rhythmSVG(ex) {
   ex.onsets.forEach(o => s += `<circle cx="${10 + o * bw + 4}" cy="${H / 2}" r="7" fill="var(--rhythm)"/>`);
   return s + '</svg>';
 }
-export function toggleCrit(i, on) { on ? run.crit.add(i) : run.crit.delete(i); }
+export function toggleCrit(on, i) { on ? run.crit.add(i) : run.crit.delete(i); }
 export function setRating(r) {
   run.rating = r;
   document.querySelectorAll('#ratebox .rate button').forEach(b => b.classList.toggle('on', +b.dataset.r === r));
@@ -132,7 +133,7 @@ export function playQ(q, bpm = 80) {
 }
 export function quizSample(id) { playQ(makeQ(exById(id))); }
 export function intervalRefs() {
-  return `<div class="row wrap" style="margin-bottom:12px;gap:6px"><span class="small muted">Эталоны:</span>${['Терция', 'Квинта', 'Октава'].map((n, i) => `<button class="btn ghost" style="min-height:38px;padding:6px 12px" onclick="playQ({seq:[[base(),1],[base()+${[4, 7, 12][i]},1]]})">${n}</button>`).join('')}</div>`;
+  return `<div class="row wrap" style="margin-bottom:12px;gap:6px"><span class="small muted">Эталоны:</span>${['Терция', 'Квинта', 'Октава'].map((n, i) => `<button class="btn ghost" style="min-height:38px;padding:6px 12px" ${act('playInterval', [4, 7, 12][i])}>${n}</button>`).join('')}</div>`;
 }
 export let quiz = null;
 export function startQuiz() { quiz = { i: 0, right: 0, mistakes: [], q: makeQ(run.ex), answered: false }; drawQuiz(); playQ(quiz.q); }
@@ -143,14 +144,14 @@ export function drawQuiz() {
     run.auto = { type: 'quiz', score, right: quiz.right, total: 10 };
     el.innerHTML = `<h3>Результат</h3><div class="score" style="margin-top:10px"><div class="s"><b>${quiz.right} из 10</b><span class="small muted">верных ответов</span></div></div>
       ${quiz.mistakes.length ? `<p class="small" style="margin:12px 0 4px"><b>Ошибки:</b></p><ul class="notes-list">${quiz.mistakes.map(m => `<li><span class="n">${m.n}</span><span>Ответ «${m.you}», а верно «${m.right}»</span></li>`).join('')}</ul>` : '<p class="small" style="margin:12px 0 0">Без ошибок 👏</p>'}
-      <button class="btn ghost block" style="margin-top:12px" onclick="startQuiz()">Пройти ещё раз</button>`;
+      <button class="btn ghost block" style="margin-top:12px" ${act('startQuiz')}>Пройти ещё раз</button>`;
     suggestFromAuto(score, 'верных ответов');
     return;
   }
   el.innerHTML = `<div class="row between"><h3>Вопрос ${quiz.i + 1} из 10</h3><span class="small muted">Верно: ${quiz.right}</span></div>
     ${ex.quiz === 'interval' ? '<div style="margin-top:10px">' + intervalRefs() + '</div>' : ''}
-    <div class="quizq"><button class="btn soft" onclick="playQ(quiz.q)">${ICON.play} Прослушать ещё раз</button></div>
-    <div class="answers">${opts.map((o, k) => `<button data-k="${k}" onclick="answerQuiz(${k})">${o}</button>`).join('')}</div><div id="verdict"></div>`;
+    <div class="quizq"><button class="btn soft" ${act('playQ', quiz.q)}>${ICON.play} Прослушать ещё раз</button></div>
+    <div class="answers">${opts.map((o, k) => `<button data-k="${k}" ${act('answerQuiz', k)}>${o}</button>`).join('')}</div><div id="verdict"></div>`;
 }
 export function answerQuiz(k) {
   if (quiz.answered) return; quiz.answered = true;
@@ -158,7 +159,7 @@ export function answerQuiz(k) {
   if (ok) quiz.right++; else quiz.mistakes.push({ n: quiz.i + 1, you: opts[k], right: opts[quiz.q.ans] });
   document.querySelectorAll('.answers button').forEach(b => { const kk = +b.dataset.k; if (kk === quiz.q.ans) b.classList.add('right'); else if (kk === k) b.classList.add('wrong'); });
   $('#verdict').innerHTML = `<div class="verdict ${ok ? 'ok' : 'bad'}">${ok ? '✓ Верно' : '✗ Неверно. Правильный ответ: ' + opts[quiz.q.ans]}</div>
-    <div class="row" style="margin-top:10px"><button class="btn ghost" onclick="playQ(quiz.q)">${ICON.play} Переслушать</button><button class="btn" style="flex:1" onclick="nextQuiz()">Дальше</button></div>`;
+    <div class="row" style="margin-top:10px"><button class="btn ghost" ${act('playQ', quiz.q)}>${ICON.play} Переслушать</button><button class="btn" style="flex:1" ${act('nextQuiz')}>Дальше</button></div>`;
 }
 export function nextQuiz() { quiz.i++; quiz.answered = false; if (quiz.i < 10) { quiz.q = makeQ(run.ex); drawQuiz(); playQ(quiz.q); } else drawQuiz(); }
 
@@ -175,6 +176,15 @@ export function viewExercise(ex) {
 
 
 
+
+
+
+
+// действия кнопок экрана упражнения
+export function playEx(id) { const e = exById(id); if (e) playNotes(e.notes, e.bpm); }
+export function playExFirst(id) { const e = exById(id); if (e) playNotes([e.notes[0]], 60); }
+export function playRhythmEx(id) { const e = exById(id); if (e) playRhythm(e); }
+export function playInterval(semi) { playQ({ seq: [[base(), 1], [base() + semi, 1]] }); }
 
 
 

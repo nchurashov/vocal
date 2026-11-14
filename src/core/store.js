@@ -76,6 +76,12 @@ export const saveText = () => store.mode === 'cloud' ? 'Данные сохра�
 
 
 
+
+// стереть прогресс текущего профиля, настройки оставить
+export function resetProgress() { state = Object.assign(DEFAULT(), { settings: state.settings }); save(); }
+
+
+
 // установщики для моста window (переходный период, см. main.js)
 export function __set_state(v) { state = v; }
 export function __set_PROF(v) { PROF = v; }

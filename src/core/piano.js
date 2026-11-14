@@ -1,3 +1,4 @@
+import { act } from './actions.js';
 import { ac, noteFull, noteShort, tone } from './audio.js';
 import { $, busy } from './util.js';
 
@@ -13,10 +14,10 @@ export function pianoSVG(from, to, o = {}) {
   const W = whites.length * WW, x = {}; whites.forEach((m, i) => x[m] = i * WW);
   const inBand = m => o.band && m >= o.band[0] && m <= o.band[1], inBand2 = m => o.band2 && m >= o.band2[0] && m <= o.band2[1];
   const cls = m => `pk ${isBlack(m) ? 'pk-b' : 'pk-w'}${inBand(m) ? ' pk-in' : inBand2(m) ? ' pk-in2' : ''}${o.cur != null && Math.round(o.cur) === m ? ' pk-cur' : ''}`;
-  const act = m => o.tap ? ` onclick="${o.onTap || 'pianoTap'}(${m})" style="cursor:pointer"` : '';
+  const tapAttr = m => o.tap ? ` ${act(o.onTap || 'pianoTap', m)} style="cursor:pointer"` : '';
   let s = `<svg ${o.id ? `id="${o.id}"` : ''} viewBox="-0.5 -0.5 ${W + 1} ${WH + (o.octaves ? 26 : 14)}" style="width:100%;display:block" role="img" aria-label="Клавиатура пианино">`;
-  for (const m of whites) s += `<rect data-m="${m}" class="${cls(m)}" x="${x[m]}" y="0" width="${WW}" height="${WH}" rx="1.2"${act(m)}><title>${noteFull(m)}</title></rect>`;
-  for (let m = from; m <= to; m++) if (isBlack(m)) s += `<rect data-m="${m}" class="${cls(m)}" x="${x[m - 1] + WW - BW / 2}" y="0" width="${BW}" height="${BH}" rx="1"${act(m)}><title>${noteFull(m)}</title></rect>`;
+  for (const m of whites) s += `<rect data-m="${m}" class="${cls(m)}" x="${x[m]}" y="0" width="${WW}" height="${WH}" rx="1.2"${tapAttr(m)}><title>${noteFull(m)}</title></rect>`;
+  for (let m = from; m <= to; m++) if (isBlack(m)) s += `<rect data-m="${m}" class="${cls(m)}" x="${x[m - 1] + WW - BW / 2}" y="0" width="${BW}" height="${BH}" rx="1"${tapAttr(m)}><title>${noteFull(m)}</title></rect>`;
   for (const m of whites) if (m % 12 === 0) s += `<text x="${x[m] + WW / 2}" y="${WH + 9}" text-anchor="middle" class="pk-lbl">${noteShort(m)}</text>`;
   if (o.octaves) for (let m = from; m <= to; m += 12) { const oc = Math.floor(m / 12) - 1; s += `<text x="${x[m] + 3.5 * WW}" y="${WH + 21}" text-anchor="middle" class="pk-oct">${OCT_NOM[oc] || ''}</text>`; if (m > from) s += `<line x1="${x[m]}" x2="${x[m]}" y1="${WH + 13}" y2="${WH + 24}" class="pk-sep"/>`; }
   return s + '</svg>';

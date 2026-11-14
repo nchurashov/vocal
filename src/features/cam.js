@@ -1,3 +1,4 @@
+import { act, onChange } from '../core/actions.js';
 import { MIC_DIRECT, afterMic, openMic } from '../core/audio.js';
 import { profName, save, state } from '../core/store.js';
 import { sheet, toast } from '../core/ui.js';
@@ -29,7 +30,7 @@ export function camMime() {
 // переключатель на экранах уровней
 export function camToggleHTML() {
   if (!CAM_OK) return '';
-  return `<label class="check sec" style="margin-top:10px;padding:10px 12px"><input type="checkbox" ${camOn() ? 'checked' : ''} onchange="camSet(this.checked)"><span class="small"><b>🎥 Снимать себя на видео.</b> Камера пишет тебя, пока поёшь, а снизу - игру или упражнение. Потом можно посмотреть и отправить друзьям. Видео остаётся только у тебя в телефоне.</span></label>
+  return `<label class="check sec" style="margin-top:10px;padding:10px 12px"><input type="checkbox" ${camOn() ? 'checked' : ''} ${onChange('camSet')}><span class="small"><b>🎥 Снимать себя на видео.</b> Камера пишет тебя, пока поёшь, а снизу - игру или упражнение. Потом можно посмотреть и отправить друзьям. Видео остаётся только у тебя в телефоне.</span></label>
     <div id="camerr" class="small" style="color:var(--bad)"></div>`;
 }
 export async function camSet(on) { state.settings.cam = !!on; save(); if (on) await camStart(); else camOff(); }
@@ -161,7 +162,7 @@ export function camWrap(g, text, x, y, maxW, lh, draw = true) {
 }
 // окно видео открывается сразу после финиша, пока файл дописывается (итог 2.5 с + сборка файла)
 export function camPending() {
-  sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
+  sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" ${act('closeSheet')}>×</button></div>
     <div id="campend" style="aspect-ratio:9/16;max-height:60vh;margin:0 auto;border-radius:14px;background:#1B1714;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px">
       <div class="spin"></div><b>Видео дописывается...</b><span class="small" style="opacity:.75">Ещё пара секунд: в конце видео твой итог.</span></div>`);
 }
@@ -178,11 +179,11 @@ export async function camSaveNative(clip) {
 }
 export function camShow(clip) {
   const i = CAM.clips.indexOf(clip), nat = camNative();
-  sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
+  sheet(`<div class="row between"><h2>Твоё видео</h2><button class="iconbtn" ${act('closeSheet')}>×</button></div>
     <video src="${clip.url}" controls playsinline preload="metadata" style="width:100%;max-height:60vh;border-radius:14px;background:#000"></video>
     ${nat ? `<div id="camsaved" class="small" style="text-align:center;color:var(--ok)">${clip.saved ? '✓ Сохранено в Фото' : 'Сохраняю в Фото...'}</div>
-      <div class="row"><button class="btn" style="flex:1" onclick="camShare(${i})">Отправить</button></div>`
-    : `<div class="row"><button class="btn" style="flex:1" onclick="camShare(${i})">📥 В Фото</button><button class="btn ghost" style="flex:1" onclick="camShare(${i})">Отправить</button></div>
+      <div class="row"><button class="btn" style="flex:1" ${act('camShare', i)}>Отправить</button></div>`
+    : `<div class="row"><button class="btn" style="flex:1" ${act('camShare', i)}>📥 В Фото</button><button class="btn ghost" style="flex:1" ${act('camShare', i)}>Отправить</button></div>
       <div class="tiny muted">На iPhone откроется меню: выбери «Сохранить видео», и оно окажется в Фото. Сразу без меню сохраняет только приложение «Вокал под бокал».</div>`}
     <div class="tiny muted">Видео есть только у тебя в телефоне. Если не сохранить, после закрытия страницы оно пропадёт.</div>`);
   if (nat && !clip.saved && clip.autoSave !== false) camSaveNative(clip);

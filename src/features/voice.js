@@ -1,3 +1,4 @@
+import { act } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
 import { MIC_DEAD, MIC_DIRECT, ac, afterMic, base, click, levelBar, micTap, noteShort, openMic, setLevel, stopAll, tone } from '../core/audio.js';
 import { afterHooks } from '../core/router.js';
@@ -128,13 +129,13 @@ export function recLine(k, name) {
 }
 export function viewVoice() {
   const v = voiceState(), nx = voiceNext(), days = new Set(v.done.map(x => x.date.slice(0, 10))).size;
-  let h = `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Голос и речь</h1>
+  let h = `<button class="back" ${act('go', 'today')}>${ICON.back} Сегодня</button><h1>Голос и речь</h1>
     <p class="muted" style="margin:6px 0 0">Актёрские и логопедические упражнения: расслабить лицо и горло, поставить дыхание, сделать голос звучнее и ниже, речь чёткой и плавной. По 4-6 минут, лучше каждый день.</p>
-    <button class="item sec" style="margin-top:14px" onclick="go('voice-${nx.id}')"><div class="dot rhythm">${voiceDoneToday() ? '✓' : nx.icon}</div><div class="t"><b>${voiceDoneToday() ? 'Сегодня уже сделано. Ещё один?' : 'Комплекс дня'}: ${nx.title}</b><span class="small muted">${setMin(nx)} мин · ${esc(nx.desc)}</span></div><span class="muted">›</span></button>
+    <button class="item sec" style="margin-top:14px" ${act('go', `voice-nx.id`)}><div class="dot rhythm">${voiceDoneToday() ? '✓' : nx.icon}</div><div class="t"><b>${voiceDoneToday() ? 'Сегодня уже сделано. Ещё один?' : 'Комплекс дня'}: ${nx.title}</b><span class="small muted">${setMin(nx)} мин · ${esc(nx.desc)}</span></div><span class="muted">›</span></button>
     <div class="card sec stack"><h3>Мой прогресс</h3>${recLine('mpt', 'Длинный звук на «а»')}${recLine('exhale', 'Выдох на «с»')}
       <div class="tiny muted">Замеры в комплексах «Дыхание», «Резонанс» и «Шире диапазон». Секундомер идёт, только пока микрофон слышит звук.${days ? ` Занимался ${days} ${plural(days, 'день', 'дня', 'дней')}.` : ''}</div></div>
     <div class="sec"><h2>Все комплексы</h2>`;
-  h += VOICE_SETS.map(s => { const n = v.done.filter(x => x.id === s.id).length; return `<button class="item" onclick="go('voice-${s.id}')"><div class="dot ear">${s.icon}</div><div class="t"><b>${s.title}</b><span class="small muted">${setMin(s)} мин · ${s.steps.length} ${plural(s.steps.length, 'упражнение', 'упражнения', 'упражнений')}${n ? ` · сделан ${n} ${plural(n, 'раз', 'раза', 'раз')}` : ''}</span></div><span class="muted">›</span></button>`; }).join('');
+  h += VOICE_SETS.map(s => { const n = v.done.filter(x => x.id === s.id).length; return `<button class="item" ${act('go', `voice-s.id`)}><div class="dot ear">${s.icon}</div><div class="t"><b>${s.title}</b><span class="small muted">${setMin(s)} мин · ${s.steps.length} ${plural(s.steps.length, 'упражнение', 'упражнения', 'упражнений')}${n ? ` · сделан ${n} ${plural(n, 'раз', 'раза', 'раз')}` : ''}</span></div><span class="muted">›</span></button>`; }).join('');
   return h + '</div>';
 }
 export function viewVoiceSet(id) {
@@ -143,7 +144,7 @@ export function viewVoiceSet(id) {
   VS = { set, i: 0, playing: false, timers: [], tw: null };
   afterHooks.push(voiceDraw);
   afterHooks.push(() => { if (camOn()) camStart(); });
-  return `<button class="back" onclick="go('voice')">${ICON.back} Голос и речь</button><h1>${set.icon} ${set.title}</h1>
+  return `<button class="back" ${act('go', 'voice')}>${ICON.back} Голос и речь</button><h1>${set.icon} ${set.title}</h1>
     <p class="muted" style="margin:6px 0 0">${esc(set.desc)} Около ${setMin(set)} мин.</p>${set.note ? `<p class="tiny muted" style="margin:6px 0 0">${esc(set.note)}</p>` : ''}${camToggleHTML()}
     <div id="vsbox" class="sec"></div>`;
 }
@@ -160,7 +161,7 @@ export function voiceDraw() {
   if (VS.i >= set.steps.length) {
     box.innerHTML = `<div class="card stack" style="text-align:center"><div style="font-size:34px">${set.icon}</div><b>Комплекс «${set.title}» сделан</b>
       ${VS.measured ? `<div class="small">${VS.measured}</div>` : ''}
-      <div class="row"><button class="btn" style="flex:1" onclick="go('voice')">Голос и речь</button><button class="btn ghost" style="flex:1" onclick="go('today')">На главную</button></div></div>`;
+      <div class="row"><button class="btn" style="flex:1" ${act('go', 'voice')}>Голос и речь</button><button class="btn ghost" style="flex:1" ${act('go', 'today')}>На главную</button></div></div>`;
     return;
   }
   const s = set.steps[VS.i];
@@ -173,7 +174,7 @@ export function voiceDraw() {
   box.innerHTML = `<div class="row" style="gap:4px;margin-bottom:10px">${set.steps.map((_, k) => `<i style="flex:1;height:5px;border-radius:3px;background:${k < VS.i ? 'var(--ok)' : k === VS.i ? 'var(--accent)' : 'var(--line)'}"></i>`).join('')}</div>
     <div class="card stack"><div class="tiny muted">${VS.i + 1} из ${set.steps.length}</div><h2 style="margin:0">${s.t}</h2><p class="small" style="margin:0">${esc(s.how)}</p>${body}
     ${meas && !MIC_DIRECT ? '<div class="note small">Для замера нужен живой микрофон: открой сайт в Safari или Chrome. Упражнение можно сделать и без замера.</div>' : ''}
-    <div class="row">${meas && !MIC_DIRECT ? '' : `<button class="btn" style="flex:1" id="vsplay" onclick="voicePlay()">${startLbl}</button>`}<button class="btn ghost" ${meas && !MIC_DIRECT ? 'style="flex:1"' : ''} onclick="voiceNextStep()">Дальше ›</button></div></div>`;
+    <div class="row">${meas && !MIC_DIRECT ? '' : `<button class="btn" style="flex:1" id="vsplay" ${act('voicePlay')}>${startLbl}</button>`}<button class="btn ghost" ${meas && !MIC_DIRECT ? 'style="flex:1"' : ''} ${act('voiceNextStep')}>Дальше ›</button></div></div>`;
 }
 export function voiceNextStep() {
   voiceStop(); VS.i++; VS.result = null; VS.resultText = '';
@@ -241,6 +242,9 @@ export function voiceMeasureDone(s, sec) {
   VS.measured = `${s.kind === 'mpt' ? 'Длинный звук' : 'Выдох на «с»'}: ${sec.toFixed(1)} с. ${VS.resultText}`;
   voiceDraw();
 }
+
+
+
 
 
 

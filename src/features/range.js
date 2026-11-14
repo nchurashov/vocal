@@ -1,3 +1,4 @@
+import { act } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
 import { BASE_MAX, BASE_MIN, MIC_DEAD, MIC_DIRECT, afterMic, base, levelBar, micTap, noteFull, noteShort, openMic, setLevel } from '../core/audio.js';
 import { pianoBand, pianoMark, pianoSVG } from '../core/piano.js';
@@ -56,7 +57,7 @@ export function viewRange() {
   if (!RG || RG.mode === 'live') RG = { mode: 'idle', fr: [] };
   afterHooks.push(rangeDraw); afterHooks.push(() => { if (camOn()) camStart(); });
   const hist = state.range || [];
-  let h = `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Мой диапазон</h1>
+  let h = `<button class="back" ${act('go', 'today')}>${ICON.back} Сегодня</button><h1>Мой диапазон</h1>
     <p class="muted" style="margin:6px 0 0">Пой на «а». Сначала самую низкую ноту, которую берёшь без хрипа и давления, и подержи секунду. Потом поднимайся ступеньками до самой высокой, где голос ещё звучит свободно, и тоже подержи.</p>
     <p class="tiny muted" style="margin:6px 0 0">Засчитываются только ноты, удержанные ровно ${RANGE_HOLD} с. Случайный писк или хрип не попадёт. <a href="#learn">Что значат E2, C4?</a></p>
     ${camToggleHTML()}<div class="card sec stack" id="rgbox"></div>`;
@@ -80,9 +81,9 @@ export function rangeDraw() {
       <div class="row" style="gap:8px"><span class="tiny muted" style="flex:none">Микрофон</span><div style="flex:1">${levelBar('rglvl')}</div></div><div id="rgdead" class="small" style="color:var(--bad)"></div>
       <div style="overflow-x:auto">${pianoSVG(36, 83, { id: 'pkrange' })}</div>
       <div class="row" style="justify-content:space-around"><div style="text-align:center"><div class="tiny muted">Низ</div><b id="rglo">-</b></div><div style="text-align:center"><div class="tiny muted">Верх</div><b id="rghi">-</b></div><div style="text-align:center"><div class="tiny muted">Грудной до</div><b id="rgchest">-</b></div></div>
-      <button class="btn ghost block" onclick="rangeMarkBreak()">Перешёл в фальцет</button>
+      <button class="btn ghost block" ${act('rangeMarkBreak')}>Перешёл в фальцет</button>
       <div class="tiny muted" style="text-align:center;margin-top:-4px">Нажми, когда голос переключился в фальцет. Можно отметить и после замера.</div>
-      <button class="btn block" onclick="rangeDone()">${ICON.stop} Готово</button>`;
+      <button class="btn block" ${act('rangeDone')}>${ICON.stop} Готово</button>`;
     return;
   }
   if (RG.mode === 'result') {
@@ -90,14 +91,14 @@ export function rangeDraw() {
     box.innerHTML = `<div><div class="tiny muted">Твой диапазон сегодня</div><div style="font:800 26px Lora,serif">${noteShort(lo)} - ${noteShort(hi)}</div><div class="small muted">${noteFull(lo)} - ${noteFull(hi)}, ${span} ${plural(span, 'полутон', 'полутона', 'полутонов')}</div>
         ${ch != null ? `<div class="small" style="margin-top:4px"><span style="color:var(--accent)">■</span> грудной ${noteShort(lo)} - ${noteShort(ch)} · <span style="color:var(--near)">■</span> фальцет ${noteShort(ch + 1)} - ${noteShort(hi)}</div>` : ''}</div>
       <div style="overflow-x:auto">${pianoSVG(Math.min(36, lo), Math.max(83, hi), { band: [lo, ch ?? hi], band2: ch != null ? [ch + 1, hi] : null, tap: true, onTap: 'rangeSetBreak' })}</div>
-      <div class="tiny muted">${ch != null ? 'Не та граница? Нажми на клавишу - последнюю ноту, которую берёшь грудным голосом.' : 'Был фальцет? Нажми на клавишу - последнюю ноту, которую берёшь грудным голосом.'}${ch != null ? ' <a href="#" onclick="rangeSetBreak(RG.hi);return false">Фальцета не было</a>' : ''}</div>
+      <div class="tiny muted">${ch != null ? 'Не та граница? Нажми на клавишу - последнюю ноту, которую берёшь грудным голосом.' : 'Был фальцет? Нажми на клавишу - последнюю ноту, которую берёшь грудным голосом.'}${ch != null ? ` <a href="#" ${act('rangeNoFalsetto')}>Фальцета не было</a>` : ''}</div>
       ${(ch ?? hi) - lo < 12 ? `<div class="note small">${ch != null ? 'Грудной голос' : 'Диапазон'} меньше октавы. Уровни игр идут на октаву вверх от базовой ноты, так что верх может не взяться. Это нормально, диапазон растёт с распевками.</div>` : ''}
       <div class="small"><b>Где работать?</b> Уровни и упражнения пойдут от выбранной ноты на октаву вверх${ch != null ? ', по грудному голосу' : ''}.</div>
-      ${rangeChoices(lo, hi, ch).map(([m, st, t, d]) => `<button class="btn ghost block" style="flex-direction:column;align-items:flex-start;gap:2px;text-align:left" onclick="rangeWork(${m},${st})"><span>${t}: от ${noteShort(m)} до ${noteShort(m + 12)}</span><span class="tiny muted" style="font-weight:500">${d}</span></button>`).join('')}
-      <button class="btn soft" onclick="rangeStart()">${ICON.mic} Замерить ещё раз</button>`;
+      ${rangeChoices(lo, hi, ch).map(([m, st, t, d]) => `<button class="btn ghost block" style="flex-direction:column;align-items:flex-start;gap:2px;text-align:left" ${act('rangeWork', m,st)}><span>${t}: от ${noteShort(m)} до ${noteShort(m + 12)}</span><span class="tiny muted" style="font-weight:500">${d}</span></button>`).join('')}
+      <button class="btn soft" ${act('rangeStart')}>${ICON.mic} Замерить ещё раз</button>`;
     return;
   }
-  box.innerHTML = `${RG.err ? `<div class="note small">${RG.err}</div>` : ''}<button class="btn block" onclick="rangeStart()">${ICON.mic} Начать замер</button>
+  box.innerHTML = `${RG.err ? `<div class="note small">${RG.err}</div>` : ''}<button class="btn block" ${act('rangeStart')}>${ICON.mic} Начать замер</button>
     <div class="tiny muted">Лучше в тишине. Не надо пищать или рычать ради рекорда: важна нота, которую поёшь свободно.</div>`;
 }
 export async function rangeStart() {
@@ -149,6 +150,11 @@ export function rangeWork(m, strict) {
 
 
 
+
+
+
+
+export function rangeNoFalsetto() { if (RG) rangeSetBreak(RG.hi); }
 
 
 

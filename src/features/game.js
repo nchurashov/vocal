@@ -1,3 +1,4 @@
+import { act } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
 import { MIC_DIRECT, ac, afterMic, base, click, openMic, stopAll, strictOct, tone } from '../core/audio.js';
 import { afterHooks } from '../core/router.js';
@@ -39,12 +40,12 @@ export const gameUnlocked = n => n === 1 || (gameState().best[n - 1]?.stars || 0
 // ----- Список уровней -----
 export function viewGame() {
   const g = gameState(), total = Object.values(g.best).reduce((a, x) => a + x.stars, 0);
-  let h = `<button class="back" onclick="go('ball')">${ICON.back} Шарик</button><h1>Попади в ноту</h1><p class="muted" style="margin:6px 0 0">Ноты плывут справа налево. Голос рисует точку: держи её внутри полосы ноты. Набери 50%, чтобы открыть следующий уровень.</p>
+  let h = `<button class="back" ${act('go', 'ball')}>${ICON.back} Шарик</button><h1>Попади в ноту</h1><p class="muted" style="margin:6px 0 0">Ноты плывут справа налево. Голос рисует точку: держи её внутри полосы ноты. Набери 50%, чтобы открыть следующий уровень.</p>
     <div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">★ ${total} из ${GAME_LEVELS.length * 3}</span><span class="pill">Пройдено: ${Object.values(g.best).filter(x => x.stars >= 1).length} из ${GAME_LEVELS.length}</span></div>
     <div class="ggrid sec">`;
   for (const lv of GAME_LEVELS) {
     const best = g.best[lv.n], open = gameUnlocked(lv.n);
-    h += `<button class="gtile ${open ? '' : 'locked'}" ${open ? `onclick="go('game-${lv.n}')"` : ''}>
+    h += `<button class="gtile ${open ? '' : 'locked'}" ${open ? `${act('go', `game-lv.n`)}` : ''}>
       <span class="gnum">${open ? lv.n : '🔒'}</span><b>${esc(lv.title)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
       <span class="tiny muted">${best ? 'лучший ' + best.acc + '%' : open ? 'ещё не играл' : 'пройди уровень ' + (lv.n - 1)}</span></button>`;
   }
@@ -63,9 +64,9 @@ export function gameStop() {
 export function viewGameLevel(n) {
   const lv = GAME_LEVELS.find(l => l.n === n);
   if (!lv) return '<div class="empty">Уровень не найден</div>';
-  if (!gameUnlocked(n)) return `<button class="back" onclick="go('game')">${ICON.back} Уровни</button><div class="note">🔒 Сначала пройди уровень ${n - 1} хотя бы на одну звезду.</div>`;
+  if (!gameUnlocked(n)) return `<button class="back" ${act('go', 'game')}>${ICON.back} Уровни</button><div class="note">🔒 Сначала пройди уровень ${n - 1} хотя бы на одну звезду.</div>`;
   const best = gameState().best[n];
-  let h = `<button class="back" onclick="go('game')">${ICON.back} Все уровни</button>
+  let h = `<button class="back" ${act('go', 'game')}>${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Уровень ${n} из ${GAME_LEVELS.length} · полоса ±${lv.tol} центов</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="gstars">${starStr(best ? best.stars : 0)}</div></div>
     <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. Первая нота: ${VA.noteName(base() + lv.notes.find(x => x[0] != null)[0])}.</p>${octaveHint()}${camToggleHTML()}
     <div class="gstage sec"><canvas id="gcv"></canvas><div id="gover" class="gover"></div></div>
@@ -267,11 +268,14 @@ export function gameResult(scores, mode) {
     <div class="small muted">нот попал: ${hits} из ${scores.length} · лучшая серия ${G.maxCombo}${record && prev ? ' · новый рекорд!' : ''}</div>
     ${notesTxt ? `<div class="small">${notesTxt}</div>` : ''}
     <div class="${st ? 'info' : 'note'}">${msg}</div>
-    <div class="row wrap" style="justify-content:center">${mode === 'take' && lastAudio ? `<button class="btn ghost" onclick="playAudioLast()">${ICON.play} Моя попытка</button>` : ''}
-    ${gameUnlocked(lv.n + 1) && lv.n < GAME_LEVELS.length ? `<button class="btn" onclick="go('game-${lv.n + 1}')">Уровень ${lv.n + 1} →</button>` : ''}</div></div>`;
+    <div class="row wrap" style="justify-content:center">${mode === 'take' && lastAudio ? `<button class="btn ghost" ${act('playAudioLast')}>${ICON.play} Моя попытка</button>` : ''}
+    ${gameUnlocked(lv.n + 1) && lv.n < GAME_LEVELS.length ? `<button class="btn" ${act('go', `game-lv.n + 1`)}>Уровень ${lv.n + 1} →</button>` : ''}</div></div>`;
   if (opened) toast(`Уровень ${lv.n + 1} открыт!`);
 }
 window.addEventListener('resize', () => { if (G && G.mode === 'idle') { gameResize(); gameDraw(-1.5); } });
+
+
+
 
 
 

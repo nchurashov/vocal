@@ -29,6 +29,8 @@ import * as screens_profiles from './screens/profiles.js';
 import * as screens_settings from './screens/settings.js';
 import * as screens_today from './screens/today.js';
 import { registerRoute, registerPrefix, beforeRender, onLeave, start } from './core/router.js';
+import { registerActions, initActions } from './core/actions.js';
+const NAMESPACES = [core_analysis, core_audio, core_piano, core_router, core_store, core_ui, core_util, data_exercises, trainer_check, trainer_exercise, trainer_exercises, trainer_logic, trainer_recorder, trainer_tap, features_ball, features_cam, features_diary, features_game, features_learn, features_range, features_register, features_voice, features_warmup, screens_history, screens_notes, screens_profiles, screens_settings, screens_today];
 
 const { viewToday } = screens_today, { viewHistory } = screens_history, { viewNotes } = screens_notes;
 const { viewExercises } = trainer_exercises, { viewExercise } = trainer_exercise, { viewCheck } = trainer_check;
@@ -63,14 +65,85 @@ beforeRender(features_diary.diaryStop);
 beforeRender(features_cam.camOff);
 onLeave(trainer_recorder.stopRecordingIfAny);
 
-// --- мост в window (переходный период): кнопки в разметке пока вызывают функции по имени (onclick="go('ball')"),
-// а тесты читают состояние. Внутри модулей window не используется - только import.
-// Следующий шаг (ARCHITECTURE.md, этап 2б): кнопки через data-action, мост сократить до тестового.
-for (const ns of [core_analysis, core_audio, core_piano, core_router, core_store, core_ui, core_util, data_exercises, trainer_check, trainer_exercise, trainer_exercises, trainer_logic, trainer_recorder, trainer_tap, features_ball, features_cam, features_diary, features_game, features_learn, features_range, features_register, features_voice, features_warmup, screens_history, screens_notes, screens_profiles, screens_settings, screens_today]) {
-  for (const k of Object.keys(ns)) {
-    if (k.startsWith('__set_')) continue;
-    const set = ns['__set_' + k];
-    Object.defineProperty(window, k, { get: () => ns[k], set: set ? v => set(v) : undefined, configurable: true });
+// --- действия кнопок: всё, что можно вызвать из разметки (data-action / data-change / data-input). Только этот список.
+registerActions({
+  answerQuiz: trainer_exercise.answerQuiz,
+  askDelete: screens_history.askDelete,
+  askReset: screens_settings.askReset,
+  back: core_router.back,
+  calibrate: screens_settings.calibrate,
+  camSet: features_cam.camSet,
+  camShare: features_cam.camShare,
+  closeSheet: core_ui.closeSheet,
+  copyData: screens_settings.copyData,
+  delNote: screens_notes.delNote,
+  diaryDel: features_diary.diaryDel,
+  diaryMakeCompare: features_diary.diaryMakeCompare,
+  diaryNextQ: features_diary.diaryNextQ,
+  diaryPlay: features_diary.diaryPlay,
+  diaryRec: features_diary.diaryRec,
+  diaryRecStop: features_diary.diaryRecStop,
+  diaryShare: features_diary.diaryShare,
+  doDelete: screens_history.doDelete,
+  editNote: screens_notes.editNote,
+  go: core_router.go,
+  goCloseSheet: features_register.goCloseSheet,
+  nextQuiz: trainer_exercise.nextQuiz,
+  openProfiles: screens_profiles.openProfiles,
+  openSettings: screens_settings.openSettings,
+  pianoTap: core_piano.pianoTap,
+  playAudioLast: trainer_recorder.playAudioLast,
+  playEx: trainer_exercise.playEx,
+  playExFirst: trainer_exercise.playExFirst,
+  playInterval: trainer_exercise.playInterval,
+  playNotes: core_audio.playNotes,
+  playQ: trainer_exercise.playQ,
+  playRhythmEx: trainer_exercise.playRhythmEx,
+  profAddFrom: screens_profiles.profAddFrom,
+  profDel: screens_profiles.profDel,
+  profRenameFrom: screens_profiles.profRenameFrom,
+  profSwitch: screens_profiles.profSwitch,
+  quizSample: trainer_exercise.quizSample,
+  rangeDone: features_range.rangeDone,
+  rangeMarkBreak: features_range.rangeMarkBreak,
+  rangeNoFalsetto: features_range.rangeNoFalsetto,
+  rangeSetBreak: features_range.rangeSetBreak,
+  rangeStart: features_range.rangeStart,
+  rangeWork: features_range.rangeWork,
+  resetAll: screens_settings.resetAll,
+  saveMelody: trainer_check.saveMelody,
+  saveNote: screens_notes.saveNote,
+  saveSession: trainer_exercise.saveSession,
+  selectMelody: trainer_check.selectMelody,
+  setExFilter: trainer_exercises.setExFilter,
+  setRating: trainer_exercise.setRating,
+  setStrict: features_register.setStrict,
+  setTol: features_ball.setTol,
+  setVoice: features_register.setVoice,
+  setWuMode: features_warmup.setWuMode,
+  showTol: features_ball.showTol,
+  startQuiz: trainer_exercise.startQuiz,
+  stepBase: features_register.stepBase,
+  stopAll: core_audio.stopAll,
+  toggleChapter: features_ball.toggleChapter,
+  toggleCrit: trainer_exercise.toggleCrit,
+  voiceNextStep: features_voice.voiceNextStep,
+  voicePlay: features_voice.voicePlay,
+  warmupNext: features_warmup.warmupNext,
+  warmupPlay: features_warmup.warmupPlay,
+  wuSaveRange: features_warmup.wuSaveRange,
+});
+initActions();
+
+// --- мост для автотестов: Playwright управляет браузером (navigator.webdriver = true) и читает состояние по именам.
+// У людей мост не включается: функции приложения не видны снаружи.
+if (navigator.webdriver) {
+  for (const ns of NAMESPACES) {
+    for (const k of Object.keys(ns)) {
+      if (k.startsWith('__set_')) continue;
+      const set = ns['__set_' + k];
+      Object.defineProperty(window, k, { get: () => ns[k], set: set ? v => set(v) : undefined, configurable: true });
+    }
   }
 }
 

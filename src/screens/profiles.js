@@ -1,3 +1,4 @@
+import { act } from '../core/actions.js';
 import { go, render } from '../core/router.js';
 import { PROF, loadState, profCur, profKey, profName, profSave, save } from '../core/store.js';
 import { closeSheet, sheet, toast } from '../core/ui.js';
@@ -24,10 +25,13 @@ export async function profDel(id) {
   profSave(); closeSheet(); render(); openProfiles();
 }
 export function openProfiles() {
-  sheet(`<div class="row between"><h2>Кто поёт?</h2><button class="iconbtn" onclick="closeSheet()">×</button></div>
+  sheet(`<div class="row between"><h2>Кто поёт?</h2><button class="iconbtn" ${act('closeSheet')}>×</button></div>
     <p class="small muted" style="margin:0">У каждого свой прогресс, рекорды, диапазон и видео. Удобно, когда телефон передают по кругу.</p>
-    ${PROF.list.map(p => `<div class="row" style="gap:8px"><button class="item" style="flex:1;margin:0" onclick="profSwitch('${p.id}')"><div class="dot ${p.id === PROF.cur ? 'pitch' : 'ear'}">${p.id === PROF.cur ? '✓' : '🎤'}</div><div class="t"><b>${esc(p.name || 'Без имени')}</b><span class="small muted">${p.id === PROF.cur ? 'сейчас поёт' : 'переключиться'}</span></div></button>${PROF.list.length > 1 ? `<button class="iconbtn" aria-label="Удалить профиль" onclick="profDel('${p.id}')">🗑</button>` : ''}</div>`).join('')}
-    <div class="card stack"><b>Моё имя</b><div class="row"><input id="pfname" class="inp" style="flex:1" maxlength="30" placeholder="Как тебя зовут?" value="${esc(profName())}"><button class="btn" onclick="profRename($('#pfname').value)">Сохранить</button></div></div>
-    <div class="card stack"><b>Новый человек</b><div class="row"><input id="pfnew" class="inp" style="flex:1" maxlength="30" placeholder="Имя"><button class="btn" onclick="profAdd($('#pfnew').value)">Добавить</button></div></div>
+    ${PROF.list.map(p => `<div class="row" style="gap:8px"><button class="item" style="flex:1;margin:0" ${act('profSwitch', `${p.id}`)}><div class="dot ${p.id === PROF.cur ? 'pitch' : 'ear'}">${p.id === PROF.cur ? '✓' : '🎤'}</div><div class="t"><b>${esc(p.name || 'Без имени')}</b><span class="small muted">${p.id === PROF.cur ? 'сейчас поёт' : 'переключиться'}</span></div></button>${PROF.list.length > 1 ? `<button class="iconbtn" aria-label="Удалить профиль" ${act('profDel', `${p.id}`)}>🗑</button>` : ''}</div>`).join('')}
+    <div class="card stack"><b>Моё имя</b><div class="row"><input id="pfname" class="inp" style="flex:1" maxlength="30" placeholder="Как тебя зовут?" value="${esc(profName())}"><button class="btn" ${act('profRenameFrom', '#pfname')}>Сохранить</button></div></div>
+    <div class="card stack"><b>Новый человек</b><div class="row"><input id="pfnew" class="inp" style="flex:1" maxlength="30" placeholder="Имя"><button class="btn" ${act('profAddFrom', '#pfnew')}>Добавить</button></div></div>
     <div class="tiny muted">Всё хранится только на этом телефоне. Вход с синхронизацией между устройствами появится позже.</div>`);
 }
+
+export function profRenameFrom(sel) { const el = $(sel); if (el) profRename(el.value); }
+export function profAddFrom(sel) { const el = $(sel); if (el) profAdd(el.value); }

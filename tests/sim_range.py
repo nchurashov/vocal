@@ -18,7 +18,7 @@ CASES = [
 ]
 fails = []
 with sync_playwright() as p:
-    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page()
+    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(bypass_csp=True)
     pg.goto(URL + '#range'); pg.wait_for_timeout(300)
     for name, parts, lo, hi in CASES:
         r = pg.evaluate(SIM, parts)

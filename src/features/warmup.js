@@ -1,3 +1,4 @@
+import { act } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
 import { BASE_MIN, MIC_DIRECT, ac, afterMic, base, noteFull, noteShort, openMic, stopAll, strictOct, tone } from '../core/audio.js';
 import { afterHooks, go, render } from '../core/router.js';
@@ -80,10 +81,10 @@ export function viewWarmup() {
   WU = { i: 0, plan: warmupPlan(), playing: false, res: {}, R: { fr: [], lo: null, hi: null }, timers: [] };
   afterHooks.push(warmupDraw); afterHooks.push(() => { if (camOn()) camStart(); });
   const r = lastRange(), st = warmupStreak();
-  return `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Распевка дня</h1>
+  return `<button class="back" ${act('go', 'today')}>${ICON.back} Сегодня</button><h1>Распевка дня</h1>
     <p class="muted" style="margin:6px 0 0">${WU.plan.length} ${plural(WU.plan.length, 'упражнение', 'упражнения', 'упражнений')}, около ${warmupMin()} мин. Тональность сдвигается по полутону.${st ? ` Дней подряд: ${st}.` : ''}</p>
     ${camToggleHTML()}
-    ${MIC_DIRECT ? `<div class="seg sec" style="margin-top:12px"><button class="${wuMode() === 'echo' ? 'on' : ''}" onclick="setWuMode('echo')">Повтори за мной</button><button class="${wuMode() === 'along' ? 'on' : ''}" onclick="setWuMode('along')">Вместе с пианино</button></div>
+    ${MIC_DIRECT ? `<div class="seg sec" style="margin-top:12px"><button class="${wuMode() === 'echo' ? 'on' : ''}" ${act('setWuMode', 'echo')}>Повтори за мной</button><button class="${wuMode() === 'along' ? 'on' : ''}" ${act('setWuMode', 'along')}>Вместе с пианино</button></div>
     <p class="tiny muted" style="margin:6px 0 0">${wuMode() === 'echo' ? 'Пианино играет фразу, потом тишина: повтори её. Микрофон слушает только твой ответ и покажет, какие ноты взяты чисто.' : 'Поёшь одновременно с пианино. Без проверки нот, просто разогрев.'}</p>` : ''}
     <p class="tiny muted" style="margin:6px 0 0">${r ? `Границы - твой замер ${noteShort(r.lo)} - ${noteShort(r.hi)}. В спуске вниз последняя тональность на полутон ниже: попробуй, но не дави.` : `Диапазон не замерен, поэтому держусь рядом с ${noteShort(base())}. <a href="#range">Замерить</a>, чтобы распевка шла по твоим границам.`}</p>
     <div id="wubox" class="sec"></div>`;
@@ -100,8 +101,8 @@ export function warmupDraw() {
     box.innerHTML = `<div class="card stack" style="text-align:center"><div style="font-size:34px">🎶</div><b>Распевка сделана</b>
       ${all.length ? `<div class="small">Чисто взято ${ok} из ${all.length} ${plural(all.length, 'тональности', 'тональностей', 'тональностей')}.</div>` : '<div class="small muted">Голос разогрет, теперь самое время для игры или упражнений.</div>'}
       ${newLo != null || newHi != null ? `<div class="note small" style="text-align:left"><b>Новая граница!</b> Ты чисто удержал ${[newLo != null ? noteFull(newLo) + ' (раньше низ был ' + noteShort(r.lo) + ')' : '', newHi != null ? noteFull(newHi) + ' (раньше верх был ' + noteShort(r.hi) + ')' : ''].filter(Boolean).join(' и ')}.
-        <div class="row" style="margin-top:8px"><button class="btn" style="flex:1" onclick="wuSaveRange(${newLo ?? r.lo},${newHi ?? r.hi})">Записать в диапазон</button></div></div>` : ''}
-      <div class="row"><button class="btn" style="flex:1" onclick="go('ball')">К игре</button><button class="btn ghost" style="flex:1" onclick="go('today')">На главную</button></div></div>`;
+        <div class="row" style="margin-top:8px"><button class="btn" style="flex:1" ${act('wuSaveRange', newLo ?? r.lo,newHi ?? r.hi)}>Записать в диапазон</button></div></div>` : ''}
+      <div class="row"><button class="btn" style="flex:1" ${act('go', 'ball')}>К игре</button><button class="btn ghost" style="flex:1" ${act('go', 'today')}>На главную</button></div></div>`;
     return;
   }
   const s = WU.plan[WU.i];
@@ -110,7 +111,7 @@ export function warmupDraw() {
     ${s.keys ? `<div class="tiny muted">${s.keys.length} ${plural(s.keys.length, 'тональность', 'тональности', 'тональностей')}: от ${noteShort(s.keys[0] + Math.min(...s.pat))} до ${noteShort(s.keys[s.keys.length - 1] + Math.min(...s.pat))}</div>` : ''}
     <div style="text-align:center"><div id="wunow" style="font:800 26px Lora,serif;min-height:36px">${WU.playing ? '' : '-'}</div><div id="wusub" class="small muted" style="min-height:20px"></div></div>
     <div id="wures">${wuResultsHTML(s)}</div>
-    <div class="row"><button class="btn" style="flex:1" id="wuplay" onclick="warmupPlay()">${WU.playing ? ICON.stop + ' Пауза' : ICON.play + ' Начать'}</button><button class="btn ghost" onclick="warmupNext()">Дальше ›</button></div></div>`;
+    <div class="row"><button class="btn" style="flex:1" id="wuplay" ${act('warmupPlay')}>${WU.playing ? ICON.stop + ' Пауза' : ICON.play + ' Начать'}</button><button class="btn ghost" ${act('warmupNext')}>Дальше ›</button></div></div>`;
 }
 export function wuSaveRange(lo, hi) {
   (state.range ||= []).push({ date: nowLocal(), lo, hi, from: 'warmup' }); save();
@@ -197,6 +198,9 @@ export async function warmupPlay() {
   });
   WU.timer = setTimeout(() => { if (WU && WU.playing) warmupNext(); }, (t - t0 + .4) * 1000 / sp);
 }
+
+
+
 
 
 

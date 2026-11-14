@@ -14,8 +14,8 @@
 ## Структура
 - `src/core/analysis.js` - распознавание высоты тона (YIN), разбиение на ноты, сравнение с эталоном (`evaluate`), живой тон с микрофона (`livePitch`), ритм (`evaluateTaps`). Работает и в Node (тесты).
 - `src/data/exercises.js` - упражнения (слух/интонация/ритм, уровни 1-3), мелодии для оценки, базовые ноты.
-- `src/main.js` - точка входа: регистрирует экраны в роутере, остановки перед сменой экрана, временный мост в `window` (кнопки `onclick` и тесты), запуск.
-- `src/core/` - ядро, не импортирует ничего вне core (правило ESLint): `util.js` (утилиты, `busy`/`setBusy`), `audio.js` (Web Audio, `openMic`/`afterMic`, `micTap`, `base`, `octLock`, `MIC_DIRECT`), `store.js` (state, профили-данные, сохранение, облако), `router.js` (реестр экранов `registerRoute`/`registerPrefix`, `beforeRender`, `render`), `ui.js` (`sheet`, `toast`), `piano.js` (клавиатура `pianoSVG`), `analysis.js`.
+- `src/main.js` - точка входа: регистрирует экраны в роутере, остановки перед сменой экрана, реестр действий кнопок (`registerActions` - всё, что можно вызвать из разметки), мост в `window` только для автотестов (`navigator.webdriver`), запуск.
+- `src/core/` - ядро, не импортирует ничего вне core (правило ESLint): `util.js` (утилиты, `busy`/`setBusy`), `audio.js` (Web Audio, `openMic`/`afterMic`, `micTap`, `base`, `octLock`, `MIC_DIRECT`), `store.js` (state, профили-данные, сохранение, облако), `router.js` (реестр экранов `registerRoute`/`registerPrefix`, `beforeRender`, `render`), `ui.js` (`sheet`, `toast`), `actions.js` (кнопки: `act('имя', ...аргументы)` -> `data-action`, `onChange`/`onInput` для полей; один обработчик на всё приложение), `piano.js` (клавиатура `pianoSVG`), `analysis.js`.
 - `src/trainer/` - тренажёр: `logic.js` (уровни, повторения), `exercises.js`, `exercise.js` (экран упражнения, квиз), `recorder.js` (запись голоса), `tap.js` (ритм), `check.js` (оценка по мелодии).
 - `src/screens/` - `today.js`, `history.js`, `notes.js`, `settings.js`, `profiles.js` (окно «Кто поёт?»).
 - `src/features/register.js` - карточка «Где работаем» (`registerCard`, `octaveHint`, `setBase`).
@@ -47,7 +47,7 @@ iPhone: на Маке открыть `ios/App/App.xcodeproj`, Signing -> Team (A
 Всё сразу: `bash tests/run_all.sh` (то же делает GitHub Actions `.github/workflows/tests.yml` на каждый пуш и PR). Архитектура, правила и план перестройки - `ARCHITECTURE.md`.
 ```
 python3 tests/check_code.py      # синтаксис, нет eval/внешних скриптов/ключей/длинных тире, ESLint (импорты и слои)
-python3 tests/check_modules.py   # исходные модули грузятся нативно без ошибок порядка (esbuild прячет их как undefined)
+python3 tests/check_modules.py   # исходные модули грузятся нативно без ошибок порядка (esbuild прячет их как undefined); CSP блокирует чужой onclick
 node tests/test_analysis.js      # распознавание нот
 node tests/synth.js              # создаёт tests/out/sing.wav для теста интерфейса
 python3 tests/smoke_ui.py        # упражнения, запись с фейкового микрофона, история
@@ -77,7 +77,8 @@ python3 tests/sim_profiles.py    # профили: свой прогресс у 
 - **Тишина с микрофона**: с AirPods/Bluetooth микрофон переключает частоту, и движок со старой частотой получает от Safari ровный ноль. `openMic` сверяет частоту трека и пересоздаёт движок; замеры без пианино (диапазон, длинный звук, выдох) читают микрофон через `micTap`: 1.5 с ровного нуля -> один раз пересоздать движок, дальше честная подсказка `MIC_DEAD`. Там же полоска громкости микрофона. Время в этих замерах - `performance.now()`, не часы движка (движок может пересоздаться).
 - **Микрофон** внутри Claude (артефакт) закрыт - там запись через камеру телефона (`capture`). На сайте и в приложении - живой микрофон (`MIC_DIRECT`).
 - **Профили «Кто поёт?»** (кнопка 🎤 в шапке, `openProfiles`): несколько человек на одном телефоне, у каждого свой state. Список в localStorage `vocal-profiles`; первый профиль p1 - старый ключ `vocal-practice` (совместимость), остальные `vocal-practice:<id>`. Облако артефакта - только для p1. Имя - в приветствии и в подписи видео. Вход с синхронизацией между устройствами - позже, нужен сервер (решение за Китом).
-- **Модули**: каждый файл импортирует всё, что использует (ESLint no-undef / no-unused-vars). Ядро (`core/`, `data/`) не импортирует `features/`, `screens/`, `trainer/`. Код модуля при загрузке не читает значения других модулей (только объявления), иначе ошибка порядка: проверяет `tests/check_modules.py`. Общие изменяемые переменные - через установщики (`setBusy`, `setRun`, `setLastAudio`). Кнопки пока `onclick` через мост в `window` (main.js), следующий шаг - `data-action` (ARCHITECTURE.md).
+- **Модули**: каждый файл импортирует всё, что использует (ESLint no-undef / no-unused-vars). Ядро (`core/`, `data/`) не импортирует `features/`, `screens/`, `trainer/`. Код модуля при загрузке не читает значения других модулей (только объявления), иначе ошибка порядка: проверяет `tests/check_modules.py`. Общие изменяемые переменные - через установщики (`setBusy`, `setRun`, `setLastAudio`).
+- **Кнопки и безопасность**: никаких `onclick` в разметке (проверяет check_code.py) - только `${act('имя', ...)}`; новое действие добавить в `registerActions` в main.js (check_code сверяет оба списка). Сайт закрыт CSP: выполняется только встроенный скрипт по sha256 (build.py считает отпечаток), внешнее - только шрифты Google. В `www/` (iOS) CSP пока нет. Тесты логики открывают страницу с `bypass_csp` (им нужен eval для ожиданий), smoke_ui и check_modules - со строгой политикой.
 - Хранилище: localStorage (сайт, приложение) или db артефакта Claude (версия в Claude). Прогресс между ними не синхронизируется.
 
 ## Статус (ноябрь 2026)

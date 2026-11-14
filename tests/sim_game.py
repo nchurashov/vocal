@@ -26,7 +26,7 @@ FAIR = {'вовремя': [.08, .06, .15, 0, -99, 0, 0], 'опоздание 0.1
         'октавой выше, динамик слышен': [.08, .06, .15, 12, -99, 0, 1]}
 fails, rows = [], []
 with sync_playwright() as p:
-    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(viewport={'width': 390, 'height': 844})
+    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(bypass_csp=True, viewport={'width': 390, 'height': 844})
     pg.goto(URL + '#game'); pg.wait_for_timeout(300)
     pg.evaluate("state.game.best={};for(let i=1;i<=12;i++)state.game.best[i]={acc:100,stars:3};save()")
     for n in range(1, 13):

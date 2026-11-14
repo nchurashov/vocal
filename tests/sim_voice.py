@@ -14,7 +14,7 @@ CASES = [('ровный звук 10 с', [[0, 1], [1, 10], [0, 1]], 10, True), (
          ('пауза 1 с обрывает', [[1, 3], [0, 1], [1, 5]], 3, True), ('тишина', [[0, 5]], 0, False)]
 fails = []
 with sync_playwright() as p:
-    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(viewport={'width': 390, 'height': 844})
+    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(bypass_csp=True, viewport={'width': 390, 'height': 844})
     errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.goto(URL + '#voice'); pg.wait_for_timeout(300)
     for name, parts, sec, done in CASES:

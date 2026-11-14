@@ -1,3 +1,4 @@
+import { act } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
 import { ac, afterMic, micTap, noteFull, noteShort, openMic } from '../core/audio.js';
 import { afterHooks, render } from '../core/router.js';
@@ -43,16 +44,16 @@ export function diaryStop() {
 export function diaryTodayItem() {
   if (!CAM_OK) return '';
   const L = diaryList(), last = L[L.length - 1];
-  if (!L.length) return `<button class="item" onclick="go('diary')"><div class="dot near">🎬</div><div class="t"><b>Запиши голос «до»</b><span class="small muted">Полторы минуты на камеру: ответь на 4 вопроса. Через месяц сравнишь и не узнаешь свой голос</span></div><span class="muted">›</span></button>`;
+  if (!L.length) return `<button class="item" ${act('go', 'diary')}><div class="dot near">🎬</div><div class="t"><b>Запиши голос «до»</b><span class="small muted">Полторы минуты на камеру: ответь на 4 вопроса. Через месяц сравнишь и не узнаешь свой голос</span></div><span class="muted">›</span></button>`;
   const d = daysSince(last.date);
-  if (d >= 30) return `<button class="item" onclick="go('diary')"><div class="dot near">🎬</div><div class="t"><b>Прошёл месяц: запиши голос «после»</b><span class="small muted">Последнее видео ${fmtDay(last.date.slice(0, 10)).toLowerCase()}. Сравни, как изменился голос</span></div><span class="muted">›</span></button>`;
+  if (d >= 30) return `<button class="item" ${act('go', 'diary')}><div class="dot near">🎬</div><div class="t"><b>Прошёл месяц: запиши голос «после»</b><span class="small muted">Последнее видео ${fmtDay(last.date.slice(0, 10)).toLowerCase()}. Сравни, как изменился голос</span></div><span class="muted">›</span></button>`;
   return '';
 }
 export function viewDiary() {
   diaryStop(); DY = { mode: 'idle' };
   afterHooks.push(diaryDraw);
   const L = diaryList();
-  return `<button class="back" onclick="go('today')">${ICON.back} Сегодня</button><h1>Голос: до и после</h1>
+  return `<button class="back" ${act('go', 'today')}>${ICON.back} Сегодня</button><h1>Голос: до и после</h1>
     <p class="muted" style="margin:6px 0 0">Налей бокал и запиши короткое видео: под камерой по очереди появятся ${DIARY_Q.length} вопроса, просто отвечай своими словами. Занимайся по упражнению в день, а через месяц запиши ещё раз. Сравни и покажи друзьям.</p>
     ${CAM_OK ? '' : '<div class="note sec">Для видео нужна камера и микрофон: открой сайт в Safari или Chrome.</div>'}
     <div id="dybox" class="sec"></div>
@@ -65,7 +66,7 @@ export function diaryItemHTML(e) {
   const idx = diaryList().indexOf(e), first = idx === 0;
   return `<div class="card stack" style="margin-bottom:10px"><div class="row between"><b>${first ? 'До' : 'После'} · ${dateRu(e.date)}</b><span class="tiny muted">${Math.round(e.dur)} с</span></div>
     <div class="small">Средняя высота речи: <b>${pitchTxt(e.stats)}</b>${e.stats ? ` · разброс интонаций ${Math.round(e.stats.p90 - e.stats.p10)} ${plural(Math.round(e.stats.p90 - e.stats.p10), 'полутон', 'полутона', 'полутонов')}` : ''}</div>
-    <div class="row wrap" style="gap:8px"><button class="btn ghost" style="flex:1;min-height:40px" onclick="diaryPlay('${e.id}')">${ICON.play} Смотреть</button><button class="btn ghost" style="flex:1;min-height:40px" onclick="diaryShare('${e.id}')">Поделиться</button><button class="btn ghost" style="min-height:40px;color:var(--bad)" onclick="diaryDel('${e.id}')">Удалить</button></div></div>`;
+    <div class="row wrap" style="gap:8px"><button class="btn ghost" style="flex:1;min-height:40px" ${act('diaryPlay', `${e.id}`)}>${ICON.play} Смотреть</button><button class="btn ghost" style="flex:1;min-height:40px" ${act('diaryShare', `${e.id}`)}>Поделиться</button><button class="btn ghost" style="min-height:40px;color:var(--bad)" ${act('diaryDel', `${e.id}`)}>Удалить</button></div></div>`;
 }
 export function diaryCompareHTML(a, b) {
   const d = daysBetween(a.date.slice(0, 10), b.date.slice(0, 10));
@@ -77,7 +78,7 @@ export function diaryCompareHTML(a, b) {
   }
   const best = typeof recBest === 'function' ? recBest('mpt') : null;
   return `<div class="card sec stack"><h3>Сравнение: ${d} ${plural(d, 'день', 'дня', 'дней')}</h3>${m}${best ? `<div class="small">Длинный звук: лучший ${best.sec.toFixed(1)} с</div>` : ''}
-    <button class="btn" onclick="diaryMakeCompare()">🎬 Собрать видео «до и после»</button><div id="dycmp" class="small muted"></div></div>`;
+    <button class="btn" ${act('diaryMakeCompare')}>🎬 Собрать видео «до и после»</button><div id="dycmp" class="small muted"></div></div>`;
 }
 export function diaryDraw() {
   const box = $('#dybox'); if (!box || !DY || !CAM_OK) return;
@@ -85,7 +86,7 @@ export function diaryDraw() {
   if (DY.mode === 'idle') {
     const wait = L.length && daysSince(L[L.length - 1].date) < 30 ? 30 - daysSince(L[L.length - 1].date) : 0;
     box.innerHTML = `<div class="card stack">${wait ? `<div class="small">До видео «после» осталось ${wait} ${plural(wait, 'день', 'дня', 'дней')}. Можно записать и раньше, но за месяц разница заметнее.</div>` : ''}
-      <button class="btn" onclick="diaryRec()">🎥 Записать видео «${next}»</button><div class="tiny muted">Будет нужен доступ к камере и микрофону. Около полутора минут: по 20 секунд на вопрос, можно листать быстрее.</div></div>`;
+      <button class="btn" ${act('diaryRec')}>🎥 Записать видео «${next}»</button><div class="tiny muted">Будет нужен доступ к камере и микрофону. Около полутора минут: по 20 секунд на вопрос, можно листать быстрее.</div></div>`;
     return;
   }
   if (DY.mode === 'rec') {
@@ -94,7 +95,7 @@ export function diaryDraw() {
       <div class="tiny muted">Вопрос <span id="dyqn">1</span> из ${DIARY_Q.length}. Отвечай как в разговоре, своими словами. Можно задуматься - это тоже часть голоса.</div>
       <div id="dyq" style="font:700 21px Lora,serif;line-height:1.35;min-height:58px">${DIARY_Q[0]}</div>
       <div style="height:5px;background:var(--line);border-radius:3px;overflow:hidden"><i id="dyqbar" style="display:block;height:100%;width:0;background:var(--accent)"></i></div>
-      <div class="row"><button class="btn ghost" style="flex:1" onclick="diaryNextQ()">Следующий вопрос ›</button><button class="btn" style="flex:1" onclick="diaryRecStop()">${ICON.stop} Готово</button></div></div>`;
+      <div class="row"><button class="btn ghost" style="flex:1" ${act('diaryNextQ')}>Следующий вопрос ›</button><button class="btn" style="flex:1" ${act('diaryRecStop')}>${ICON.stop} Готово</button></div></div>`;
     const v = $('#dyprev'); if (v && CAM.stream) { v.srcObject = CAM.stream; v.play().catch(() => { }); }
   }
 }
@@ -197,6 +198,9 @@ export async function diaryMakeCompare() {
   const clip = { blob, url: URL.createObjectURL(blob), title: 'До и после', date: nowLocal(), ext };
   CAM.clips.push(clip); camShow(clip);
 }
+
+
+
 
 
 

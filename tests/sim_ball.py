@@ -24,7 +24,7 @@ FAIR = {'вовремя': [.12, .08, .15, 0, -99, 0], 'опоздание 0.2с'
         'октавой выше, динамик слышен': [.12, .08, .15, 12, -99, 0, 1]}
 fails = []
 with sync_playwright() as p:
-    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(viewport={'width': 390, 'height': 844})
+    br = p.chromium.launch(executable_path=CHROME); pg = br.new_page(bypass_csp=True, viewport={'width': 390, 'height': 844})
     pg.goto(URL + '#ball'); pg.wait_for_timeout(300)
     for tol in [40, 20]:
         pg.evaluate(f"state.settings.tol={tol};state.ball.best={{}};for(let i=1;i<=100;i++)state.ball.best[i]={{pct:100,stars:3}};state.ball.v=3;save()")

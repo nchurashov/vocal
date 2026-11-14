@@ -1,3 +1,4 @@
+import { act } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
 import { MIC_DIRECT, ac, afterMic, base, master, openMic, playing, stopAll, strictOct } from '../core/audio.js';
 import { profName } from '../core/store.js';
@@ -104,12 +105,15 @@ export function resultHTML(ref, ev, audio) {
     <div class="tiny muted" style="margin-top:4px">Серым: как надо. Цветом: как спето. Зелёный верно (до 30 ц), жёлтый близко (до 60 ц), красный мимо.</div>
     <ul class="notes-list">${lines}</ul>
     ${tip ? `<div class="info" style="margin-top:10px">${esc(tip)}</div>` : ''}
-    <div class="row wrap" style="margin-top:12px"><button class="btn ghost" onclick="playNotes(${JSON.stringify(ref.notes)},${ref.bpm})">${ICON.play} Как надо</button>
-    <button class="btn ghost" onclick="playAudioLast()">${ICON.play} Моя запись</button></div>`;
+    <div class="row wrap" style="margin-top:12px"><button class="btn ghost" ${act('playNotes', ref.notes, ref.bpm)}>${ICON.play} Как надо</button>
+    <button class="btn ghost" ${act('playAudioLast')}>${ICON.play} Моя запись</button></div>`;
 }
 export let lastAudio = null;
 export function setLastAudio(v) { lastAudio = v; }
 export function playAudioLast() { if (!lastAudio) return; stopAll(); const s = ac().createBufferSource(); s.buffer = lastAudio; s.connect(master); s.start(); playing.push(s); }
+
+
+
 
 
 

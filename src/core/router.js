@@ -1,3 +1,4 @@
+import { act } from './actions.js';
 import { stopAll } from './audio.js';
 import { initDb, profName, state } from './store.js';
 import { $, busy, esc } from './util.js';
@@ -38,7 +39,7 @@ export function render() {
   const p = !ROUTES[route] && findPrefix(route), R = ROUTES[route] || ROUTES.today;
   const tabRoute = p ? p.tab : R.tab;
   { const w = $('#who'); if (w) w.innerHTML = `🎤 ${esc(profName() || 'Кто?')}`; }
-  $('#tabs').innerHTML = '<div class="tabs-in">' + TABS.map(([k, n, ic]) => `<button class="tab ${tabRoute === k ? 'on' : ''}" onclick="go('${k}')">${ic}<span>${n}</span></button>`).join('') + '</div>';
+  $('#tabs').innerHTML = '<div class="tabs-in">' + TABS.map(([k, n, ic]) => `<button class="tab ${tabRoute === k ? 'on' : ''}" ${act('go', `${k}`)}>${ic}<span>${n}</span></button>`).join('') + '</div>';
   $('#view').innerHTML = p ? p.view(route.slice(p.prefix.length)) : R.view();
   afterRender();
 }
@@ -47,6 +48,12 @@ export function afterRender() { const h = afterHooks; afterHooks = []; h.forEach
 
 
 
+
+
+
+
+// «Назад»: в историю браузера, а если её нет - на главную
+export function back() { if (history.length > 1) history.back(); else go('today'); }
 
 
 

@@ -10,7 +10,7 @@ WAV = os.path.join(ROOT, 'tests', 'out', 'sing.wav')
 fails = []
 with sync_playwright() as p:
     br = p.chromium.launch(executable_path=CHROME, args=['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', f'--use-file-for-fake-audio-capture={WAV}', '--autoplay-policy=no-user-gesture-required'])
-    pg = br.new_page(viewport={'width': 390, 'height': 844}); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
+    pg = br.new_page(bypass_csp=True, viewport={'width': 390, 'height': 844}); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.goto(URL + '#today'); pg.wait_for_timeout(300)
     # метрики: мало речи -> null; речь вокруг A2 с интонацией ±3 полутона
     st = pg.evaluate("[speechStats(Array(100).fill(45)), speechStats(Array.from({length: 600}, (_, i) => i % 5 === 0 ? null : 45 + 3 * Math.sin(i / 9)))]")

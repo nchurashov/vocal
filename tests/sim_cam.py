@@ -15,13 +15,13 @@ CHECK = """async () => { const c = CAM.clips[CAM.clips.length - 1]; if (!c) retu
 fails = []
 with sync_playwright() as p:
     br = p.chromium.launch(executable_path=CHROME, args=['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', f'--use-file-for-fake-audio-capture={WAV}', '--autoplay-policy=no-user-gesture-required'])
-    pg = br.new_page(viewport={'width': 390, 'height': 844}); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
+    pg = br.new_page(bypass_csp=True, viewport={'width': 390, 'height': 844}); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.goto(URL + '#ball-1'); pg.evaluate("state.settings.voiceSet = true; state.settings.cam = false; save()")
     for route, btn, fin in [('ball-1', '#blive', 'ballFinish(false)'), ('game-1', '#glive', 'gameFinish(false)')]:
         pg.goto(URL + '#' + route); pg.reload(); pg.wait_for_timeout(600)
         if not pg.evaluate("CAM_OK"): fails.append('CAM_OK = false в Chrome'); break
         if pg.evaluate("!!CAM.stream"): fails.append(f'{route}: камера включилась без галочки')
-        if not pg.evaluate("document.querySelector('.check input[onchange^=camSet]').checked === false"): fails.append(f'{route}: галочка камеры включена по умолчанию')
+        if not pg.evaluate("document.querySelector('.check input[data-change=camSet]').checked === false"): fails.append(f'{route}: галочка камеры включена по умолчанию')
         pg.click('text=Снимать себя'); pg.wait_for_timeout(1200)
         pg.click(btn); pg.wait_for_timeout(5000); pg.evaluate(fin); pg.wait_for_timeout(200)
         if 'дописывается' not in pg.inner_text('#sheet'): fails.append(f'{route}: окно «Видео дописывается» не открылось сразу')

@@ -1,3 +1,4 @@
+import { act } from '../core/actions.js';
 import { noteShort } from '../core/audio.js';
 import { pianoSVG } from '../core/piano.js';
 import { ICON } from '../core/util.js';
@@ -8,7 +9,7 @@ export function viewLearn() {
   const r = lastRange();
   const names = [['До', 'C'], ['Ре', 'D'], ['Ми', 'E'], ['Фа', 'F'], ['Соль', 'G'], ['Ля', 'A'], ['Си', 'B']];
   const vrow = ([n, lo, hi, col]) => { const L = 36, H = 84, w = 100 / (H - L + 1); return `<div class="row" style="gap:8px;margin-top:6px"><span class="small" style="width:108px;flex:none">${n}</span><div style="flex:1;position:relative;height:14px;background:var(--line);border-radius:7px"><i style="position:absolute;left:${(lo - L) * w}%;width:${(hi - lo + 1) * w}%;top:0;bottom:0;border-radius:7px;background:${col || 'var(--ear)'};opacity:.8"></i></div><span class="tiny muted" style="width:62px;flex:none;text-align:right">${noteShort(lo)}-${noteShort(hi)}</span></div>`; };
-  return `<button class="back" onclick="history.length > 1 ? history.back() : go('today')">${ICON.back} Назад</button><h1>Как устроены ноты</h1>
+  return `<button class="back" ${act('back')}>${ICON.back} Назад</button><h1>Как устроены ноты</h1>
     <p class="muted" style="margin:6px 0 0">Коротко: что значат До, C4 и E2 и где это на пианино. Нажимай на клавиши, они звучат.</p>
     <div class="card sec stack"><div id="pkname" class="small" style="min-height:22px;text-align:center">Нажми на клавишу</div>
       <div style="overflow-x:auto">${pianoSVG(36, 83, { tap: true, octaves: true, band: r ? [r.lo, r.chestHi ?? r.hi] : null, band2: r && r.chestHi != null && r.chestHi < r.hi ? [r.chestHi + 1, r.hi] : null, id: 'pklearn' })}</div>

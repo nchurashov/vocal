@@ -1,3 +1,4 @@
+
 // ===== Утилиты =====
 export const $ = (s, el = document) => el.querySelector(s);
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -21,6 +22,9 @@ export const ICON = {
 // идёт запись или проверка: не перерисовываем и не уходим с экрана
 export let busy = false;
 export function setBusy(v) { busy = !!v; }
+
+
+
 
 
 

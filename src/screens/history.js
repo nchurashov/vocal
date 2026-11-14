@@ -1,3 +1,4 @@
+import { act } from '../core/actions.js';
 import { render } from '../core/router.js';
 import { save, state } from '../core/store.js';
 import { closeSheet, sheet } from '../core/ui.js';
@@ -18,7 +19,7 @@ export function sessionRow(s) {
   return `<div class="item" style="align-items:flex-start"><div class="dot ${s.cat}">${s.level}</div>
     <div class="t"><b>${esc(ex ? ex.title : s.ex)}</b><div class="row wrap" style="gap:6px;margin-top:4px"><span class="chip ${r.cls}">${r.label}</span>${auto ? `<span class="pill">${auto}</span>` : ''}${crit ? `<span class="pill">${crit}</span>` : ''}<span class="tiny muted">${time}</span></div>
     ${s.note ? `<div class="small" style="margin-top:6px">${esc(s.note)}</div>` : ''}</div>
-    <button class="iconbtn" style="width:32px;height:32px;border:0" title="Удалить" onclick="askDelete('${s.id}')">×</button></div>`;
+    <button class="iconbtn" style="width:32px;height:32px;border:0" title="Удалить" ${act('askDelete', `${s.id}`)}>×</button></div>`;
 }
 export function viewHistory() {
   let h = `<h1>История</h1>`;
@@ -31,7 +32,7 @@ export function viewHistory() {
   return h;
 }
 export function askDelete(id) {
-  sheet(`<h2>Удалить занятие?</h2><p class="muted">Оно пропадёт из истории и перестанет учитываться в уровнях.</p><div class="row"><button class="btn ghost" style="flex:1" onclick="closeSheet()">Отмена</button><button class="btn" style="flex:1;background:var(--bad)" onclick="doDelete('${id}')">Удалить</button></div>`);
+  sheet(`<h2>Удалить занятие?</h2><p class="muted">Оно пропадёт из истории и перестанет учитываться в уровнях.</p><div class="row"><button class="btn ghost" style="flex:1" ${act('closeSheet')}>Отмена</button><button class="btn" style="flex:1;background:var(--bad)" ${act('doDelete', `${id}`)}>Удалить</button></div>`);
 }
 export function doDelete(id) {
   state.sessions = state.sessions.filter(s => s.id !== id);
