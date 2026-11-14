@@ -6,6 +6,7 @@ import { CATS, RATINGS } from '../data/exercises.js';
 import { BALL_CHAPTERS, BALL_LEVELS, ballDone, ballNextN } from '../features/ball.js';
 import { diaryTodayItem } from '../features/diary.js';
 import { lastRange } from '../features/register.js';
+import { songsAll } from '../features/songs.js';
 import { setMin, voiceDoneToday, voiceNext } from '../features/voice.js';
 import { doneToday, warmupMin } from '../features/warmup.js';
 import { NEED_CONF, NEED_DAYS, dueList, freshList, isUnlocked, levelInfo, pitchAssessment, streak } from '../trainer/logic.js';
@@ -24,7 +25,7 @@ export function levelCard(cat) {
 }
 export function exItem(e, sub) {
   const locked = !isUnlocked(e);
-  return `<button class="item ${locked ? 'locked' : ''}" ${act('go', `ex-e.id`)}>
+  return `<button class="item ${locked ? 'locked' : ''}" ${act('go', `ex-${e.id}`)}>
     <div class="dot ${e.cat}">${e.level}</div>
     <div class="t"><b>${esc(e.title)}</b><span class="small muted">${sub || esc(CATS[e.cat].name + ' · ' + e.min + ' мин')}</span>
     ${locked ? `<div class="lockline">🔒 Откроется после ${NEED_CONF} уверенных занятий уровня ${e.level - 1} за ${NEED_DAYS}+ дня</div>` : ''}</div>
@@ -47,9 +48,11 @@ export function viewToday() {
   h += `<button class="item sec" style="margin-top:18px" ${act('go', 'warmup')}><div class="dot rhythm">${doneToday() ? '✓' : '♪'}</div><div class="t"><b>Распевка дня${doneToday() ? ': сделана' : ''}</b><span class="small muted">${doneToday() ? 'Можно повторить или сразу петь' : `Около ${warmupMin()} мин: дыхание, трель, мычание, гаммы, спуск вниз`}</span></div><span class="muted">›</span></button>`;
   h += diaryTodayItem();
   { const nx = voiceNext(), dn = voiceDoneToday();
-    h += `<button class="item" ${act('go', `voice-nx.id`)}><div class="dot ear">${dn ? '✓' : nx.icon}</div><div class="t"><b>Голос и речь${dn ? ': сделано' : ''}: ${nx.title}</b><span class="small muted">${dn ? 'Можно ещё один комплекс' : setMin(nx) + ' мин · дыхание, дикция, плавная речь, сильный голос'}</span></div><span class="muted">›</span></button>`; }
+    h += `<button class="item" ${act('go', `voice-${nx.id}`)}><div class="dot ear">${dn ? '✓' : nx.icon}</div><div class="t"><b>Голос и речь${dn ? ': сделано' : ''}: ${nx.title}</b><span class="small muted">${dn ? 'Можно ещё один комплекс' : setMin(nx) + ' мин · дыхание, дикция, плавная речь, сильный голос'}</span></div><span class="muted">›</span></button>`; }
   { const nx = BALL_LEVELS[ballNextN() - 1], done = BALL_LEVELS.filter(l => ballDone(l.n)).length;
-    h += `<button class="item" ${act('go', `ball-nx.n`)}><div class="dot pitch">🟠</div><div class="t"><b>Шарик: глава ${nx.ch + 1}, ${nx.exam ? 'экзамен' : 'задание ' + nx.task}</b><span class="small muted">${esc(BALL_CHAPTERS[nx.ch].title)} · пройдено ${done} из ${BALL_LEVELS.length}</span></div><span class="muted">›</span></button>`; }
+    h += `<button class="item" ${act('go', `ball-${nx.n}`)}><div class="dot pitch">🟠</div><div class="t"><b>Шарик: глава ${nx.ch + 1}, ${nx.exam ? 'экзамен' : 'задание ' + nx.task}</b><span class="small muted">${esc(BALL_CHAPTERS[nx.ch].title)} · пройдено ${done} из ${BALL_LEVELS.length}</span></div><span class="muted">›</span></button>`; }
+  { const mine = songsAll().filter(x => x.src !== 'builtin').length;
+    h += `<button class="item" ${act('go', 'songs')}><div class="dot rhythm">🎵</div><div class="t"><b>Разучить песню</b><span class="small muted">${mine ? 'Моих песен: ' + mine + ' · ' : ''}Своя из MIDI или караоке, или напой сам. По фразам, потом целиком</span></div><span class="muted">›</span></button>`; }
   { const r = lastRange();
     h += `<button class="item" ${act('go', 'range')}><div class="dot ear">↕</div><div class="t"><b>${r ? 'Мой диапазон: ' + noteShort(r.lo) + ' - ' + noteShort(r.hi) : 'Замерить мой диапазон'}</b><span class="small muted">${r ? 'Последний замер ' + fmtDay(r.date.slice(0, 10)).toLowerCase() + ' · работаем от ' + noteShort(base()) + (strictOct() ? ', строго в октаве' : '') : 'Минута: узнаешь свой низ и верх и выберешь, где работать'}</span></div><span class="muted">›</span></button>`; }
   h += `<button class="item" ${act('go', 'learn')}><div class="dot pitch">🎹</div><div class="t"><b>Как устроены ноты</b><span class="small muted">До-ре-ми и C-D-E, октавы, что значат C4 и E2, клавиатура со звуком</span></div><span class="muted">›</span></button>`;

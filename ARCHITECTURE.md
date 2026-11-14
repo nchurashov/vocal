@@ -14,7 +14,7 @@
 | Ядро | `src/core/` - util, audio, store, router, ui, piano, analysis | только `core/` |
 | Данные | `src/data/` | только `core/` |
 | Тренажёр | `src/trainer/` - логика уровней, экраны упражнений, запись голоса | `core/`, `data/`, `features/` |
-| Функции | `src/features/` - ball, game, warmup, voice, range, diary, learn, cam, register | `core/`, `data/`, другие функции через их публичные функции |
+| Функции | `src/features/` - ball, game, warmup, voice, range, diary, learn, cam, register, songs (+ songlib) | `core/`, `data/`, другие функции через их публичные функции |
 | Экраны | `src/screens/` - today, history, notes, settings, profiles | всё |
 | Сборка | `src/main.js` - регистрирует экраны в роутере, остановки, запуск | всё |
 

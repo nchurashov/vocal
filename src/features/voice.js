@@ -131,11 +131,11 @@ export function viewVoice() {
   const v = voiceState(), nx = voiceNext(), days = new Set(v.done.map(x => x.date.slice(0, 10))).size;
   let h = `<button class="back" ${act('go', 'today')}>${ICON.back} Сегодня</button><h1>Голос и речь</h1>
     <p class="muted" style="margin:6px 0 0">Актёрские и логопедические упражнения: расслабить лицо и горло, поставить дыхание, сделать голос звучнее и ниже, речь чёткой и плавной. По 4-6 минут, лучше каждый день.</p>
-    <button class="item sec" style="margin-top:14px" ${act('go', `voice-nx.id`)}><div class="dot rhythm">${voiceDoneToday() ? '✓' : nx.icon}</div><div class="t"><b>${voiceDoneToday() ? 'Сегодня уже сделано. Ещё один?' : 'Комплекс дня'}: ${nx.title}</b><span class="small muted">${setMin(nx)} мин · ${esc(nx.desc)}</span></div><span class="muted">›</span></button>
+    <button class="item sec" style="margin-top:14px" ${act('go', `voice-${nx.id}`)}><div class="dot rhythm">${voiceDoneToday() ? '✓' : nx.icon}</div><div class="t"><b>${voiceDoneToday() ? 'Сегодня уже сделано. Ещё один?' : 'Комплекс дня'}: ${nx.title}</b><span class="small muted">${setMin(nx)} мин · ${esc(nx.desc)}</span></div><span class="muted">›</span></button>
     <div class="card sec stack"><h3>Мой прогресс</h3>${recLine('mpt', 'Длинный звук на «а»')}${recLine('exhale', 'Выдох на «с»')}
       <div class="tiny muted">Замеры в комплексах «Дыхание», «Резонанс» и «Шире диапазон». Секундомер идёт, только пока микрофон слышит звук.${days ? ` Занимался ${days} ${plural(days, 'день', 'дня', 'дней')}.` : ''}</div></div>
     <div class="sec"><h2>Все комплексы</h2>`;
-  h += VOICE_SETS.map(s => { const n = v.done.filter(x => x.id === s.id).length; return `<button class="item" ${act('go', `voice-s.id`)}><div class="dot ear">${s.icon}</div><div class="t"><b>${s.title}</b><span class="small muted">${setMin(s)} мин · ${s.steps.length} ${plural(s.steps.length, 'упражнение', 'упражнения', 'упражнений')}${n ? ` · сделан ${n} ${plural(n, 'раз', 'раза', 'раз')}` : ''}</span></div><span class="muted">›</span></button>`; }).join('');
+  h += VOICE_SETS.map(s => { const n = v.done.filter(x => x.id === s.id).length; return `<button class="item" ${act('go', `voice-${s.id}`)}><div class="dot ear">${s.icon}</div><div class="t"><b>${s.title}</b><span class="small muted">${setMin(s)} мин · ${s.steps.length} ${plural(s.steps.length, 'упражнение', 'упражнения', 'упражнений')}${n ? ` · сделан ${n} ${plural(n, 'раз', 'раза', 'раз')}` : ''}</span></div><span class="muted">›</span></button>`; }).join('');
   return h + '</div>';
 }
 export function viewVoiceSet(id) {

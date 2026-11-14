@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-Id2nn9rFeVO/KkoW3sui+IF1bDzQH94EtuRi9xRKEnY='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-DTYy0rbuFXhDPjXiCMrr0bLblJWW1nYfhhoyWHcziAs='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Вокал под бокал</title>
 <meta name="apple-mobile-web-app-title" content="Вокал под бокал"><meta name="description" content="Вокал под бокал: налей бокал и включи одно упражнение в день. Через месяц ты не узнаешь свой голос.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -347,28 +347,28 @@ details summary{cursor:pointer}
     }
     function alignWith(ref, segs, o) {
       const n = ref.length, m = segs.length, GAP_REF = 2.5, GAP_SEG = 1;
-      const D = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
+      const D2 = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
       const B2 = Array.from({ length: n + 1 }, () => new Int8Array(m + 1));
       for (let i2 = 1; i2 <= n; i2++) {
-        D[i2][0] = i2 * GAP_REF;
+        D2[i2][0] = i2 * GAP_REF;
         B2[i2][0] = 1;
       }
       for (let j2 = 1; j2 <= m; j2++) {
-        D[0][j2] = j2 * GAP_SEG;
+        D2[0][j2] = j2 * GAP_SEG;
         B2[0][j2] = 2;
       }
       for (let i2 = 1; i2 <= n; i2++) for (let j2 = 1; j2 <= m; j2++) {
         const c = Math.min(Math.abs(segs[j2 - 1].pitch - o - ref[i2 - 1]), 4);
-        let best = D[i2 - 1][j2 - 1] + c, bb = 0;
-        if (D[i2 - 1][j2] + GAP_REF < best) {
-          best = D[i2 - 1][j2] + GAP_REF;
+        let best = D2[i2 - 1][j2 - 1] + c, bb = 0;
+        if (D2[i2 - 1][j2] + GAP_REF < best) {
+          best = D2[i2 - 1][j2] + GAP_REF;
           bb = 1;
         }
-        if (D[i2][j2 - 1] + GAP_SEG < best) {
-          best = D[i2][j2 - 1] + GAP_SEG;
+        if (D2[i2][j2 - 1] + GAP_SEG < best) {
+          best = D2[i2][j2 - 1] + GAP_SEG;
           bb = 2;
         }
-        D[i2][j2] = best;
+        D2[i2][j2] = best;
         B2[i2][j2] = bb;
       }
       const pairs = new Array(n).fill(-1), extra = [];
@@ -386,7 +386,7 @@ details summary{cursor:pointer}
           j--;
         }
       }
-      return { cost: D[n][m], pairs, extra };
+      return { cost: D2[n][m], pairs, extra };
     }
     function align(ref, segs, anyKey, strict) {
       let cands;
@@ -833,11 +833,13 @@ details summary{cursor:pointer}
   }
 
   // src/core/store.js
-  var STATE_V = 2;
-  var DEFAULT = () => ({ v: STATE_V, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] }, range: [], warmups: [] });
+  var STATE_V = 3;
+  var DEFAULT = () => ({ v: STATE_V, settings: { base: 48, latency: 0 }, sessions: [], srs: {}, notes: [], game: { best: {}, plays: [] }, ball: { best: {}, plays: [] }, range: [], warmups: [], songs: {} });
   var MIGRATIONS = {
-    1: (s) => s
+    1: (s) => s,
     // v1 -> v2: формат стал версионным; поля, которых не было, добавит DEFAULT
+    2: (s) => s
+    // v2 -> v3: прогресс песен state.songs[id] = { ph: {номер фразы: лучший %}, whole: %, shift, plays, last }; пустой добавит DEFAULT
   };
   var TEXT_KEYS = /* @__PURE__ */ new Set(["text", "note"]);
   var SESSION_CATS = ["ear", "pitch", "rhythm"];
@@ -1737,18 +1739,18 @@ details summary{cursor:pointer}
   var NEED_DAYS = 2;
   function levelInfo(cat) {
     let open = 1, passed = 0;
-    const prog = {};
+    const prog2 = {};
     for (let L = 1; L <= 3; L++) {
       const conf = state.sessions.filter((s) => s.cat === cat && s.level === L && s.rating === 3);
       const days = new Set(conf.map((s) => s.date.slice(0, 10))).size;
-      prog[L] = { conf: conf.length, days };
+      prog2[L] = { conf: conf.length, days };
       if (conf.length >= NEED_CONF && days >= NEED_DAYS) {
         passed = L;
         open = Math.min(3, L + 1);
       } else break;
     }
     const any = state.sessions.some((s) => s.cat === cat);
-    return { open, passed, prog: prog[open] || { conf: 0, days: 0 }, any, done3: passed === 3 };
+    return { open, passed, prog: prog2[open] || { conf: 0, days: 0 }, any, done3: passed === 3 };
   }
   function isUnlocked(ex) {
     return ex.level <= levelInfo(ex.cat).open;
@@ -2343,7 +2345,7 @@ details summary{cursor:pointer}
   function resultHTML(ref, ev, audio) {
     const n = ev.notes.length;
     const lines = ev.notes.map((r, i) => {
-      const nm = VA.noteName(base() + ref.notes[i][0]);
+      const nm2 = VA.noteName(base() + ref.notes[i][0]);
       let t;
       if (r.status === "missed") t = '<span class="mark missed">✗ не спета</span>';
       else {
@@ -2354,7 +2356,7 @@ details summary{cursor:pointer}
         else t = `<span class="mark off">✗ мимо</span>, ${dir} ${amount}`;
       }
       if (r.rhythm) t += `<span class="muted"> · ${r.rhythm === "long" ? "затянута" : "короче нужного"}</span>`;
-      return `<li><span class="n">${i + 1}</span><span><b>${nm}</b>: ${t}</span></li>`;
+      return `<li><span class="n">${i + 1}</span><span><b>${nm2}</b>: ${t}</span></li>`;
     }).join("");
     const sung = ev.notes.filter((r) => r.dev != null);
     const avg = sung.length ? Math.round(sung.reduce((a, r) => a + r.dev, 0) / sung.length) : 0;
@@ -3710,13 +3712,13 @@ details summary{cursor:pointer}
     const v = voiceState(), nx = voiceNext(), days = new Set(v.done.map((x) => x.date.slice(0, 10))).size;
     let h = `<button class="back" ${act("go", "today")}>${ICON.back} Сегодня</button><h1>Голос и речь</h1>
     <p class="muted" style="margin:6px 0 0">Актёрские и логопедические упражнения: расслабить лицо и горло, поставить дыхание, сделать голос звучнее и ниже, речь чёткой и плавной. По 4-6 минут, лучше каждый день.</p>
-    <button class="item sec" style="margin-top:14px" ${act("go", `voice-nx.id`)}><div class="dot rhythm">${voiceDoneToday() ? "✓" : nx.icon}</div><div class="t"><b>${voiceDoneToday() ? "Сегодня уже сделано. Ещё один?" : "Комплекс дня"}: ${nx.title}</b><span class="small muted">${setMin(nx)} мин · ${esc(nx.desc)}</span></div><span class="muted">›</span></button>
+    <button class="item sec" style="margin-top:14px" ${act("go", `voice-${nx.id}`)}><div class="dot rhythm">${voiceDoneToday() ? "✓" : nx.icon}</div><div class="t"><b>${voiceDoneToday() ? "Сегодня уже сделано. Ещё один?" : "Комплекс дня"}: ${nx.title}</b><span class="small muted">${setMin(nx)} мин · ${esc(nx.desc)}</span></div><span class="muted">›</span></button>
     <div class="card sec stack"><h3>Мой прогресс</h3>${recLine("mpt", "Длинный звук на «а»")}${recLine("exhale", "Выдох на «с»")}
       <div class="tiny muted">Замеры в комплексах «Дыхание», «Резонанс» и «Шире диапазон». Секундомер идёт, только пока микрофон слышит звук.${days ? ` Занимался ${days} ${plural(days, "день", "дня", "дней")}.` : ""}</div></div>
     <div class="sec"><h2>Все комплексы</h2>`;
     h += VOICE_SETS.map((s) => {
       const n = v.done.filter((x) => x.id === s.id).length;
-      return `<button class="item" ${act("go", `voice-s.id`)}><div class="dot ear">${s.icon}</div><div class="t"><b>${s.title}</b><span class="small muted">${setMin(s)} мин · ${s.steps.length} ${plural(s.steps.length, "упражнение", "упражнения", "упражнений")}${n ? ` · сделан ${n} ${plural(n, "раз", "раза", "раз")}` : ""}</span></div><span class="muted">›</span></button>`;
+      return `<button class="item" ${act("go", `voice-${s.id}`)}><div class="dot ear">${s.icon}</div><div class="t"><b>${s.title}</b><span class="small muted">${setMin(s)} мин · ${s.steps.length} ${plural(s.steps.length, "упражнение", "упражнения", "упражнений")}${n ? ` · сделан ${n} ${plural(n, "раз", "раза", "раз")}` : ""}</span></div><span class="muted">›</span></button>`;
     }).join("");
     return h + "</div>";
   }
@@ -4046,7 +4048,7 @@ details summary{cursor:pointer}
     <div class="ggrid sec">`;
     for (const lv of GAME_LEVELS) {
       const best = g.best[lv.n], open = gameUnlocked(lv.n);
-      h += `<button class="gtile ${open ? "" : "locked"}" ${open ? `${act("go", `game-lv.n`)}` : ""}>
+      h += `<button class="gtile ${open ? "" : "locked"}" ${open ? `${act("go", `game-${lv.n}`)}` : ""}>
       <span class="gnum">${open ? lv.n : "🔒"}</span><b>${esc(lv.title)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
       <span class="tiny muted">${best ? "лучший " + best.acc + "%" : open ? "ещё не играл" : "пройди уровень " + (lv.n - 1)}</span></button>`;
     }
@@ -4080,9 +4082,9 @@ details summary{cursor:pointer}
     return h;
   }
   function gameSetup(lv) {
-    const { tl, D } = gameTimeline(lv);
+    const { tl, D: D2 } = gameTimeline(lv);
     const cv = $("#gcv");
-    G = { lv, tl, D, cv, ctx: cv.getContext("2d"), trail: [], combo: 0, maxCombo: 0, pops: [], mode: "idle", voice: null };
+    G = { lv, tl, D: D2, cv, ctx: cv.getContext("2d"), trail: [], combo: 0, maxCombo: 0, pops: [], mode: "idle", voice: null };
     gameResize();
     gameDraw(-1.5);
     const ctl = $("#gctl");
@@ -4452,8 +4454,8 @@ details summary{cursor:pointer}
     const msg = st === 0 ? `Нужно ${STAR_AT[0]}%, чтобы пройти уровень. Послушай его ещё раз и попробуй снова.` : opened ? `Уровень ${lv.n + 1} открыт!` : st === 3 ? "Максимум звёзд!" : `До следующей звезды нужно ${STAR_AT[st]}%.`;
     const notesTxt = G.devs ? G.tl.map((n, i) => {
       const d = G.devs[i];
-      const nm = VA.noteName(base() + n.rel);
-      return d == null ? `${nm} ✗` : Math.abs(d) <= lv.tol ? `${nm} ✓` : `${nm} ${d > 0 ? "↑" : "↓"}${Math.abs(d)}ц`;
+      const nm2 = VA.noteName(base() + n.rel);
+      return d == null ? `${nm2} ✗` : Math.abs(d) <= lv.tol ? `${nm2} ✓` : `${nm2} ${d > 0 ? "↑" : "↓"}${Math.abs(d)}ц`;
     }).join(" · ") : "";
     $("#gres").innerHTML = `<div class="card sec stack" style="text-align:center">
     <div>${starStr(st, true)}</div>
@@ -4462,7 +4464,7 @@ details summary{cursor:pointer}
     ${notesTxt ? `<div class="small">${notesTxt}</div>` : ""}
     <div class="${st ? "info" : "note"}">${msg}</div>
     <div class="row wrap" style="justify-content:center">${mode === "take" && lastAudio ? `<button class="btn ghost" ${act("playAudioLast")}>${ICON.play} Моя попытка</button>` : ""}
-    ${gameUnlocked(lv.n + 1) && lv.n < GAME_LEVELS.length ? `<button class="btn" ${act("go", `game-lv.n + 1`)}>Уровень ${lv.n + 1} →</button>` : ""}</div></div>`;
+    ${gameUnlocked(lv.n + 1) && lv.n < GAME_LEVELS.length ? `<button class="btn" ${act("go", `game-${lv.n + 1}`)}>Уровень ${lv.n + 1} →</button>` : ""}</div></div>`;
     if (opened) toast(`Уровень ${lv.n + 1} открыт!`);
   }
   window.addEventListener("resize", () => {
@@ -4515,21 +4517,21 @@ details summary{cursor:pointer}
     }
     return null;
   }
-  function ballPhrase(C, R, n) {
+  function ballPhrase(C2, R, n) {
     const out = [];
-    if (C.kind === "hold") {
+    if (C2.kind === "hold") {
       for (let k = 0; k < n; k++) out.push(0);
       return out;
     }
-    if (C.kind === "int") {
-      for (let k = 0; k < n; k++) out.push(k === 0 ? 0 : out[k - 1] === 0 ? C.deg : R() < 0.6 ? 0 : C.deg);
+    if (C2.kind === "int") {
+      for (let k = 0; k < n; k++) out.push(k === 0 ? 0 : out[k - 1] === 0 ? C2.deg : R() < 0.6 ? 0 : C2.deg);
       return out;
     }
-    if (C.kind === "scale") {
+    if (C2.kind === "scale") {
       const up = [0, 1, 2, 3, 4, 3, 2, 1, 0, 2, 4, 2, 0];
       return up.slice(0, n);
     }
-    if (C.kind === "triad") {
+    if (C2.kind === "triad") {
       const seq = [0, 2, 4, 2, 0, 4, 2, 4, 0, 2];
       for (let k = 0; k < n; k++) out.push(k < 5 ? seq[k] : [0, 2, 4][Math.floor(R() * 3)]);
       return out;
@@ -4537,38 +4539,38 @@ details summary{cursor:pointer}
     let cur = 0;
     out.push(0);
     for (let k = 1; k < n; k++) {
-      const cand = [cur - 2, cur - 1, cur + 1, cur + 2].filter((x) => x >= 0 && x <= C.deg);
+      const cand = [cur - 2, cur - 1, cur + 1, cur + 2].filter((x) => x >= 0 && x <= C2.deg);
       cur = k === n - 1 ? 0 : cand[Math.floor(R() * cand.length)];
       out.push(cur);
     }
     return out;
   }
   function ballGen(ci, ti, W) {
-    const C = BALL_CHAPTERS[ci], exam = ti === 9, d = ti / 9, R = ballRng((ci + 1) * 1e3 + ti + 7);
-    const top = C.kind === "hold" ? 0 : C.deg, roots = [0, 1, 2, 3, 4, 5, 6].map((g) => ballRoot(g, top, W)).filter(Boolean);
+    const C2 = BALL_CHAPTERS[ci], exam = ti === 9, d = ti / 9, R = ballRng((ci + 1) * 1e3 + ti + 7);
+    const top = C2.kind === "hold" ? 0 : C2.deg, roots = [0, 1, 2, 3, 4, 5, 6].map((g) => ballRoot(g, top, W)).filter(Boolean);
     const fixed = ti < 7 ? ballRoot(ti, top, W) : null;
-    const n = exam ? 10 : 5 + Math.round(3 * d), legato = C.kind === "melody" || C.kind === "scale" && ti >= 4 || exam && C.kind !== "hold";
-    const bpm = Math.round(C.bpm[0] + (C.bpm[1] - C.bpm[0]) * d), guide = exam ? false : ti < 6;
+    const n = exam ? 10 : 5 + Math.round(3 * d), legato = C2.kind === "melody" || C2.kind === "scale" && ti >= 4 || exam && C2.kind !== "hold";
+    const bpm = Math.round(C2.bpm[0] + (C2.bpm[1] - C2.bpm[0]) * d), guide = exam ? false : ti < 6;
     const walls = [];
     if (fixed) {
-      ballPhrase(C, R, n).forEach((g) => walls.push(DEG_SEMI(fixed.dg + g) + (fixed.r - DEG_SEMI(fixed.dg))));
+      ballPhrase(C2, R, n).forEach((g) => walls.push(DEG_SEMI(fixed.dg + g) + (fixed.r - DEG_SEMI(fixed.dg))));
     } else {
       while (walls.length < n) {
         const rt = roots[Math.floor(R() * roots.length)] || { dg: 0, r: 0 };
-        ballPhrase(C, R, C.kind === "hold" ? 2 : C.kind === "int" ? 2 : 3).forEach((g) => {
+        ballPhrase(C2, R, C2.kind === "hold" ? 2 : C2.kind === "int" ? 2 : 3).forEach((g) => {
           if (walls.length < n) walls.push(DEG_SEMI(rt.dg + g));
         });
       }
     }
     const out = walls.map((s, k) => {
       const jump = k ? Math.abs(s - walls[k - 1]) : 0;
-      const len = legato ? jump >= 7 || R() < 0.3 ? 2 : 1 : C.kind === "hold" ? 1 + Math.round(2 * d) : 1 + (R() < 0.25 + 0.25 * d ? 1 : 0) + (jump >= 9 ? 1 : 0);
+      const len = legato ? jump >= 7 || R() < 0.3 ? 2 : 1 : C2.kind === "hold" ? 1 + Math.round(2 * d) : 1 + (R() < 0.25 + 0.25 * d ? 1 : 0) + (jump >= 9 ? 1 : 0);
       return [s, len, legato ? 0 : Math.max(1, 2 - Math.round(d * 2) * 0.5)];
     });
     out[out.length - 1][1] = Math.max(2, out[out.length - 1][1]);
     out[out.length - 1][2] = 1;
     const from = fixed ? `от ${DEG_NAME[ti]}` : "вразнобой";
-    return { n: ci * 10 + ti + 1, ch: ci, task: ti + 1, exam, from, title: exam ? `Экзамен: ${C.title.toLowerCase()}` : `${C.title} ${from}`, hint: C.goal, bpm, guide, walls: out };
+    return { n: ci * 10 + ti + 1, ch: ci, task: ti + 1, exam, from, title: exam ? `Экзамен: ${C2.title.toLowerCase()}` : `${C2.title} ${from}`, hint: C2.goal, bpm, guide, walls: out };
   }
   var BALL_LEVELS = [];
   function ballRebuild() {
@@ -4622,17 +4624,17 @@ details summary{cursor:pointer}
     ${diffSeg()}
     <div class="row sec" style="margin-top:14px;gap:8px"><span class="pill">★ ${total} из ${BALL_LEVELS.length * 3}</span><span class="pill">Пройдено: ${BALL_LEVELS.filter((l) => ballDone(l.n)).length} из ${BALL_LEVELS.length}</span></div>`;
     const curCh = Math.floor((ballNextN() - 1) / 10);
-    BALL_CHAPTERS.forEach((C, ci) => {
+    BALL_CHAPTERS.forEach((C2, ci) => {
       const lvls = BALL_LEVELS.filter((l) => l.ch === ci), done = lvls.filter((l) => ballDone(l.n)).length, open = ballUnlocked(ci * 10 + 1), show = ballOpenCh === ci || ballOpenCh == null && ci === curCh;
       h += `<div class="card sec" style="padding:0;overflow:hidden;${open ? "" : "opacity:.6"}">
       <button class="row between" style="width:100%;border:0;background:none;padding:14px 16px;text-align:left;color:inherit" ${act("toggleChapter", show ? -1 : ci)}>
-        <div><div class="tiny muted">Глава ${ci + 1}${done === 10 ? " · пройдена ✓" : ""}</div><b>${open ? "" : "🔒 "}${esc(C.title)}</b><div class="small muted">${esc(C.goal)}</div></div>
+        <div><div class="tiny muted">Глава ${ci + 1}${done === 10 ? " · пройдена ✓" : ""}</div><b>${open ? "" : "🔒 "}${esc(C2.title)}</b><div class="small muted">${esc(C2.goal)}</div></div>
         <div style="text-align:right;flex:none;margin-left:10px"><b>${done}/10</b><div style="width:64px;height:5px;background:var(--line);border-radius:3px;margin-top:4px"><i style="display:block;height:100%;width:${done * 10}%;background:var(--ok);border-radius:3px"></i></div></div></button>`;
       if (show) {
         h += `<div class="ggrid" style="padding:0 12px 12px">`;
         for (const lv of lvls) {
           const best = g.best[lv.n], o = ballUnlocked(lv.n), ok = ballDone(lv.n);
-          h += `<button class="gtile ${o ? "" : "locked"}" ${o ? `${act("go", `ball-lv.n`)}` : ""}>
+          h += `<button class="gtile ${o ? "" : "locked"}" ${o ? `${act("go", `ball-${lv.n}`)}` : ""}>
           <span class="gnum">${o ? lv.exam ? "🎓" : lv.task : "🔒"}</span><b>${lv.exam ? "Экзамен" : lv.from[0].toUpperCase() + lv.from.slice(1)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
           <span class="tiny muted">${ok ? "пройдено" : best ? "нужно " + BALL_NEED(lv.n) + "★, есть " + best.stars : o ? lv.exam ? "без ударов, 3★" : lv.guide ? "с подсказкой" : "без подсказки" : "закрыто"}</span></button>`;
         }
@@ -4676,7 +4678,7 @@ details summary{cursor:pointer}
     if (!best) return "";
     const next = lv.n < BALL_LEVELS.length && ballUnlocked(lv.n + 1);
     return `<div class="card row between wrap" style="margin-top:12px;gap:8px;padding:12px 14px"><div><div class="tiny muted">Твой рекорд сохранён</div><b>${starStr(best.stars)} ${best.pct}% стен при ±${bestTol(best, lv.n)}</b></div>
-    ${next ? `<button class="btn soft" style="min-height:40px" ${act("go", `ball-lv.n + 1`)}>${ballNextLbl(lv.n + 1)} →</button>` : ""}</div>`;
+    ${next ? `<button class="btn soft" style="min-height:40px" ${act("go", `ball-${lv.n + 1}`)}>${ballNextLbl(lv.n + 1)} →</button>` : ""}</div>`;
   }
   function ballBuild(lv) {
     const b = 60 / lv.bpm;
@@ -4691,8 +4693,8 @@ details summary{cursor:pointer}
     return { walls, D: t };
   }
   function ballSetup(lv) {
-    const { walls, D } = ballBuild(lv), cv = $("#bcv");
-    B = { lv, walls, D, cv, ctx: cv.getContext("2d"), mode: "idle", y: null, vy: 0, lives: 3, trail: [], parts: [], voice: null, guide: lv.guide };
+    const { walls, D: D2 } = ballBuild(lv), cv = $("#bcv");
+    B = { lv, walls, D: D2, cv, ctx: cv.getContext("2d"), mode: "idle", y: null, vy: 0, lives: 3, trail: [], parts: [], voice: null, guide: lv.guide };
     {
       const t = [...new Set(walls.map((w) => w.rel))];
       B.dupName = new Set(t.map((r) => VA.noteName(base() + r))).size < t.length;
@@ -5127,8 +5129,8 @@ details summary{cursor:pointer}
     const need = BALL_NEED(lv.n), last = lv.n === BALL_LEVELS.length;
     const msg = B.lives <= 0 ? "Шарик разбился. Посмотри демо и попробуй снова." : st < need ? lv.exam ? `Экзамен засчитывается только без единого удара (3 звезды). Сейчас ${st}★ - ещё раз, ты близко!` : `Чтобы засчитать задание, нужно 2 звезды (80% стен). Сейчас ${st}★ - закрепи ещё раз.` : opened ? lv.exam ? `Экзамен сдан! Открыта глава ${lv.ch + 2} «${BALL_CHAPTERS[lv.ch + 1].title}».` : `Засчитано! ${ballNextLbl(lv.n + 1)} открыто.` : last && st === 3 ? "Все 100 заданий пройдены. Ты прошёл весь «Шарик»!" : st === 3 ? "Все стены чисто! Максимум звёзд." : "Засчитано. Можно улучшить рекорд или идти дальше.";
     const notesTxt = B.devs ? B.walls.map((w, i) => {
-      const d = B.devs[i], nm = VA.noteName(base() + w.rel);
-      return d == null ? `${nm} ✗` : w.passed ? `${nm} ✓` : `${nm} ${d > 0 ? "↑" : "↓"}${Math.abs(d)}ц`;
+      const d = B.devs[i], nm2 = VA.noteName(base() + w.rel);
+      return d == null ? `${nm2} ✗` : w.passed ? `${nm2} ✓` : `${nm2} ${d > 0 ? "↑" : "↓"}${Math.abs(d)}ц`;
     }).join(" · ") : B.walls.map((w) => `${VA.noteName(base() + w.rel)} ${w.passed ? "✓" : w.crashed ? "✗" : "·"}`).join(" · ");
     $("#bres").innerHTML = `<div class="card sec stack" style="text-align:center">
     <div>${starStr(st, true)}</div>
@@ -5137,7 +5139,7 @@ details summary{cursor:pointer}
     <div class="small">${notesTxt}</div>
     <div class="${st ? "info" : "note"}">${msg}</div>
     <div class="row wrap" style="justify-content:center">${mode === "take" && lastAudio ? `<button class="btn ghost" ${act("playAudioLast")}>${ICON.play} Моя попытка</button>` : ""}
-    ${ballUnlocked(lv.n + 1) && lv.n < BALL_LEVELS.length ? `<button class="btn" ${act("go", `ball-lv.n + 1`)}>${ballNextLbl(lv.n + 1)} →</button>` : ""}</div></div>`;
+    ${ballUnlocked(lv.n + 1) && lv.n < BALL_LEVELS.length ? `<button class="btn" ${act("go", `ball-${lv.n + 1}`)}>${ballNextLbl(lv.n + 1)} →</button>` : ""}</div></div>`;
     if (opened) toast(`${ballNextLbl(lv.n + 1)} открыто!`);
   }
   window.addEventListener("resize", () => {
@@ -5452,7 +5454,7 @@ details summary{cursor:pointer}
     camPending();
     if ($("#campend b")) $("#campend b").textContent = "Собираю «до и после»...";
     const c = ac(), dest = c.createMediaStreamDestination();
-    const mk = async (blob2) => {
+    const mk2 = async (blob2) => {
       const v = document.createElement("video");
       v.src = URL.createObjectURL(blob2);
       v.muted = true;
@@ -5468,13 +5470,13 @@ details summary{cursor:pointer}
       }
       return { v, buf };
     };
-    const A = await mk(ba), B2 = await mk(bb);
+    const A2 = await mk2(ba), B2 = await mk2(bb);
     const labels = [["ДО", a], ["ПОСЛЕ", b]];
     let cur = 0;
     DY = DY || {};
-    DY.playing = [A.v, B2.v];
+    DY.playing = [A2.v, B2.v];
     const rec2 = recCanvas((g, W, H) => {
-      const v = cur === 0 ? A.v : B2.v;
+      const v = cur === 0 ? A2.v : B2.v;
       g.fillStyle = "#000";
       g.fillRect(0, 0, W, H);
       if (v.videoWidth) {
@@ -5505,11 +5507,11 @@ details summary{cursor:pointer}
       const len = (X.buf ? X.buf.duration : X.v.duration) || 5;
       setTimeout(res, len * 1e3 + 200);
     });
-    await playOne(A);
+    await playOne(A2);
     cur = 1;
     await playOne(B2);
     const { blob, ext } = await rec2.stop();
-    [A.v, B2.v].forEach((v) => {
+    [A2.v, B2.v].forEach((v) => {
       try {
         v.pause();
         URL.revokeObjectURL(v.src);
@@ -5523,6 +5525,936 @@ details summary{cursor:pointer}
   }
   function __set_DY(v) {
     DY = v;
+  }
+
+  // src/features/songs.js
+  var songs_exports2 = {};
+  __export(songs_exports2, {
+    SG: () => SG,
+    __set_SG: () => __set_SG,
+    shiftText: () => shiftText,
+    songAskDel: () => songAskDel,
+    songById: () => songById,
+    songCancel: () => songCancel,
+    songDel: () => songDel,
+    songDraftDraw: () => songDraftDraw,
+    songDraw: () => songDraw,
+    songEnsureMic: () => songEnsureMic,
+    songFile: () => songFile,
+    songFinish: () => songFinish,
+    songFrame: () => songFrame,
+    songFromAudioBuf: () => songFromAudioBuf,
+    songFromMidiBuf: () => songFromMidiBuf,
+    songGoPhrase: () => songGoPhrase,
+    songNext: () => songNext,
+    songPanel: () => songPanel,
+    songPickTrack: () => songPickTrack,
+    songPlay: () => songPlay,
+    songPreview: () => songPreview,
+    songRecord: () => songRecord,
+    songRoll: () => songRoll,
+    songSave: () => songSave,
+    songSetMode: () => songSetMode,
+    songSetTempo: () => songSetTempo,
+    songShiftBy: () => songShiftBy,
+    songShiftOf: () => songShiftOf,
+    songStop: () => songStop,
+    songTempo: () => songTempo,
+    songWin: () => songWin,
+    songsAll: () => songsAll,
+    songsMine: () => songsMine,
+    viewSong: () => viewSong,
+    viewSongs: () => viewSongs
+  });
+
+  // src/data/songs.js
+  var songs_exports = {};
+  __export(songs_exports, {
+    BUILTIN_SONGS: () => BUILTIN_SONGS
+  });
+  var mk = (id, title, bpm, lines, by) => {
+    const b = 60 / bpm, notes = [], ph = [];
+    let t = 0;
+    for (const line of lines) {
+      ph.push(notes.length);
+      for (const [m, beats] of line) {
+        notes.push({ m, t: +t.toFixed(3), d: +(beats * b * 0.92).toFixed(3) });
+        t += beats * b;
+      }
+    }
+    return { id, title, by, src: "builtin", notes, ph };
+  };
+  var C = 60;
+  var D = 62;
+  var E = 64;
+  var F = 65;
+  var G2 = 67;
+  var A = 69;
+  var BUILTIN_SONGS = [
+    mk("b-twinkle", "Маленькая звёздочка", 100, [
+      [[C, 1], [C, 1], [G2, 1], [G2, 1], [A, 1], [A, 1], [G2, 2]],
+      [[F, 1], [F, 1], [E, 1], [E, 1], [D, 1], [D, 1], [C, 2]],
+      [[G2, 1], [G2, 1], [F, 1], [F, 1], [E, 1], [E, 1], [D, 2]],
+      [[G2, 1], [G2, 1], [F, 1], [F, 1], [E, 1], [E, 1], [D, 2]],
+      [[C, 1], [C, 1], [G2, 1], [G2, 1], [A, 1], [A, 1], [G2, 2]],
+      [[F, 1], [F, 1], [E, 1], [E, 1], [D, 1], [D, 1], [C, 2]]
+    ], "Французская народная мелодия"),
+    mk("b-ode", "Ода к радости", 110, [
+      [[E, 1], [E, 1], [F, 1], [G2, 1], [G2, 1], [F, 1], [E, 1], [D, 1]],
+      [[C, 1], [C, 1], [D, 1], [E, 1], [E, 1.5], [D, 0.5], [D, 2]],
+      [[E, 1], [E, 1], [F, 1], [G2, 1], [G2, 1], [F, 1], [E, 1], [D, 1]],
+      [[C, 1], [C, 1], [D, 1], [E, 1], [D, 1.5], [C, 0.5], [C, 2]]
+    ], "Бетховен, 9-я симфония")
+  ];
+
+  // src/features/songlib.js
+  var songlib_exports = {};
+  __export(songlib_exports, {
+    decodeText: () => decodeText,
+    midiCandidates: () => midiCandidates,
+    midiLyrics: () => midiLyrics,
+    monophonic: () => monophonic,
+    normalizeSong: () => normalizeSong,
+    parseMidi: () => parseMidi,
+    phraseNotes: () => phraseNotes,
+    phraseRange: () => phraseRange,
+    phraseWords: () => phraseWords,
+    scoreSung: () => scoreSung,
+    songFromMidi: () => songFromMidi,
+    songFromSegs: () => songFromSegs,
+    songScorer: () => songScorer,
+    songShift: () => songShift,
+    songTargets: () => songTargets,
+    splitPhrases: () => splitPhrases
+  });
+  var vlq = (b, p) => {
+    let v = 0, c;
+    do {
+      c = b[p.i++];
+      v = v << 7 | c & 127;
+    } while (c & 128 && p.i < b.length);
+    return v;
+  };
+  var str4 = (b, i) => String.fromCharCode(b[i], b[i + 1], b[i + 2], b[i + 3]);
+  function decodeText(bytes) {
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch (e) {
+    }
+    try {
+      return new TextDecoder("windows-1251").decode(bytes);
+    } catch (e) {
+      return String.fromCharCode(...bytes);
+    }
+  }
+  function parseMidi(buf) {
+    const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+    if (b.length < 14 || str4(b, 0) !== "MThd") throw new Error("Это не MIDI-файл");
+    if (b.length > 3e6) throw new Error("Файл слишком большой");
+    const hl = b[4] << 24 | b[5] << 16 | b[6] << 8 | b[7], ntr = b[10] << 8 | b[11], div = b[12] << 8 | b[13];
+    let pos = 8 + hl;
+    const tracks = [], tempos = [];
+    for (let k = 0; k < ntr && pos + 8 <= b.length; k++) {
+      if (str4(b, pos) !== "MTrk") break;
+      const len = b[pos + 4] << 24 | b[pos + 5] << 16 | b[pos + 6] << 8 | b[pos + 7], end = Math.min(b.length, pos + 8 + len);
+      const p = { i: pos + 8 }, tr = { name: "", notes: [], texts: [] }, open = /* @__PURE__ */ new Map();
+      let tick = 0, run2 = 0, guard = 0;
+      while (p.i < end && guard++ < 4e5) {
+        tick += vlq(b, p);
+        let st = b[p.i];
+        if (st & 128) {
+          p.i++;
+          if (st < 240) run2 = st;
+        } else if (run2) st = run2;
+        else break;
+        if (st === 255) {
+          const type = b[p.i++], l = vlq(b, p), data = b.subarray(p.i, p.i + l);
+          p.i += l;
+          if (type === 81 && l === 3) tempos.push({ tick, us: data[0] << 16 | data[1] << 8 | data[2] });
+          else if (type === 3 && !tr.name) tr.name = decodeText(data).trim().slice(0, 40);
+          else if (type === 1 || type === 5) tr.texts.push({ tick, type, s: decodeText(data) });
+          else if (type === 47) break;
+        } else if (st === 240 || st === 247) {
+          p.i += vlq(b, p);
+        } else {
+          const hi = st & 240, ch = st & 15;
+          if (hi === 192 || hi === 208) {
+            p.i += 1;
+            continue;
+          }
+          const d1 = b[p.i++], d2 = b[p.i++];
+          if (hi !== 144 && hi !== 128) continue;
+          const key = ch * 128 + d1;
+          if (hi === 144 && d2 > 0) {
+            if (!open.has(key)) open.set(key, []);
+            open.get(key).push(tick);
+          } else {
+            const q = open.get(key);
+            if (q && q.length) tr.notes.push({ m: d1, ch, t0: q.shift(), t1: tick });
+          }
+        }
+      }
+      tracks.push(tr);
+      pos = end;
+    }
+    tempos.sort((x, y) => x.tick - y.tick);
+    let toSec;
+    if (div & 32768) {
+      const fps = 256 - (div >> 8), tpf = div & 255;
+      toSec = (tk) => tk / (fps * tpf);
+    } else {
+      const map = [{ tick: 0, us: 5e5, sec: 0 }];
+      for (const x of tempos) {
+        const l = map[map.length - 1];
+        const sec = l.sec + (x.tick - l.tick) * l.us / 1e6 / div;
+        if (x.tick === l.tick) {
+          l.us = x.us;
+        } else map.push({ tick: x.tick, us: x.us, sec });
+      }
+      toSec = (tk) => {
+        let l = map[0];
+        for (const x of map) {
+          if (x.tick <= tk) l = x;
+          else break;
+        }
+        return l.sec + (tk - l.tick) * l.us / 1e6 / div;
+      };
+    }
+    for (const tr of tracks) {
+      tr.notes = tr.notes.map((n) => ({ m: n.m, ch: n.ch, t: toSec(n.t0), d: Math.max(0.02, toSec(n.t1) - toSec(n.t0)) })).sort((x, y) => x.t - y.t || y.m - x.m);
+      tr.texts = tr.texts.map((x) => ({ t: toSec(x.tick), type: x.type, s: x.s }));
+    }
+    return { tracks };
+  }
+  function midiLyrics(mid) {
+    const all = mid.tracks.flatMap((tr) => tr.texts);
+    const ly = all.filter((x) => x.type === 5 && x.s.trim()), tx = all.filter((x) => x.type === 1 && !x.s.startsWith("@") && x.s.trim());
+    const use = ly.length >= 10 ? ly : tx.length >= 10 ? tx : [];
+    return use.sort((x, y) => x.t - y.t).map((x) => ({ t: x.t, br: /^[/\\]/.test(x.s) || /^[\r\n]/.test(x.s), s: x.s.replace(/[/\\\r\n]/g, "") }));
+  }
+  function monophonic(notes) {
+    const out = [];
+    for (const n of [...notes].sort((x, y) => x.t - y.t || y.m - x.m)) {
+      const l = out[out.length - 1];
+      if (l && n.t - l.t < 0.03) {
+        if (n.m > l.m) {
+          l.m = n.m;
+          l.d = n.d;
+        }
+        continue;
+      }
+      if (l && l.t + l.d > n.t) l.d = n.t - l.t;
+      out.push({ m: n.m, t: n.t, d: n.d });
+    }
+    return out.filter((n) => n.d >= 0.06);
+  }
+  function midiCandidates(mid, lyrics = midiLyrics(mid)) {
+    const c = [];
+    mid.tracks.forEach((tr, i) => {
+      const chans = [...new Set(tr.notes.map((n) => n.ch))].filter((ch) => ch !== 9);
+      for (const ch of chans) {
+        const raw = tr.notes.filter((n) => n.ch === ch);
+        if (raw.length < 8) continue;
+        const mono = monophonic(raw);
+        if (mono.length < 8) continue;
+        const ms = mono.map((n) => n.m), med = VA.median(ms), chord = 1 - mono.length / raw.length;
+        let score = -Math.abs(med - 66) / 6 - chord * 4;
+        if (/melod|vocal|voice|lead|sing|solo|мелод|вокал|голос/i.test(tr.name)) score += 3;
+        if (lyrics.length) {
+          const on = mono.map((n) => n.t);
+          const hit = lyrics.filter((l) => on.some((t) => Math.abs(t - l.t) < 0.08)).length;
+          score += 8 * hit / lyrics.length;
+        }
+        c.push({ i, ch, name: tr.name || `Дорожка ${i + 1}`, n: mono.length, lo: Math.min(...ms), hi: Math.max(...ms), score });
+      }
+    });
+    return c.sort((x, y) => y.score - x.score);
+  }
+  function songFromMidi(mid, cand) {
+    const lyrics = midiLyrics(mid);
+    let notes = monophonic(mid.tracks[cand.i].notes.filter((n) => n.ch === cand.ch));
+    const t0 = notes.length ? notes[0].t : 0;
+    const breaks = /* @__PURE__ */ new Set();
+    let j = 0;
+    for (const l of lyrics) {
+      while (j < notes.length - 1 && notes[j].t < l.t - 0.25) j++;
+      let best = -1, bd = 0.25;
+      for (let k = j; k < notes.length && notes[k].t < l.t + 0.25; k++) if (notes[k].w == null && Math.abs(notes[k].t - l.t) < bd) {
+        bd = Math.abs(notes[k].t - l.t);
+        best = k;
+      }
+      if (best < 0) continue;
+      notes[best].w = l.s.slice(0, 24);
+      if (l.br) breaks.add(best);
+    }
+    notes = notes.map((n) => ({ m: n.m, t: +(n.t - t0).toFixed(3), d: +n.d.toFixed(3), ...n.w != null ? { w: n.w } : {} }));
+    return { notes, ph: splitPhrases(notes, breaks.size >= 2 ? [...breaks] : null) };
+  }
+  function songFromSegs(segs) {
+    const s = segs.filter((x) => x.end - x.start >= 0.1 && isFinite(x.pitch));
+    if (!s.length) return { notes: [], ph: [], tune: 0 };
+    let cx = 0, cy = 0;
+    for (const x of s) {
+      const a = 2 * Math.PI * (x.pitch - Math.round(x.pitch));
+      cx += Math.cos(a);
+      cy += Math.sin(a);
+    }
+    const tune = Math.atan2(cy, cx) / (2 * Math.PI);
+    const notes = [];
+    for (const x of s) {
+      const m = Math.round(x.pitch - tune), l = notes[notes.length - 1];
+      if (l && l.m === m && x.start - (l.t + l.d) < 0.025) {
+        l.d = x.end - l.t;
+        continue;
+      }
+      notes.push({ m, t: x.start, d: x.end - x.start });
+    }
+    const t0 = notes[0].t;
+    const out = notes.filter((n) => n.d >= 0.12).map((n) => ({ m: n.m, t: +(n.t - t0).toFixed(3), d: +n.d.toFixed(3) }));
+    return { notes: out, ph: splitPhrases(out), tune: Math.round(tune * 100) };
+  }
+  function splitPhrases(notes, starts) {
+    if (!notes.length) return [];
+    let ph;
+    if (starts) ph = [.../* @__PURE__ */ new Set([0, ...starts])].filter((i) => i >= 0 && i < notes.length).sort((a, b) => a - b);
+    else {
+      const md = VA.median(notes.map((n) => n.d)), need = Math.max(0.3, md * 0.9);
+      ph = [0];
+      for (let i = 1; i < notes.length; i++) if (notes[i].t - (notes[i - 1].t + notes[i - 1].d) >= need) ph.push(i);
+    }
+    ph = ph.filter((s, k) => k === 0 || s - ph[k - 1] >= 3);
+    if (ph.length > 1 && notes.length - ph[ph.length - 1] < 3) ph.pop();
+    const out = [];
+    const cut = (a, b) => {
+      if (b - a <= 12) {
+        out.push(a);
+        return;
+      }
+      let best = a + 6, bv = -1;
+      for (let i = a + 4; i <= b - 4; i++) {
+        const v = notes[i].t - notes[i - 1].t;
+        if (v > bv) {
+          bv = v;
+          best = i;
+        }
+      }
+      cut(a, best);
+      cut(best, b);
+    };
+    ph.forEach((s, k) => cut(s, k + 1 < ph.length ? ph[k + 1] : notes.length));
+    return out;
+  }
+  var phraseRange = (song, k) => [song.ph[k], k + 1 < song.ph.length ? song.ph[k + 1] : song.notes.length];
+  var phraseNotes = (song, k) => {
+    const [a, b] = phraseRange(song, k);
+    return song.notes.slice(a, b);
+  };
+  var phraseWords = (notes) => notes.map((n) => n.w || "").join("").replace(/\s+/g, " ").trim();
+  function songShift(notes, win) {
+    const ms = notes.map((n) => n.m), lo = Math.min(...ms), hi = Math.max(...ms), mid = (win[0] + win[1]) / 2;
+    const oct = [-36, -24, -12, 0, 12, 24, 36].filter((s) => lo + s >= win[0] && hi + s <= win[1]).sort((a, b) => Math.abs(lo + hi + 2 * a - 2 * mid) - Math.abs(lo + hi + 2 * b - 2 * mid));
+    if (oct.length) return oct[0];
+    return Math.round(mid - (lo + hi) / 2);
+  }
+  function songTargets(notes, tempo = 1) {
+    const T = [];
+    notes.forEach((n, i) => {
+      const l = T[T.length - 1];
+      if (l && l.m === n.m) {
+        l.d += n.d / tempo;
+        l.idx.push(i);
+      } else T.push({ m: n.m, d: n.d / tempo, idx: [i] });
+    });
+    for (const x of T) x.need = Math.min(0.3, Math.max(0.12, x.d * 0.35));
+    return T;
+  }
+  function songScorer(targets, strict, shift = 0) {
+    const S = { j: 0, hit: targets.map(() => false), acc: targets.map(() => 0), lastT: null };
+    S.push = (t, m) => {
+      const dt = S.lastT == null ? 0 : Math.min(0.1, Math.max(0, t - S.lastT));
+      S.lastT = t;
+      if (m == null || S.j >= targets.length) return S;
+      const near = (k) => {
+        let d = m - (targets[k].m + shift);
+        if (!strict) d -= 12 * Math.round(d / 12);
+        return Math.abs(d) <= 0.5;
+      };
+      const tail = S.j > 0 && near(S.j - 1);
+      for (let k = S.j; k < Math.min(targets.length, tail ? S.j + 1 : S.j + 3); k++) {
+        if (!near(k)) continue;
+        S.acc[k] += dt;
+        if (S.acc[k] >= targets[k].need) {
+          S.hit[k] = true;
+          S.j = k + 1;
+          for (let q = k + 1; q < targets.length; q++) S.acc[q] = 0;
+        }
+        break;
+      }
+      return S;
+    };
+    S.result = () => {
+      const n = S.hit.filter(Boolean).length;
+      return { hit: S.hit, n, total: targets.length, ok: n >= Math.ceil(targets.length * 0.8), pct: Math.round(100 * n / targets.length) };
+    };
+    return S;
+  }
+  function scoreSung(notes, frames, strict, shift = 0, tempo = 1) {
+    const S = songScorer(songTargets(notes, tempo), strict, shift);
+    for (const f of frames) S.push(f.t, f.m);
+    return S.result();
+  }
+  function normalizeSong(x) {
+    if (!x || typeof x !== "object" || !Array.isArray(x.notes)) return null;
+    const id = typeof x.id === "string" && /^[\w-]{1,40}$/.test(x.id) ? x.id : null;
+    if (!id) return null;
+    const notes = [];
+    for (const n of x.notes.slice(0, 3e3)) {
+      if (!n || !Number.isInteger(n.m) || n.m < 24 || n.m > 100 || !isFinite(n.t) || !isFinite(n.d) || n.t < 0 || n.d <= 0 || n.d > 30) continue;
+      notes.push({ m: n.m, t: +n.t, d: +n.d, ...typeof n.w === "string" && n.w ? { w: n.w.slice(0, 120) } : {} });
+    }
+    if (notes.length < 3) return null;
+    let ph = Array.isArray(x.ph) ? [...new Set(x.ph.filter((i) => Number.isInteger(i) && i >= 0 && i < notes.length))].sort((a, b) => a - b) : [];
+    if (ph[0] !== 0) ph = splitPhrases(notes);
+    return { id, title: (typeof x.title === "string" ? x.title : "Песня").trim().slice(0, 80) || "Песня", src: ["builtin", "midi", "voice"].includes(x.src) ? x.src : "midi", notes, ph };
+  }
+
+  // src/features/songs.js
+  var LIB_KEY = "vocal-songs";
+  function songsMine() {
+    try {
+      const x = JSON.parse(localStorage.getItem(LIB_KEY) || "[]");
+      return Array.isArray(x) ? x.map(normalizeSong).filter(Boolean) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function songsSaveMine(list) {
+    try {
+      localStorage.setItem(LIB_KEY, JSON.stringify(list));
+      return true;
+    } catch (e) {
+      toast("Не хватило места в памяти браузера. Удали какую-нибудь песню.");
+      return false;
+    }
+  }
+  var songsAll = () => [...BUILTIN_SONGS, ...songsMine()];
+  var songById = (id) => songsAll().find((s) => s.id === id) || null;
+  var prog = (id) => (state.songs ||= {})[id] ||= { ph: {}, whole: 0, plays: 0 };
+  var songTempo = () => state.settings.songTempo || 1;
+  function songWin() {
+    const r = lastRange();
+    return r ? [r.lo, r.chestHi ?? r.hi] : [base() - 5, base() + 12];
+  }
+  function songShiftOf(s) {
+    const p = (state.songs || {})[s.id];
+    return p && Number.isInteger(p.shift) ? p.shift : songShift(s.notes, songWin());
+  }
+  var learned = (s) => {
+    const p = (state.songs || {})[s.id];
+    return p ? s.ph.filter((_, k) => (p.ph[k] || 0) >= 80).length : 0;
+  };
+  var nm = (m) => VA.noteName(m);
+  function shiftText(sh) {
+    if (!sh) return "как в оригинале";
+    const o = Math.trunc(sh / 12), r = sh - 12 * o, oct = o ? `на ${Math.abs(o) === 1 ? "октаву" : Math.abs(o) + " октавы"} ${o < 0 ? "ниже" : "выше"}` : "";
+    return [oct, r ? (r > 0 ? "+" : "") + r + " " + plural(Math.abs(r), "полутон", "полутона", "полутонов") : ""].filter(Boolean).join(" и ");
+  }
+  var SG = null;
+  function songStop() {
+    if (!SG) return;
+    (SG.timers || []).forEach(clearTimeout);
+    SG.timers = [];
+    stopAll();
+    SG.playing = false;
+    SG.win = null;
+    cancelAnimationFrame(SG.raf);
+    if (SG.stream) {
+      SG.stream.getTracks().forEach((t) => t.stop());
+      SG.stream = null;
+      afterMic();
+    }
+    if (SG.rec && SG.rec.mr && SG.rec.mr.state === "recording") {
+      SG.rec.cancel = true;
+      SG.rec.mr.stop();
+    }
+    setBusy(false);
+  }
+  function viewSongs() {
+    songStop();
+    SG = { draft: SG && SG.draft, timers: [] };
+    afterHooks.push(songDraftDraw);
+    const item = (s) => {
+      const p = (state.songs || {})[s.id], n = learned(s);
+      return `<button class="item" ${act("go", `song-${s.id}`)}><div class="dot pitch">${n === s.ph.length ? "✓" : "🎵"}</div><div class="t"><b>${esc(s.title)}</b><span class="small muted">${s.ph.length} ${plural(s.ph.length, "фраза", "фразы", "фраз")}${n ? ` · выучено ${n}` : ""}${p && p.whole ? ` · целиком ${p.whole}%` : ""}${s.by ? " · " + esc(s.by) : ""}</span></div><span class="muted">›</span></button>`;
+    };
+    const mine = songsMine();
+    return `<button class="back" ${act("go", "today")}>${ICON.back} Сегодня</button><h1>Песни</h1>
+    <p class="muted" style="margin:6px 0 0">Разучиваем по фразам: пианино играет кусочек, ты повторяешь, микрофон показывает, какие ноты чисто. Потом поёшь всю песню сам.</p>
+    ${mine.length ? `<div class="sec"><h2>Мои песни</h2>${mine.map(item).join("")}</div>` : ""}
+    <div class="sec"><h2>Для начала</h2>${BUILTIN_SONGS.map(item).join("")}</div>
+    <div class="sec"><h2>Добавить свою</h2><div class="card stack">
+      <label class="btn">${ICON.file} Файл MIDI или караоке<input type="file" accept=".mid,.midi,.kar,audio/midi,audio/x-midi" class="hidden" ${onChange("songFile")}></label>
+      <div class="tiny muted" style="margin-top:-4px">Поищи в интернете «название песни midi» или «karaoke kar». В караоке-файле (.kar) есть и ноты, и слова.</div>
+      <div class="row wrap">${MIC_DIRECT ? `<button class="btn ghost" style="flex:1" id="sgrec" ${act("songRecord")}>${ICON.mic} Напеть в микрофон</button>` : ""}
+      <label class="btn ghost" style="flex:1">${ICON.file} Запись голоса<input type="file" accept="audio/*,video/*" class="hidden" ${onChange("songFile")}></label></div>
+      <div class="tiny muted" style="margin-top:-4px">Напой песню сам или возьми запись знакомого: один голос, без музыки, на «ля» или со словами. Обычная песня с музыкой (mp3) не подойдёт: голос из неё надёжно не вытащить, и ноты будут врать.</div>
+      <div id="sgadd"></div></div></div>`;
+  }
+  var stripExt = (n) => String(n || "").replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim().slice(0, 80);
+  async function songFile(input) {
+    const f = input.files && input.files[0];
+    input.value = "";
+    if (!f) return;
+    const box = $("#sgadd");
+    if (box) box.innerHTML = '<div class="small muted">Читаю файл...</div>';
+    const buf = new Uint8Array(await f.arrayBuffer());
+    if (buf.length >= 4 && String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) === "MThd") return songFromMidiBuf(buf, stripExt(f.name));
+    return songFromAudioBuf(buf.buffer, stripExt(f.name));
+  }
+  function songFromMidiBuf(buf, name) {
+    let mid, cands;
+    try {
+      mid = parseMidi(buf);
+      cands = midiCandidates(mid);
+    } catch (e) {
+      songMsg("Не получилось прочитать MIDI-файл. Попробуй другой файл этой песни.");
+      return;
+    }
+    if (!cands.length) {
+      songMsg("В файле не нашёл мелодии: нет дорожки с отдельными нотами.");
+      return;
+    }
+    const tr = mid.tracks.find((t2) => t2.texts.some((x) => x.s.startsWith("@T")));
+    const t = tr && tr.texts.find((x) => x.s.startsWith("@T"));
+    SG.draft = { src: "midi", mid, cands, pick: 0, name: t && t.s.slice(2).trim().slice(0, 80) || name, ...songFromMidi(mid, cands[0]) };
+    songDraftDraw();
+  }
+  async function songFromAudioBuf(arrayBuf, name) {
+    songMsg("Слушаю запись и ищу ноты...");
+    setBusy(true);
+    let audio;
+    try {
+      audio = await new Promise((ok, bad) => {
+        const p = ac().decodeAudioData(arrayBuf, ok, bad);
+        if (p && p.then) p.then(ok, bad);
+      });
+    } catch (e) {
+      setBusy(false);
+      songMsg("Не получилось прочитать файл. Подойдут MIDI (.mid, .kar) или запись голоса в m4a, mp3, wav, webm.");
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 30));
+    const chs = [], len = Math.min(audio.length, audio.sampleRate * 90);
+    for (let c = 0; c < audio.numberOfChannels; c++) chs.push(audio.getChannelData(c).subarray(0, len));
+    const a = VA.analyzeSamples(chs, audio.sampleRate);
+    setBusy(false);
+    const sg = songFromSegs(a.segs);
+    if (sg.notes.length < 3) {
+      songMsg("Не слышу в записи нот с понятной высотой. Пой громче и ближе к телефону, без музыки на фоне.");
+      return;
+    }
+    SG.draft = { src: "voice", name: name || "Моя песня", ...sg, cut: audio.length > len };
+    songDraftDraw();
+  }
+  var songMsg = (t) => {
+    const box = $("#sgadd");
+    if (box) box.innerHTML = `<div class="note small" style="margin-top:6px">${esc(t)}</div>`;
+  };
+  function songDraftDraw() {
+    const box = $("#sgadd"), d = SG && SG.draft;
+    if (!box || !d) return;
+    const ms = d.notes.map((n) => n.m), words = d.notes.some((n) => n.w);
+    box.innerHTML = `<div class="card stack" style="margin-top:6px;background:var(--bg)">
+    <b>Нашёл ${d.notes.length} ${plural(d.notes.length, "ноту", "ноты", "нот")}, ${d.ph.length} ${plural(d.ph.length, "фразу", "фразы", "фраз")}${words ? " и слова" : ""}</b>
+    <div class="small muted">От ${noteShort(Math.min(...ms))} до ${noteShort(Math.max(...ms))}, около ${Math.round(d.notes[d.notes.length - 1].t + d.notes[d.notes.length - 1].d)} с.${d.src === "voice" && d.tune ? ` Ты пел чуть ${d.tune > 0 ? "выше" : "ниже"} обычного строя (${Math.abs(d.tune)} ц), ноты выровнял.` : ""}${d.cut ? " Взял первые 90 секунд." : ""}</div>
+    ${songRoll(d.notes, null, 0)}
+    ${d.cands && d.cands.length > 1 ? `<label class="small">Какая дорожка - мелодия? <select class="inp" ${onChange("songPickTrack")}>${d.cands.map((c, i) => `<option value="${i}" ${i === d.pick ? "selected" : ""}>${esc(c.name)} · ${c.n} нот · ${noteShort(c.lo)}-${noteShort(c.hi)}</option>`).join("")}</select></label>
+      <div class="tiny muted" style="margin-top:-6px">Первой стоит самая похожая на голос. Послушай: если играет не мелодия, выбери другую.</div>` : ""}
+    <label class="small">Название<input id="sgtitle" class="inp" maxlength="80" value="${esc(d.name)}"></label>
+    ${words ? "" : `<label class="small">Слова (можно пропустить): по строчке на фразу<textarea id="sglyr" class="inp" rows="4" placeholder="Первая строчка&#10;Вторая строчка"></textarea></label>`}
+    <div class="row wrap"><button class="btn ghost" style="flex:1" ${act("songPreview")}>${ICON.play} Послушать</button><button class="btn" style="flex:1" ${act("songSave")}>Сохранить</button></div>
+    <button class="btn ghost" ${act("songCancel")}>Отмена</button></div>`;
+  }
+  function songPickTrack(v) {
+    const d = SG.draft;
+    if (!d || !d.mid) return;
+    d.pick = +v;
+    Object.assign(d, songFromMidi(d.mid, d.cands[d.pick]));
+    stopAll();
+    songDraftDraw();
+  }
+  function songPreview() {
+    const d = SG && SG.draft;
+    if (d) playNotes2(d.notes.filter((n) => n.t < 20), 0, 1);
+  }
+  function songCancel() {
+    stopAll();
+    SG.draft = null;
+    const b = $("#sgadd");
+    if (b) b.innerHTML = "";
+  }
+  function songSave() {
+    const d = SG && SG.draft;
+    if (!d) return;
+    const title = ($("#sgtitle") ? $("#sgtitle").value : d.name).trim().slice(0, 80) || "Моя песня";
+    let notes = d.notes.map((n) => ({ ...n }));
+    const lyr = $("#sglyr") ? $("#sglyr").value.split("\n").map((x) => x.trim()).filter(Boolean) : [];
+    lyr.forEach((line, k) => {
+      const i = d.ph[Math.min(k, d.ph.length - 1)];
+      notes[i].w = ((k >= d.ph.length ? notes[i].w + " / " : "") + line).slice(0, 120);
+    });
+    const s = normalizeSong({ id: "s" + uid(), title, src: d.src, notes, ph: d.ph });
+    if (!s) {
+      toast("Слишком мало нот для песни");
+      return;
+    }
+    stopAll();
+    if (!songsSaveMine([...songsMine(), s])) return;
+    SG.draft = null;
+    go("song-" + s.id);
+  }
+  function songAskDel(id) {
+    const s = songById(id);
+    if (!s || s.src === "builtin") return;
+    sheet(`<h2>Удалить «${esc(s.title)}»?</h2><p class="muted">Песня пропадёт из списка у всех профилей на этом телефоне.</p><div class="row"><button class="btn ghost" style="flex:1" ${act("closeSheet")}>Отмена</button><button class="btn" style="flex:1;background:var(--bad)" ${act("songDel", id)}>Удалить</button></div>`);
+  }
+  function songDel(id) {
+    songsSaveMine(songsMine().filter((s) => s.id !== id));
+    if (state.songs) {
+      delete state.songs[id];
+      save();
+    }
+    closeSheet();
+    go("songs");
+  }
+  async function songRecord() {
+    const btn = $("#sgrec");
+    if (SG.rec && SG.rec.mr && SG.rec.mr.state === "recording") {
+      SG.rec.mr.stop();
+      return;
+    }
+    let stream;
+    try {
+      stream = await openMic();
+    } catch (e) {
+      songMsg("Нет доступа к микрофону. Разреши его в настройках браузера или загрузи готовую запись.");
+      return;
+    }
+    const chunks = [], mr = new MediaRecorder(stream);
+    SG.rec = { mr, cancel: false };
+    setBusy(true);
+    mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    mr.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      clearInterval(SG.rec.tick);
+      afterMic();
+      setBusy(false);
+      if (btn) btn.innerHTML = ICON.mic + " Напеть в микрофон";
+      if (SG.rec.cancel) return;
+      songFromAudioBuf(await new Blob(chunks, { type: mr.mimeType || "audio/webm" }).arrayBuffer(), "Моя песня");
+    };
+    mr.start();
+    const t0 = Date.now();
+    if (btn) btn.innerHTML = ICON.stop + " Готово";
+    songMsg("Запись 0 с. Пой песню целиком или куплет.");
+    SG.rec.tick = setInterval(() => {
+      const s = Math.round((Date.now() - t0) / 1e3);
+      const m = $("#sgadd .note");
+      if (m) m.textContent = `Запись ${s} с. Пой песню целиком или куплет.`;
+      if (s >= 90) mr.stop();
+    }, 250);
+  }
+  function songRoll(notes, hit, shift) {
+    if (!notes.length) return "";
+    const W = 640, H = 110, t0 = notes[0].t, t1 = Math.max(...notes.map((n) => n.t + n.d)), ms = notes.map((n) => n.m);
+    const lo = Math.min(...ms) - 1, hi = Math.max(...ms) + 1, x = (t) => 6 + (t - t0) / (t1 - t0 || 1) * (W - 12), y = (m) => H - 8 - (m - lo) / (hi - lo || 1) * (H - 16);
+    const bars = notes.map((n, i) => `<rect x="${x(n.t).toFixed(1)}" y="${(y(n.m) - 5).toFixed(1)}" width="${Math.max(4, x(n.t + n.d) - x(n.t) - 2).toFixed(1)}" height="10" rx="4" fill="${hit ? hit[i] ? "var(--ok)" : "var(--bad)" : "var(--accent)"}" opacity="${hit && hit[i] == null ? 0.3 : 0.9}"/>`).join("");
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:var(--card);border:1px solid var(--line);border-radius:12px" aria-label="Ноты: ${esc(notes.map((n) => noteShort(n.m + shift)).join(" "))}">${bars}</svg>`;
+  }
+  function playNotes2(notes, shift, tempo, when) {
+    const c = ac(), t0 = when ?? c.currentTime + 0.1, s0 = notes[0].t;
+    for (const n of notes) tone(n.m + shift, t0 + (n.t - s0) / tempo, Math.max(0.12, n.d / tempo * 0.95), 0.2);
+    return t0 + Math.max(...notes.map((n) => (n.t - s0 + n.d) / tempo));
+  }
+  function viewSong(id) {
+    songStop();
+    const s = songById(id);
+    SG = { s, k: 0, mode: MIC_DIRECT && state.settings.songMode === "whole" ? "whole" : "phrase", res: {}, timers: [], tries: 0 };
+    const p = (state.songs || {})[s.id];
+    if (p) {
+      const k = s.ph.findIndex((_, i) => (p.ph[i] || 0) < 80);
+      SG.k = k < 0 ? 0 : k;
+    }
+    afterHooks.push(songDraw);
+    afterHooks.push(() => {
+      if (camOn()) camStart();
+    });
+    const sh = songShiftOf(s), ms = s.notes.map((n) => n.m), r = lastRange(), tp = songTempo();
+    return `<button class="back" ${act("go", "songs")}>${ICON.back} Песни</button><h1>${esc(s.title)}</h1>
+    <p class="muted" style="margin:6px 0 0">${s.ph.length} ${plural(s.ph.length, "фраза", "фразы", "фраз")} · ${noteShort(Math.min(...ms) + sh)} - ${noteShort(Math.max(...ms) + sh)}${s.by ? " · " + esc(s.by) : ""}</p>
+    <div class="card sec stack" style="padding:12px 14px">
+      <div class="row" style="gap:8px"><span class="small" style="flex:1">Тональность: <b>${shiftText(sh)}</b></span>
+        <button class="iconbtn" ${act("songShiftBy", -1)} title="Ниже">−</button><button class="iconbtn" ${act("songShiftBy", 1)} title="Выше">+</button></div>
+      <div class="tiny muted" style="margin-top:-6px">${r ? `Подобрал под твой диапазон ${noteShort(songWin()[0])} - ${noteShort(songWin()[1])}.` : `Подобрал рядом с ${noteShort(base())}. <a href="#range">Замерь диапазон</a>, чтобы песня встала точно под голос.`} Неудобно - сдвинь на полутон.</div>
+      <div class="seg"><button class="${tp < 1 ? "on" : ""}" ${act("songSetTempo", 0.75)}>Медленно</button><button class="${tp >= 1 ? "on" : ""}" ${act("songSetTempo", 1)}>Как в песне</button></div>
+      ${MIC_DIRECT ? `<div class="seg"><button class="${SG.mode === "phrase" ? "on" : ""}" ${act("songSetMode", "phrase")}>По фразам</button><button class="${SG.mode === "whole" ? "on" : ""}" ${act("songSetMode", "whole")}>Целиком</button></div>
+      <div class="tiny muted" style="margin-top:-6px">${SG.mode === "phrase" ? "Пианино играет фразу, потом тишина: повтори. Чисто - идём дальше, нет - ещё раз." : "Пианино даёт первую ноту, дальше поёшь всю песню сам, без подсказки. Микрофон идёт за тобой по нотам."}</div>` : '<div class="tiny muted">Здесь микрофон закрыт: можно слушать фразы и подпевать. Проверка нот - на сайте или в приложении.</div>'}
+    </div>
+    ${camToggleHTML()}
+    <div id="sgbox" class="sec"></div>
+    ${s.src !== "builtin" ? `<button class="btn ghost block sec" style="color:var(--bad)" ${act("songAskDel", s.id)}>Удалить песню</button>` : ""}`;
+  }
+  function songShiftBy(d) {
+    const s = SG && SG.s;
+    if (!s) return;
+    prog(s.id).shift = songShiftOf(s) + d;
+    save();
+    render();
+  }
+  function songSetTempo(v) {
+    state.settings.songTempo = v;
+    save();
+    render();
+  }
+  function songSetMode(m) {
+    state.settings.songMode = m;
+    save();
+    render();
+  }
+  function songGoPhrase(k) {
+    if (!SG) return;
+    songPause();
+    SG.k = k;
+    SG.tries = 0;
+    songDraw();
+  }
+  function songNext() {
+    if (!SG) return;
+    songPause();
+    SG.tries = 0;
+    if (SG.k < SG.s.ph.length - 1) SG.k++;
+    songDraw();
+  }
+  function songPause() {
+    if (!SG) return;
+    (SG.timers || []).forEach(clearTimeout);
+    SG.timers = [];
+    stopAll();
+    SG.playing = false;
+    SG.win = null;
+  }
+  var lineOf = (s, notes, sh) => esc(phraseWords(notes)) || notes.map((n) => nm(n.m + sh)).join(" ");
+  function phraseChips() {
+    const s = SG.s, p = (state.songs || {})[s.id] || { ph: {} };
+    return `<div class="row wrap" style="gap:6px">${s.ph.map((_, k) => {
+      const v = p.ph[k];
+      return `<button class="chip ${v >= 80 ? "ok" : v ? "near" : ""}" style="border:${k === SG.k && SG.mode === "phrase" ? "2px solid var(--accent)" : "0"}" ${act("songGoPhrase", k)}>${k + 1}${v >= 80 ? " ✓" : v ? " " + v + "%" : ""}</button>`;
+    }).join("")}</div>`;
+  }
+  function songDraw() {
+    const box = $("#sgbox");
+    if (!box || !SG || !SG.s) return;
+    const s = SG.s, sh = songShiftOf(s);
+    if (SG.mode === "whole") {
+      const p = (state.songs || {})[s.id], r2 = SG.res.whole;
+      box.innerHTML = `<div class="card stack"><div class="tiny muted">Вся песня${p && p.whole ? ` · лучший результат ${p.whole}%` : ""}</div>
+      <div id="sgline" style="font:700 22px Lora,serif;min-height:30px">${SG.playing ? "" : lineOf(s, phraseNotes(s, 0), sh)}</div><div id="sgnext" class="small muted" style="min-height:20px"></div>
+      <div id="sgnow" class="small muted" style="min-height:20px">${SG.playing ? "" : "Нажми «Начать»: прозвучит первая нота, и пой."}</div>
+      ${songRoll(s.notes, r2 ? r2.hitNotes : null, sh)}
+      ${r2 ? `<div class="score"><div class="s"><b>${r2.pct}%</b><span class="small muted">нот чисто</span></div><div class="s"><b>${r2.n}/${r2.total}</b><span class="small muted">нот</span></div></div>` : ""}
+      <button class="btn block" ${act("songPlay")}>${SG.playing ? ICON.stop + " Готово" : ICON.play + (r2 ? " Ещё раз" : " Начать")}</button></div>
+      <div class="sec">${phraseChips()}</div>`;
+      return;
+    }
+    const notes = phraseNotes(s, SG.k), r = SG.res[SG.k];
+    box.innerHTML = `<div class="card stack"><div class="tiny muted">Фраза ${SG.k + 1} из ${s.ph.length}</div>
+    <div style="font:700 22px Lora,serif">${lineOf(s, notes, sh)}</div>
+    ${phraseWords(notes) ? `<div class="small muted">${notes.map((n) => nm(n.m + sh)).join(" ")}</div>` : ""}
+    ${songRoll(notes, r ? r.hitNotes : null, sh)}
+    <div id="sgnow" class="small" style="min-height:20px">${r ? r.ok ? `<b style="color:var(--ok)">Чисто: ${r.n} из ${r.total}</b>` : `<b style="color:var(--near)">${r.n} из ${r.total}.</b> Красные ноты - мимо или не услышал.` : ""}</div>
+    <div class="row"><button class="btn" style="flex:1" id="sgplay" ${act("songPlay")}>${SG.playing ? ICON.stop + " Пауза" : ICON.play + (MIC_DIRECT ? r ? " Ещё раз" : " Начать" : " Послушать")}</button><button class="btn ghost" ${act("songNext")}>Дальше ›</button></div></div>
+    <div class="sec">${phraseChips()}</div>`;
+  }
+  async function songEnsureMic() {
+    if (SG.stream) return true;
+    let stream;
+    try {
+      stream = await openMic();
+    } catch (e) {
+      toast("Нет доступа к микрофону. Можно слушать и подпевать без проверки.");
+      return false;
+    }
+    const c = ac();
+    SG.stream = stream;
+    setBusy(true);
+    const an = c.createAnalyser();
+    an.fftSize = 4096;
+    c.createMediaStreamSource(stream).connect(an);
+    const buf = new Float32Array(an.fftSize), hist = [];
+    const loop = () => {
+      if (!SG || !SG.stream) return;
+      an.getFloatTimeDomainData(buf);
+      hist.push(VA.livePitch(buf, c.sampleRate));
+      if (hist.length > 3) hist.shift();
+      const v = hist.filter((x) => x != null), m = v.length >= 2 ? VA.median(v) : null;
+      songFrame(c.currentTime, m);
+      SG.raf = requestAnimationFrame(loop);
+    };
+    loop();
+    return true;
+  }
+  function songFrame(now, m) {
+    const w = SG && SG.win;
+    if (!w || now < w.t0 || now > w.t1) return;
+    w.S.push(now, m);
+    const el = $("#sgnow");
+    if (el) el.textContent = m == null ? SG.mode === "whole" ? "Пой" : "Твоя очередь" : "Слышу " + nm(m);
+    if (SG.mode === "whole") songFollow(w);
+    if (w.S.j >= w.T.length && !w.early) {
+      w.early = true;
+      songAt(0.5, songFinish);
+    }
+  }
+  function songFollow(w) {
+    const s = SG.s, sh = songShiftOf(s), ni = w.S.j < w.T.length ? w.T[w.S.j].idx[0] : s.notes.length - 1;
+    let k = 0;
+    while (k + 1 < s.ph.length && s.ph[k + 1] <= ni) k++;
+    if (w.line === k) return;
+    w.line = k;
+    const a = $("#sgline"), b = $("#sgnext");
+    if (a) a.innerHTML = lineOf(s, phraseNotes(s, k), sh);
+    if (b) b.innerHTML = k + 1 < s.ph.length ? lineOf(s, phraseNotes(s, k + 1), sh) : "";
+  }
+  var songAt = (sec, f) => SG.timers.push(setTimeout(() => {
+    if (SG && SG.playing) f();
+  }, sec * 1e3 / (window.SONG_SPEED || 1)));
+  var songPanel = () => {
+    const s = SG && SG.s;
+    if (!s) return { big: "" };
+    const notes = SG.mode === "whole" ? null : phraseNotes(s, SG.k);
+    return { top: `Песня · ${s.title}`, big: notes ? phraseWords(notes) || notes.map((n) => nm(n.m + songShiftOf(s))).join(" ") : ($("#sgline") || {}).textContent || "", sub: ($("#sgnow") || {}).textContent || "" };
+  };
+  async function songPlay() {
+    if (!SG || !SG.s) return;
+    if (SG.playing) {
+      if (SG.mode === "whole" && SG.win) {
+        songFinish();
+        return;
+      }
+      songPause();
+      songDraw();
+      return;
+    }
+    const s = SG.s, sh = songShiftOf(s), tp = songTempo();
+    if (MIC_DIRECT) await songEnsureMic();
+    if (camOn() && !camRecording() && SG.stream) await camSession("Песня", songPanel, SG.stream);
+    const c = ac(), t0 = c.currentTime + 0.15;
+    SG.playing = true;
+    songDraw();
+    const say = (t) => {
+      const el = $("#sgnow");
+      if (el) el.textContent = t;
+    };
+    if (SG.mode === "whole") {
+      const m0 = s.notes[0].m + sh;
+      [0, 4, 7].forEach((x) => tone(m0 + x, t0, 1.2, 0.05));
+      tone(m0, t0, 1.4, 0.2);
+      const dur = (s.notes[s.notes.length - 1].t + s.notes[s.notes.length - 1].d - s.notes[0].t) / tp;
+      const w02 = t0 + 1.7, w12 = w02 + dur * 1.6 + 4, T2 = songTargets(s.notes, tp);
+      say("Первая нота: " + nm(m0));
+      songAt(w02 - t0, () => {
+        SG.win = { t0: w02, t1: w12, T: T2, S: songScorer(T2, strictOct(), sh), line: -1 };
+        say("Пой!");
+        songFollow(SG.win);
+      });
+      songAt(w12 - t0 + 0.05, songFinish);
+      return;
+    }
+    const notes = phraseNotes(s, SG.k);
+    say("Слушай");
+    const end = playNotes2(notes, sh, tp, t0);
+    if (!SG.stream) {
+      songAt(end - t0 + 0.3, () => {
+        SG.playing = false;
+        songDraw();
+      });
+      return;
+    }
+    const w0 = end + 0.25, w1 = w0 + (end - t0) * 1.3 + 1.5, T = songTargets(notes, tp);
+    songAt(w0 - t0, () => {
+      SG.win = { t0: w0, t1: w1, T, S: songScorer(T, strictOct(), sh) };
+      say("Твоя очередь");
+    });
+    songAt(w1 - t0 + 0.05, songFinish);
+  }
+  function songFinish() {
+    const w = SG && SG.win;
+    if (!w) return;
+    SG.win = null;
+    (SG.timers || []).forEach(clearTimeout);
+    SG.timers = [];
+    const s = SG.s, r = w.S.result(), hitNotes = [];
+    w.T.forEach((x, q) => x.idx.forEach((i) => {
+      hitNotes[i] = r.hit[q];
+    }));
+    const p = prog(s.id);
+    p.plays = (p.plays || 0) + 1;
+    p.last = nowLocal();
+    if (SG.mode === "whole") {
+      SG.res.whole = { ...r, hitNotes };
+      p.whole = Math.max(p.whole || 0, r.pct);
+      s.ph.forEach((_, k) => {
+        const [a, b] = [s.ph[k], k + 1 < s.ph.length ? s.ph[k + 1] : s.notes.length];
+        let n = 0;
+        for (let i = a; i < b; i++) if (hitNotes[i]) n++;
+        p.ph[k] = Math.max(p.ph[k] || 0, Math.round(100 * n / (b - a)));
+      });
+      save();
+      SG.playing = false;
+      songDraw();
+      if (camRecording()) camRecStop(`${r.pct}% нот`);
+      return;
+    }
+    const off = s.ph[SG.k];
+    SG.res[SG.k] = { ...r, hitNotes: hitNotes.slice(off) };
+    p.ph[SG.k] = Math.max(p.ph[SG.k] || 0, r.pct);
+    save();
+    SG.tries++;
+    const last = SG.k >= s.ph.length - 1;
+    if (r.ok && !last) {
+      SG.k++;
+      SG.tries = 0;
+      SG.playing = true;
+      songDraw();
+      const el = $("#sgnow");
+      if (el) el.innerHTML = `<b style="color:var(--ok)">Чисто! Следующая фраза...</b>`;
+      songAt(1.6, () => {
+        SG.playing = false;
+        songPlay();
+      });
+      SG.playing = true;
+      return;
+    }
+    if (!r.ok && SG.tries < 3) {
+      SG.playing = true;
+      songDraw();
+      songAt(1.6, () => {
+        SG.playing = false;
+        songPlay();
+      });
+      SG.playing = true;
+      return;
+    }
+    SG.playing = false;
+    songDraw();
+    if (r.ok && last) {
+      const el = $("#sgnow");
+      if (el) el.innerHTML = `<b style="color:var(--ok)">Последняя фраза чисто!</b> Теперь попробуй всю песню: переключи на «Целиком».`;
+      if (camRecording()) camRecStop(`${learned(s)} из ${s.ph.length} фраз`);
+    }
+  }
+  function __set_SG(v) {
+    SG = v;
   }
 
   // src/screens/today.js
@@ -5539,7 +6471,7 @@ details summary{cursor:pointer}
   }
   function exItem(e, sub) {
     const locked = !isUnlocked(e);
-    return `<button class="item ${locked ? "locked" : ""}" ${act("go", `ex-e.id`)}>
+    return `<button class="item ${locked ? "locked" : ""}" ${act("go", `ex-${e.id}`)}>
     <div class="dot ${e.cat}">${e.level}</div>
     <div class="t"><b>${esc(e.title)}</b><span class="small muted">${sub || esc(CATS[e.cat].name + " · " + e.min + " мин")}</span>
     ${locked ? `<div class="lockline">🔒 Откроется после ${NEED_CONF} уверенных занятий уровня ${e.level - 1} за ${NEED_DAYS}+ дня</div>` : ""}</div>
@@ -5563,11 +6495,15 @@ details summary{cursor:pointer}
     h += diaryTodayItem();
     {
       const nx = voiceNext(), dn = voiceDoneToday();
-      h += `<button class="item" ${act("go", `voice-nx.id`)}><div class="dot ear">${dn ? "✓" : nx.icon}</div><div class="t"><b>Голос и речь${dn ? ": сделано" : ""}: ${nx.title}</b><span class="small muted">${dn ? "Можно ещё один комплекс" : setMin(nx) + " мин · дыхание, дикция, плавная речь, сильный голос"}</span></div><span class="muted">›</span></button>`;
+      h += `<button class="item" ${act("go", `voice-${nx.id}`)}><div class="dot ear">${dn ? "✓" : nx.icon}</div><div class="t"><b>Голос и речь${dn ? ": сделано" : ""}: ${nx.title}</b><span class="small muted">${dn ? "Можно ещё один комплекс" : setMin(nx) + " мин · дыхание, дикция, плавная речь, сильный голос"}</span></div><span class="muted">›</span></button>`;
     }
     {
       const nx = BALL_LEVELS[ballNextN() - 1], done = BALL_LEVELS.filter((l) => ballDone(l.n)).length;
-      h += `<button class="item" ${act("go", `ball-nx.n`)}><div class="dot pitch">🟠</div><div class="t"><b>Шарик: глава ${nx.ch + 1}, ${nx.exam ? "экзамен" : "задание " + nx.task}</b><span class="small muted">${esc(BALL_CHAPTERS[nx.ch].title)} · пройдено ${done} из ${BALL_LEVELS.length}</span></div><span class="muted">›</span></button>`;
+      h += `<button class="item" ${act("go", `ball-${nx.n}`)}><div class="dot pitch">🟠</div><div class="t"><b>Шарик: глава ${nx.ch + 1}, ${nx.exam ? "экзамен" : "задание " + nx.task}</b><span class="small muted">${esc(BALL_CHAPTERS[nx.ch].title)} · пройдено ${done} из ${BALL_LEVELS.length}</span></div><span class="muted">›</span></button>`;
+    }
+    {
+      const mine = songsAll().filter((x) => x.src !== "builtin").length;
+      h += `<button class="item" ${act("go", "songs")}><div class="dot rhythm">🎵</div><div class="t"><b>Разучить песню</b><span class="small muted">${mine ? "Моих песен: " + mine + " · " : ""}Своя из MIDI или караоке, или напой сам. По фразам, потом целиком</span></div><span class="muted">›</span></button>`;
     }
     {
       const r = lastRange();
@@ -5782,7 +6718,7 @@ details summary{cursor:pointer}
   }
 
   // src/main.js
-  var NAMESPACES = [analysis_exports, audio_exports, piano_exports, router_exports, store_exports, ui_exports, util_exports, exercises_exports, check_exports, exercise_exports, exercises_exports2, logic_exports, recorder_exports, tap_exports, ball_exports, cam_exports, diary_exports, game_exports, learn_exports, range_exports, register_exports, voice_exports, warmup_exports, history_exports, notes_exports, profiles_exports, settings_exports, today_exports];
+  var NAMESPACES = [analysis_exports, audio_exports, piano_exports, router_exports, store_exports, ui_exports, util_exports, exercises_exports, check_exports, exercise_exports, exercises_exports2, logic_exports, recorder_exports, tap_exports, ball_exports, cam_exports, diary_exports, game_exports, learn_exports, range_exports, register_exports, voice_exports, warmup_exports, songlib_exports, songs_exports2, songs_exports, history_exports, notes_exports, profiles_exports, settings_exports, today_exports];
   var { viewToday: viewToday2 } = today_exports;
   var { viewHistory: viewHistory2 } = history_exports;
   var { viewNotes: viewNotes2 } = notes_exports;
@@ -5802,9 +6738,11 @@ details summary{cursor:pointer}
   registerRoute("learn", viewLearn);
   registerRoute("voice", viewVoice, "exercises");
   registerRoute("diary", viewDiary);
+  registerRoute("songs", viewSongs, "exercises");
   registerPrefix("ex-", (id) => viewExercise2(exById2(id)), "exercises", (id) => !!exById2(id));
   registerPrefix("game-", (n) => viewGameLevel(+n), "ball", (n) => /^\d+$/.test(n));
   registerPrefix("ball-", (n) => viewBallLevel(+n), "ball", (n) => /^\d+$/.test(n));
+  registerPrefix("song-", (id) => viewSong(id), "exercises", (id) => !!songById(id));
   registerPrefix("voice-", (id) => viewVoiceSet(id), "exercises", (id) => !!voiceSet(id));
   beforeRender(gameStop);
   beforeRender(ballRebuild);
@@ -5813,6 +6751,7 @@ details summary{cursor:pointer}
   beforeRender(warmupStop);
   beforeRender(voiceStop);
   beforeRender(diaryStop);
+  beforeRender(songStop);
   beforeRender(camOff);
   onLeave(stopRecordingIfAny);
   registerActions({
@@ -5875,6 +6814,20 @@ details summary{cursor:pointer}
     setVoice,
     setWuMode,
     showTol,
+    songAskDel,
+    songCancel,
+    songDel,
+    songFile,
+    songGoPhrase,
+    songNext,
+    songPickTrack,
+    songPlay,
+    songPreview,
+    songRecord,
+    songSave,
+    songSetMode,
+    songSetTempo,
+    songShiftBy,
     startQuiz,
     stepBase,
     stopAll,

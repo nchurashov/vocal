@@ -23,6 +23,9 @@ import * as features_range from './features/range.js';
 import * as features_register from './features/register.js';
 import * as features_voice from './features/voice.js';
 import * as features_warmup from './features/warmup.js';
+import * as features_songlib from './features/songlib.js';
+import * as features_songs from './features/songs.js';
+import * as data_songs from './data/songs.js';
 import * as screens_history from './screens/history.js';
 import * as screens_notes from './screens/notes.js';
 import * as screens_profiles from './screens/profiles.js';
@@ -30,7 +33,7 @@ import * as screens_settings from './screens/settings.js';
 import * as screens_today from './screens/today.js';
 import { registerRoute, registerPrefix, beforeRender, onLeave, start } from './core/router.js';
 import { registerActions, initActions } from './core/actions.js';
-const NAMESPACES = [core_analysis, core_audio, core_piano, core_router, core_store, core_ui, core_util, data_exercises, trainer_check, trainer_exercise, trainer_exercises, trainer_logic, trainer_recorder, trainer_tap, features_ball, features_cam, features_diary, features_game, features_learn, features_range, features_register, features_voice, features_warmup, screens_history, screens_notes, screens_profiles, screens_settings, screens_today];
+const NAMESPACES = [core_analysis, core_audio, core_piano, core_router, core_store, core_ui, core_util, data_exercises, trainer_check, trainer_exercise, trainer_exercises, trainer_logic, trainer_recorder, trainer_tap, features_ball, features_cam, features_diary, features_game, features_learn, features_range, features_register, features_voice, features_warmup, features_songlib, features_songs, data_songs, screens_history, screens_notes, screens_profiles, screens_settings, screens_today];
 
 const { viewToday } = screens_today, { viewHistory } = screens_history, { viewNotes } = screens_notes;
 const { viewExercises } = trainer_exercises, { viewExercise } = trainer_exercise, { viewCheck } = trainer_check;
@@ -49,9 +52,11 @@ registerRoute('warmup', features_warmup.viewWarmup);
 registerRoute('learn', features_learn.viewLearn);
 registerRoute('voice', features_voice.viewVoice, 'exercises');
 registerRoute('diary', features_diary.viewDiary);
+registerRoute('songs', features_songs.viewSongs, 'exercises');
 registerPrefix('ex-', id => viewExercise(exById(id)), 'exercises', id => !!exById(id));
 registerPrefix('game-', n => features_game.viewGameLevel(+n), 'ball', n => /^\d+$/.test(n));
 registerPrefix('ball-', n => features_ball.viewBallLevel(+n), 'ball', n => /^\d+$/.test(n));
+registerPrefix('song-', id => features_songs.viewSong(id), 'exercises', id => !!features_songs.songById(id));
 registerPrefix('voice-', id => features_voice.viewVoiceSet(id), 'exercises', id => !!features_voice.voiceSet(id));
 
 // --- что остановить перед сменой экрана (порядок важен: игры и микрофон, потом камера)
@@ -62,6 +67,7 @@ beforeRender(features_range.rangeStop);
 beforeRender(features_warmup.warmupStop);
 beforeRender(features_voice.voiceStop);
 beforeRender(features_diary.diaryStop);
+beforeRender(features_songs.songStop);
 beforeRender(features_cam.camOff);
 onLeave(trainer_recorder.stopRecordingIfAny);
 
@@ -126,6 +132,20 @@ registerActions({
   setVoice: features_register.setVoice,
   setWuMode: features_warmup.setWuMode,
   showTol: features_ball.showTol,
+  songAskDel: features_songs.songAskDel,
+  songCancel: features_songs.songCancel,
+  songDel: features_songs.songDel,
+  songFile: features_songs.songFile,
+  songGoPhrase: features_songs.songGoPhrase,
+  songNext: features_songs.songNext,
+  songPickTrack: features_songs.songPickTrack,
+  songPlay: features_songs.songPlay,
+  songPreview: features_songs.songPreview,
+  songRecord: features_songs.songRecord,
+  songSave: features_songs.songSave,
+  songSetMode: features_songs.songSetMode,
+  songSetTempo: features_songs.songSetTempo,
+  songShiftBy: features_songs.songShiftBy,
   startQuiz: trainer_exercise.startQuiz,
   stepBase: features_register.stepBase,
   stopAll: core_audio.stopAll,

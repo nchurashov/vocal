@@ -45,7 +45,7 @@ export function viewGame() {
     <div class="ggrid sec">`;
   for (const lv of GAME_LEVELS) {
     const best = g.best[lv.n], open = gameUnlocked(lv.n);
-    h += `<button class="gtile ${open ? '' : 'locked'}" ${open ? `${act('go', `game-lv.n`)}` : ''}>
+    h += `<button class="gtile ${open ? '' : 'locked'}" ${open ? `${act('go', `game-${lv.n}`)}` : ''}>
       <span class="gnum">${open ? lv.n : '🔒'}</span><b>${esc(lv.title)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
       <span class="tiny muted">${best ? 'лучший ' + best.acc + '%' : open ? 'ещё не играл' : 'пройди уровень ' + (lv.n - 1)}</span></button>`;
   }
@@ -269,7 +269,7 @@ export function gameResult(scores, mode) {
     ${notesTxt ? `<div class="small">${notesTxt}</div>` : ''}
     <div class="${st ? 'info' : 'note'}">${msg}</div>
     <div class="row wrap" style="justify-content:center">${mode === 'take' && lastAudio ? `<button class="btn ghost" ${act('playAudioLast')}>${ICON.play} Моя попытка</button>` : ''}
-    ${gameUnlocked(lv.n + 1) && lv.n < GAME_LEVELS.length ? `<button class="btn" ${act('go', `game-lv.n + 1`)}>Уровень ${lv.n + 1} →</button>` : ''}</div></div>`;
+    ${gameUnlocked(lv.n + 1) && lv.n < GAME_LEVELS.length ? `<button class="btn" ${act('go', `game-${lv.n + 1}`)}>Уровень ${lv.n + 1} →</button>` : ''}</div></div>`;
   if (opened) toast(`Уровень ${lv.n + 1} открыт!`);
 }
 window.addEventListener('resize', () => { if (G && G.mode === 'idle') { gameResize(); gameDraw(-1.5); } });
