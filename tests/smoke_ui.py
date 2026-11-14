@@ -23,8 +23,34 @@ with sync_playwright() as p:
         if ex == 'r1':
             pg.click('text=Начать проверку'); pg.wait_for_timeout(400)
         pg.locator('.rate button >> nth=0').click(); pg.click('text=Сохранить занятие'); pg.wait_for_timeout(300)
+        # после «Уверенно» не выкидывает на «Сегодня», а предлагает следующее упражнение того же раздела
+        if '✓ Пройдено' not in pg.locator('#sheet').inner_text(): bad.append(f'{ex}: нет окна «Пройдено» после сохранения')
+        nxt = pg.evaluate("(() => { const b = [...document.querySelectorAll('#sheet [data-action]')].find(b => b.textContent.includes('Дальше')); return b && JSON.parse(b.dataset.args || '[]')[0]; })()")
+        if ex == 'h1':
+            pg.locator('#sheet button', has_text='Дальше').click(); pg.wait_for_timeout(300)
+            if pg.locator('#sheet').count() or not pg.url.endswith('#' + str(nxt)) or nxt == 'ex-h1': bad.append(f'«Дальше» не открыло следующее упражнение: {pg.url} / {nxt}')
+            if pg.evaluate("location.hash") == '#ex-h1': bad.append('«Дальше» осталось на том же упражнении')
+        else: pg.locator('#sheet button', has_text='Сегодня').click(); pg.wait_for_timeout(300)
+    # «Не вышло»: окно предлагает «Ещё раз» первым, упражнение не помечается пройденным
+    pg.goto(f'{URL}#ex-r2'); pg.wait_for_timeout(300)
+    pg.locator('.rate button >> nth=2').click(); pg.click('text=Сохранить занятие'); pg.wait_for_timeout(300)
+    if '✓ Пройдено' in pg.locator('#sheet').inner_text(): bad.append('«Не вышло» показало «Пройдено»')
+    pg.locator('#sheet .btn.block >> nth=0').click(); pg.wait_for_timeout(300)
+    if pg.locator('#sheet').count() or pg.evaluate('location.hash') != '#ex-r2' or not pg.locator('#savebtn').count(): bad.append('«Ещё раз» не открыло упражнение заново')
+    pg.locator('.rate button >> nth=2').click(); pg.click('text=Сохранить занятие'); pg.wait_for_timeout(300)
+    pg.evaluate("location.hash = 'exercises'"); pg.wait_for_timeout(300)  # ушли жестом «Назад»/по ссылке - окошко не должно висеть
+    if pg.locator('#sheet').count(): bad.append('окно после сохранения осталось на другом экране')
+    if pg.locator('.dot.done').count() != 3: bad.append(f'галочек «Пройдено» не 3: {pg.locator(".dot.done").count()}')
+    if 'Пройдено 3 из' not in pg.inner_text('main' if pg.locator('main').count() else 'body'): bad.append('нет счётчика «Пройдено 3 из N»')
     pg.goto(URL + '#history'); pg.wait_for_timeout(300)
-    if pg.locator('.item').count() != 3: bad.append('в истории не 3 занятия')
+    if pg.locator('.item').count() != 5: bad.append('в истории не 5 занятий')
+    # текст шагов называет те же ноты, что подписаны на графике примера (база не До - не «до, ре, до»)
+    pg.evaluate("(() => { const s = JSON.parse(localStorage.getItem('vocal-practice')); s.settings.base = 46; localStorage.setItem('vocal-practice', JSON.stringify(s)); })()")
+    for ex in ['p2', 'p4']:
+        pg.goto(f'{URL}#{ex}'); pg.reload(); pg.goto(f'{URL}#ex-{ex}'); pg.wait_for_timeout(300)
+        step = pg.inner_text('.steps li >> nth=0').lower()
+        labels = pg.evaluate("[...document.querySelectorAll('svg.roll text')].map(t => t.textContent.toLowerCase()).join(', ')")
+        if '{' in step or labels not in step: bad.append(f'{ex}: в шагах не те ноты, что в примере: «{step}» / {labels}')
     for r in ['ball', 'ball-1', 'game', 'game-1', 'check', 'notes', 'exercises']:
         pg.goto(f'{URL}#{r}'); pg.wait_for_timeout(200)
     b.close()

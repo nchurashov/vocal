@@ -2,7 +2,7 @@ import { act } from './actions.js';
 import { ac, noteFull, noteShort, tone } from './audio.js';
 import { $, busy } from './util.js';
 
-// ===== Клавиатура пианино (SVG) и страница «Как устроены ноты» (#learn) =====
+// ===== Клавиатура пианино (SVG) и урок «Ноты и клавиатура» (#learn-notes) =====
 export const PC_BLACK = [1, 3, 6, 8, 10];
 export const isBlack = m => PC_BLACK.includes(((m % 12) + 12) % 12);
 export const OCT_NOM = ['субконтроктава', 'контроктава', 'большая октава', 'малая октава', 'первая октава', 'вторая октава', 'третья октава'];
