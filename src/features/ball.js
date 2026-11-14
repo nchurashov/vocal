@@ -32,6 +32,9 @@ export const BALL_CHAPTERS = [
 ];
 export const DEG_SEMI = d => 12 * Math.floor(d / 7) + [0, 2, 4, 5, 7, 9, 11][((d % 7) + 7) % 7];
 export const DEG_NAME = ['до', 'ре', 'ми', 'фа', 'соль', 'ля', 'си'];
+// урок теории к главе: [адрес, о чём]
+export const ballTheory = C => C.kind === 'hold' ? ['learn-iv-0', 'прима и унисон'] : C.kind === 'int' ? [`learn-iv-${DEG_SEMI(C.deg)}`, C.title.toLowerCase()] : C.kind === 'melody' ? ['learn-intervals', 'интервалы в мелодии'] : ['learn-scale', C.title.toLowerCase()];
+const theoryLink = C => { const [h, t] = ballTheory(C); return `<a href="#${h}" class="small">📖 Теория: ${t}</a>`; };
 export function ballRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 // окно голоса в полутонах от базовой ноты
 export function ballWindow() {
@@ -121,7 +124,7 @@ export function viewBall() {
         <div><div class="tiny muted">Глава ${ci + 1}${done === 10 ? ' · пройдена ✓' : ''}</div><b>${open ? '' : '🔒 '}${esc(C.title)}</b><div class="small muted">${esc(C.goal)}</div></div>
         <div style="text-align:right;flex:none;margin-left:10px"><b>${done}/10</b><div style="width:64px;height:5px;background:var(--line);border-radius:3px;margin-top:4px"><i style="display:block;height:100%;width:${done * 10}%;background:var(--ok);border-radius:3px"></i></div></div></button>`;
     if (show) {
-      h += `<div class="ggrid" style="padding:0 12px 12px">`;
+      h += `<div style="padding:0 16px 10px">${theoryLink(C)}</div><div class="ggrid" style="padding:0 12px 12px">`;
       for (const lv of lvls) {
         const best = g.best[lv.n], o = ballUnlocked(lv.n), ok = ballDone(lv.n);
         h += `<button class="gtile ${o ? '' : 'locked'}" ${o ? `${act('go', `ball-${lv.n}`)}` : ''}>
@@ -152,7 +155,7 @@ export function viewBallLevel(n) {
   afterHooks.push(() => ballSetup(lv)); afterHooks.push(() => { if (camOn()) camStart(); });
   return `<button class="back" ${act('go', 'ball')}>${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Глава ${lv.ch + 1} «${esc(BALL_CHAPTERS[lv.ch].title)}» · ${lv.exam ? 'экзамен' : 'задание ' + lv.task + ' из 10'} · точность ±${ballTol()} ц</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. ${lv.exam ? 'Экзамен: нужно пролететь все стены без удара, тогда откроется следующая глава.' : `Чтобы засчитать, нужно 2 звезды (80% стен).${lv.guide ? '' : ' Без подсказки пианино перед стеной.'}`}</p>${octaveHint()}${camToggleHTML()}
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. ${lv.exam ? 'Экзамен: нужно пролететь все стены без удара, тогда откроется следующая глава.' : `Чтобы засчитать, нужно 2 звезды (80% стен).${lv.guide ? '' : ' Без подсказки пианино перед стеной.'}`} ${theoryLink(BALL_CHAPTERS[lv.ch])}</p>${octaveHint()}${camToggleHTML()}
     ${diffSeg()}
     <div id="bbest">${ballBestHTML(lv)}</div>
     <div class="gstage sec"><canvas id="bcv"></canvas></div>

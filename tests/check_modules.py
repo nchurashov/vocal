@@ -25,7 +25,7 @@ with sync_playwright() as p:
     pg.on('pageerror', lambda e: errs.append(str(e) + ' | ' + (e.stack or '')[:400].replace(chr(10), ' ')))
     pg.on('console', lambda m: m.type == 'error' and 'Failed to load resource' not in m.text and errs.append(m.text))
     pg.on('response', lambda r: r.status >= 400 and not r.url.endswith('/favicon.ico') and errs.append(f'{r.status} {r.url}'))
-    for r in ['today', 'ball', 'ball-1', 'game-1', 'exercises', 'ex-h1', 'check', 'history', 'notes', 'range', 'warmup', 'learn', 'voice', 'voice-pencil', 'diary']:
+    for r in ['today', 'ball', 'ball-1', 'game-1', 'exercises', 'ex-h1', 'check', 'history', 'notes', 'range', 'warmup', 'learn', 'learn-notes', 'learn-intervals', 'learn-iv-6', 'voice', 'voice-pencil', 'diary']:
         pg.goto(url + '#' + r); pg.wait_for_timeout(250)
         if not pg.inner_text('#view').strip(): fails.append(f'#{r}: пустой экран')
     v = pg.evaluate("[typeof CAM_OK, typeof MIC_DIRECT, typeof state, typeof BALL_LEVELS]")

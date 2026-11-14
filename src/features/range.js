@@ -59,7 +59,7 @@ export function viewRange() {
   const hist = state.range || [];
   let h = `<button class="back" ${act('go', 'today')}>${ICON.back} Сегодня</button><h1>Мой диапазон</h1>
     <p class="muted" style="margin:6px 0 0">Пой на «а». Сначала самую низкую ноту, которую берёшь без хрипа и давления, и подержи секунду. Потом поднимайся ступеньками до самой высокой, где голос ещё звучит свободно, и тоже подержи.</p>
-    <p class="tiny muted" style="margin:6px 0 0">Засчитываются только ноты, удержанные ровно ${RANGE_HOLD} с. Случайный писк или хрип не попадёт. <a href="#learn">Что значат E2, C4?</a></p>
+    <p class="tiny muted" style="margin:6px 0 0">Засчитываются только ноты, удержанные ровно ${RANGE_HOLD} с. Случайный писк или хрип не попадёт. <a href="#learn-notes">Что значат E2, C4?</a></p>
     ${camToggleHTML()}<div class="card sec stack" id="rgbox"></div>`;
   if (hist.length) {
     const f = hist[0], l = hist[hist.length - 1];

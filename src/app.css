@@ -139,3 +139,16 @@ details summary{cursor:pointer}
 .who{max-width:92px;padding:8px 10px}
 @media (max-width:390px){.brand b{font-size:16px}.brand{gap:8px}}
 .spin{width:34px;height:34px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+
+/* теория */
+.ivgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.ivtile{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:10px;text-align:left;display:flex;flex-direction:column;gap:1px;font-size:13.5px}
+.ivtile b{font-family:'Lora',serif;font-size:19px;color:var(--accent)}
+.btn.lp{min-height:40px;padding:8px 12px;font-size:14px}
+.btn.lpi{min-height:36px;width:42px;padding:0;flex:none}
+.ltab{border-collapse:collapse;font-size:13px;width:100%}
+.ltab th,.ltab td{padding:5px 2px;border-top:1px solid var(--line);text-align:center;white-space:nowrap}
+.ltab th{font-weight:700;color:var(--muted);font-size:12px;border-top:0}
+.ltab td:first-child,.ltab th:first-child{text-align:left}
+.ltab .chip{padding:2px 5px;text-decoration:none}
+.chip.ok{text-decoration:none}
