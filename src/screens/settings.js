@@ -1,8 +1,9 @@
 import { VA } from '../core/analysis.js';
 import { ac, click, stopAll } from '../core/audio.js';
-import { save, saveText, state } from '../core/store.js';
-import { sheet, toast } from '../core/ui.js';
-import { $ } from '../core/util.js';
+import { normalizeState, replaceState, save, saveText, state } from '../core/store.js';
+import { render } from '../core/router.js';
+import { closeSheet, sheet, toast } from '../core/ui.js';
+import { $, nowLocal, ymd } from '../core/util.js';
 import { registerCard } from '../features/register.js';
 
 // ===== Настройки =====
@@ -13,6 +14,9 @@ export function openSettings() {
     <button class="tap" id="calbtn" style="width:150px" disabled>Тап</button><div id="calmsg" class="small muted" style="text-align:center"></div>
     <button class="btn ghost" onclick="calibrate()">Настроить: стучи в такт 8 щелчкам</button></div>
     <div class="card stack"><h3>Данные</h3><p class="small muted" style="margin:0" id="savebadge">${saveText()}</p>
+    <p class="small muted" style="margin:0">Сохрани прогресс в файл, чтобы не потерять его при удалении приложения или перенести на другое устройство. Сохраняется прогресс того, кто сейчас поёт.</p>
+    <button class="btn ghost" onclick="exportData()">Сохранить прогресс в файл</button>
+    <label class="btn ghost" style="text-align:center">Загрузить прогресс из файла<input type="file" accept=".json,application/json" style="display:none" onchange="importFile(this)"></label>
     <button class="btn ghost" onclick="copyData()">Скопировать мои данные</button>
     <button class="btn ghost" style="color:var(--bad)" onclick="askReset()">Удалить всё и начать заново</button></div>`);
 }
@@ -30,5 +34,41 @@ export function calibrate() {
     $('#calmsg').textContent = `Готово: задержка ${ms} мс. Учту её в проверке ритма.`;
   }, (t0 + 8 * b - c.currentTime + .6) * 1000);
 }
-export async function copyData() { try { await navigator.clipboard.writeText(JSON.stringify(state, null, 1)); toast('Скопировано'); } catch (e) { toast('Не получилось скопировать'); } }
+// ===== Экспорт и импорт прогресса (файл .json; при загрузке всё проходит normalizeState) =====
+export const exportJSON = () => JSON.stringify({ app: 'vocal', exported: nowLocal(), ...state }, null, 1);
+export async function exportData() {
+  const name = `vocal-${ymd()}.json`, text = exportJSON();
+  try {
+    const file = new File([text], name, { type: 'application/json' });
+    // На iPhone и в приложении - системное меню «Поделиться»: «Сохранить в Файлы», AirDrop, почта.
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Прогресс Вокала' }); return; }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  try {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Файл сохранён: ' + name);
+  } catch (e) { copyData(); }
+}
+const importSummary = s => `занятий: ${s.sessions.length}, заметок: ${s.notes.length}, замеров диапазона: ${s.range.length}, распевок: ${s.warmups.length}`;
+let pendingImport = null;
+export async function importFile(input) {
+  const f = input.files && input.files[0]; input.value = ''; if (!f) return;
+  if (f.size > 5e6) { toast('Файл слишком большой для прогресса'); return; }
+  let data;
+  try {
+    const raw = JSON.parse(await f.text());
+    if (!raw || (raw.app !== 'vocal' && !Array.isArray(raw.sessions))) throw new Error('Это не файл прогресса Вокала');
+    data = normalizeState(raw);
+  } catch (e) { toast(e instanceof SyntaxError ? 'Файл повреждён или это не прогресс' : e.message); return; }
+  pendingImport = data;
+  sheet(`<h2>Загрузить прогресс?</h2><p class="muted">В файле: ${importSummary(data)}.</p>
+    <p class="muted">Сейчас: ${importSummary(state)}. Текущие данные заменятся данными из файла.</p>
+    <div class="row"><button class="btn ghost" style="flex:1" onclick="cancelImport()">Отмена</button><button class="btn" style="flex:1" onclick="applyImport()">Загрузить</button></div>`);
+}
+export function cancelImport() { pendingImport = null; closeSheet(); }
+export function applyImport() {
+  if (!pendingImport) return;
+  replaceState(pendingImport); pendingImport = null; closeSheet(); render(); toast('Прогресс загружен');
+}
+export async function copyData() { try { await navigator.clipboard.writeText(exportJSON()); toast('Скопировано'); } catch (e) { toast('Не получилось скопировать'); } }
 export function askReset() { sheet(`<h2>Удалить всё?</h2><p class="muted">История, заметки и уровни будут стёрты. Это нельзя отменить.</p><div class="row"><button class="btn ghost" style="flex:1" onclick="closeSheet()">Отмена</button><button class="btn" style="flex:1;background:var(--bad)" onclick="state=Object.assign(DEFAULT(),{settings:state.settings});save();closeSheet();go('today');render()">Удалить</button></div>`); }
