@@ -158,6 +158,8 @@ export function splitPhrases(notes, starts) {
   return out;
 }
 export const phraseRange = (song, k) => [song.ph[k], k + 1 < song.ph.length ? song.ph[k + 1] : song.notes.length];
+// сколько заданий у песни в «Шарике» (songball.js): каждая фраза, фразы парами, вся песня
+export const sbTotal = P => P + (P > 1 ? Math.ceil(P / 2) : 0) + 1;
 export const phraseNotes = (song, k) => { const [a, b] = phraseRange(song, k); return song.notes.slice(a, b); };
 // текст фразы: слоги вместе, если слов нет - пусто
 export const phraseWords = notes => notes.map(n => n.w || '').join('').replace(/\s+/g, ' ').trim();
@@ -203,6 +205,43 @@ export function scoreSung(notes, frames, strict, shift = 0, tempo = 1) {
   const S = songScorer(songTargets(notes, tempo), strict, shift);
   for (const f of frames) S.push(f.t, f.m);
   return S.result();
+}
+
+// --- караоке-игра: ноты едут по экрану, поёшь в такт. Время - секунды от первой ноты (с учётом темпа).
+// Нота засчитана, если голос в пределах ±50 центов (без строгого режима - в любой октаве) набрал 40% её длины
+// внутри окна [начало + атака - 0.05 с; конец + 0.3 с]: опоздание до 0.3 с не штрафуется, начало ноты (атака) не нужно.
+export const SONG_LATE = .3;
+export function songGame(notes, { tempo = 1, shift = 0, strict = false } = {}) {
+  const s0 = notes[0].t;
+  const N = notes.map((n, i) => {
+    const t0 = (n.t - s0) / tempo, d = n.d / tempo, att = Math.min(.15, d * .3);
+    return { i, m: n.m + shift, w: n.w, t0, t1: t0 + d, a: t0 + att - .05, need: Math.max(.06, .4 * (d - att)), got: 0, hit: false, done: false };
+  });
+  return { N, strict, D: N[N.length - 1].t1, last: null, combo: 0, best: 0, j: 0 };
+}
+export const songNear = (G, n, m) => { let d = m - n.m; if (!G.strict) d -= 12 * Math.round(d / 12); return Math.abs(d) <= .5; };
+// один кадр: время t (с от начала), высота голоса m (MIDI или null). Возвращает события: [{ hit|miss, i }]
+export function songGameStep(G, t, m) {
+  const dt = G.last == null ? 0 : Math.min(.05, Math.max(0, t - G.last)); G.last = t;
+  const ev = [];
+  while (G.j < G.N.length && G.N[G.j].done) G.j++;
+  for (let k = G.j; k < G.N.length; k++) {
+    const n = G.N[k]; if (n.a > t) break; if (n.done) continue;
+    if (!n.hit && m != null && t <= n.t1 + SONG_LATE && songNear(G, n, m)) { n.got += dt; if (n.got >= n.need) { n.hit = true; G.combo++; G.best = Math.max(G.best, G.combo); ev.push({ hit: true, i: k }); } }
+    if (t > n.t1 + SONG_LATE) { n.done = true; if (!n.hit) { G.combo = 0; ev.push({ miss: true, i: k }); } }
+  }
+  return ev;
+}
+export function songGameResult(G) {
+  const n = G.N.filter(x => x.hit).length, total = G.N.length, pct = Math.round(100 * n / total);
+  return { n, total, pct, ok: pct >= 80, stars: pct >= 90 ? 3 : pct >= 75 ? 2 : pct >= 50 ? 1 : 0, best: G.best, hit: G.N.map(x => x.hit) };
+}
+// прогнать готовые кадры (тест и проверка записи)
+export function songGameFrames(notes, frames, opts) {
+  const G = songGame(notes, opts);
+  for (const f of frames) songGameStep(G, f.t, f.m);
+  songGameStep(G, G.D + SONG_LATE + 1, null);
+  return songGameResult(G);
 }
 
 // --- проверка песни, пришедшей извне (localStorage, файл): только числа и короткий текст, вывод слов - через esc()

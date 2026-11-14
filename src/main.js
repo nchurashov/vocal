@@ -26,7 +26,10 @@ import * as features_voice from './features/voice.js';
 import * as features_warmup from './features/warmup.js';
 import * as features_songlib from './features/songlib.js';
 import * as features_songs from './features/songs.js';
+import * as features_path from './features/path.js';
+import * as features_songball from './features/songball.js';
 import * as features_songgame from './features/songgame.js';
+import * as features_songkeys from './features/songkeys.js';
 import * as data_songs from './data/songs.js';
 import * as screens_history from './screens/history.js';
 import * as screens_notes from './screens/notes.js';
@@ -35,7 +38,7 @@ import * as screens_settings from './screens/settings.js';
 import * as screens_today from './screens/today.js';
 import { registerRoute, registerPrefix, beforeRender, onLeave, start } from './core/router.js';
 import { registerActions, initActions } from './core/actions.js';
-const NAMESPACES = [core_analysis, core_audio, core_piano, core_router, core_store, core_ui, core_util, data_exercises, trainer_check, trainer_exercise, trainer_exercises, trainer_logic, trainer_recorder, trainer_tap, features_ball, features_cam, features_diary, features_game, features_learn, features_range, features_register, features_voice, features_warmup, features_songlib, features_songs, features_songgame, data_songs, screens_history, screens_notes, screens_profiles, screens_settings, screens_today];
+const NAMESPACES = [core_analysis, core_audio, core_piano, core_router, core_store, core_ui, core_util, data_exercises, trainer_check, trainer_exercise, trainer_exercises, trainer_logic, trainer_recorder, trainer_tap, features_ball, features_cam, features_diary, features_game, features_learn, features_range, features_register, features_voice, features_warmup, features_songlib, features_songs, features_songball, features_songgame, features_songkeys, features_path, data_songs, screens_history, screens_notes, screens_profiles, screens_settings, screens_today];
 
 const { viewToday } = screens_today, { viewHistory } = screens_history, { viewNotes } = screens_notes;
 const { viewExercises } = trainer_exercises, { viewExercise } = trainer_exercise, { viewCheck } = trainer_check;
@@ -58,7 +61,10 @@ registerRoute('songs', features_songs.viewSongs, 'exercises');
 registerPrefix('ex-', id => viewExercise(exById(id)), 'exercises', id => !!exById(id));
 registerPrefix('game-', n => features_game.viewGameLevel(+n), 'ball', n => /^\d+$/.test(n));
 registerPrefix('ball-', n => features_ball.viewBallLevel(+n), 'ball', n => /^\d+$/.test(n));
-registerPrefix('song-', id => features_songs.viewSong(id), 'exercises', id => !!features_songs.songById(id));
+registerPrefix('song-', id => features_songball.viewSongLevels(id), 'exercises', id => !!features_songs.songById(id));
+registerPrefix('karaoke-', id => features_songs.viewSong(id), 'exercises', id => !!features_songs.songById(id));
+registerPrefix('keys-', id => features_songkeys.viewSongKeys(id), 'exercises', id => !!features_songs.songById(id));
+registerPrefix('sball-', r => features_songball.viewSongBall(r), 'exercises', r => !!features_songball.sbParse(r));
 registerPrefix('learn-', features_learn.viewLesson, 'learn', features_learn.learnValid);
 registerPrefix('voice-', id => features_voice.viewVoiceSet(id), 'exercises', id => !!features_voice.voiceSet(id));
 
@@ -71,6 +77,7 @@ beforeRender(features_warmup.warmupStop);
 beforeRender(features_voice.voiceStop);
 beforeRender(features_diary.diaryStop);
 beforeRender(features_songs.songStop);
+beforeRender(features_songkeys.skStop);
 beforeRender(features_cam.camOff);
 beforeRender(core_update.applyUpdate); // новая версия сайта - при смене экрана, когда уже ничего не поёт
 onLeave(trainer_recorder.stopRecordingIfAny);
@@ -128,6 +135,9 @@ registerActions({
   rangeSetBreak: features_range.rangeSetBreak,
   rangeStart: features_range.rangeStart,
   rangeWork: features_range.rangeWork,
+  pathAll: features_path.pathAll,
+  pathGo: features_path.pathGo,
+  pathHide: features_path.pathHide,
   resetAll: screens_settings.resetAll,
   saveMelody: trainer_check.saveMelody,
   saveNote: screens_notes.saveNote,
@@ -136,6 +146,15 @@ registerActions({
   selectMelody: trainer_check.selectMelody,
   setExFilter: trainer_exercises.setExFilter,
   setRating: trainer_exercise.setRating,
+  sbShift: features_songball.sbShift,
+  skGamePlay: features_songkeys.skGamePlay,
+  skGamePreview: features_songkeys.skGamePreview,
+  skGoPhrase: features_songkeys.skGoPhrase,
+  skNext: features_songkeys.skNext,
+  skPlay: features_songkeys.skPlay,
+  skSetMode: features_songkeys.skSetMode,
+  skSetTempo: features_songkeys.skSetTempo,
+  skShiftBy: features_songkeys.skShiftBy,
   setStrict: features_register.setStrict,
   setTol: features_ball.setTol,
   setVoice: features_register.setVoice,
@@ -145,9 +164,8 @@ registerActions({
   songCancel: features_songs.songCancel,
   songDel: features_songs.songDel,
   songFile: features_songs.songFile,
-  songGamePlay: features_songs.songGamePlay,
-  songGamePreview: features_songs.songGamePreview,
   songGoPhrase: features_songs.songGoPhrase,
+  songListenAll: features_songs.songListenAll,
   songNext: features_songs.songNext,
   songPickTrack: features_songs.songPickTrack,
   songPlay: features_songs.songPlay,
