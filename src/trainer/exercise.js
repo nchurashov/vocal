@@ -1,6 +1,6 @@
 import { act, onChange } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
-import { ac, base, playNotes, playRhythm, stopAll, tone } from '../core/audio.js';
+import { ac, base, noteFull, playNotes, playRhythm, stopAll, tone } from '../core/audio.js';
 import { afterHooks, go, render } from '../core/router.js';
 import { save, state } from '../core/store.js';
 import { closeSheet, sheet, toast } from '../core/ui.js';
@@ -41,6 +41,11 @@ export function rollSVG(notes, result) {
   });
   return out + '</svg>';
 }
+// {ноты} в шагах = настоящие ноты примера от базовой ноты пользователя (а не всегда «до, ре, до»)
+export function stepText(ex, s) {
+  if (!ex.notes) return s;
+  return s.replace('{ноты}', ex.notes.map(([x]) => VA.noteName(base() + x).toLowerCase()).join(', '));
+}
 export function viewExerciseBase(ex) {
   if (!ex) return '<div class="empty">Упражнение не найдено</div>';
   const locked = !isUnlocked(ex);
@@ -49,7 +54,7 @@ export function viewExerciseBase(ex) {
     <div class="row wrap" style="gap:6px"><span class="chip ${ex.cat}">${CATS[ex.cat].name}</span><span class="chip">Уровень ${ex.level}</span><span class="chip">${ex.min} мин</span></div>
     <h1 style="margin-top:10px">${esc(ex.title)}</h1><p class="muted" style="margin:6px 0 0">${esc(ex.goal)}</p>`;
   if (locked) h += `<div class="note sec">🔒 Это упражнение уровня ${ex.level}. Оно откроется после ${NEED_CONF} отметок «Уверенно» на уровне ${ex.level - 1} в разделе «${CATS[ex.cat].name}» за ${NEED_DAYS}+ дня. Можно прочитать, но в план оно пока не попадёт.</div>`;
-  h += `<div class="card sec"><h3 style="margin-bottom:12px">Как делать</h3><ol class="steps">${ex.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol></div>`;
+  h += `<div class="card sec"><h3 style="margin-bottom:12px">Как делать</h3><ol class="steps">${ex.steps.map(s => `<li>${esc(stepText(ex, s))}</li>`).join('')}</ol>${ex.kind === 'sing' ? `<p class="tiny muted" style="margin:10px 0 0">Ноты подстроены под твой голос: пример начинается с ноты ${noteFull(base())}. Поменять можно в ⚙ «Где работаем».</p>` : ''}</div>`;
   // Пример
   h += `<div class="card sec"><h3>Пример</h3>`;
   if (ex.kind === 'sing') h += `${rollSVG(ex.notes)}<div class="row wrap" style="margin-top:10px"><button class="btn" ${act('playEx', ex.id)}>${ICON.play} Послушать пример</button><button class="btn ghost" ${act('playExFirst', ex.id)}>Дать первую ноту</button></div>`;
