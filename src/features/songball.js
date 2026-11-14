@@ -16,7 +16,7 @@ import { shiftText, songById, songShiftOf, songWin } from './songs.js';
 // Маршруты: #song-<id> (задания песни), #sball-<id>-<N> (задание). Прогресс - state.songs[id].ball[N] = {stars, pct, tol, date}.
 // Засчитано с 2 звёзд (80% стен) - открывается следующее задание. Правила стен и звёзд - общие с «Шариком» (ballStep).
 export const SB_NEED = 2;
-// ноты -> стены «Шарика» [полутон от базы, длина, пауза, слог] при bpm 60 (доля = секунда).
+// ноты -> стены «Шарика» [полутон от базы, длина, пауза, cue, слог] при bpm 60 (доля = секунда).
 // Быстрые песни замедляем целиком (ритм сохраняется): короткие ноты (четверть самых коротких) - около 0.8 с, не больше чем в 3 раза.
 // Совсем короткие - не короче 0.75 с: иначе тоннель (за вычетом окна на смену ноты) слишком короткий для честной проверки
 export function songWalls(notes, rel) {
@@ -26,7 +26,7 @@ export function songWalls(notes, rel) {
     const len = Math.max(.75, n.d * k), nx = notes[i + 1];
     const gap = nx ? Math.max(0, (nx.t - n.t) * k - len) : 1;
     const w = n.w && n.w.trim().length <= 12 ? n.w.trim() : '';
-    return [n.m + rel, +len.toFixed(3), +gap.toFixed(3), ...(w ? [w] : [])];
+    return [n.m + rel, +len.toFixed(3), +gap.toFixed(3), 0, ...(w ? [w] : [])]; // [3] - подсказка (cue) «Шарика», [4] - слог
   });
 }
 export function songLevels(s) {

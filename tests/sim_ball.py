@@ -44,6 +44,22 @@ with sync_playwright() as p:
     if w[1]: fails.append(f'ноты вне окна голоса {w[0]}: {w[1]}')
     oc = pg.evaluate("(() => { state.settings.base = 48; state.range = [{ date: '2026-11-13T10:00:00', lo: 40, hi: 79, chestHi: 64 }]; save(); ballRebuild(); return [ballWindow(), BALL_LEVELS.filter(l => l.ch === 9 && l.task <= 7).map(l => l.from)]; })()")
     if oc[1] != ['от до', 'от ре', 'от ми', 'от фа', 'от соль', 'от ля', 'от си']: fails.append(f'октава при окне {oc[0]}: {oc[1]}')
+    # «от до» - настоящее До при любой базовой ноте (было: от базы, у базы Ля# «от до» звучало Ля#); с замером и без
+    for rng in ("[]", "[{ date: '2026-11-13T10:00:00', lo: 40, hi: 79, chestHi: 64 }]"):
+        for b in (46, 50, 55):
+            bad = pg.evaluate(f"""(() => {{ state.settings.base = {b}; state.range = {rng}; save(); ballRebuild();
+              const NM = ['до','до#','ре','ре#','ми','фа','фа#','соль','соль#','ля','ля#','си'], out = [];
+              for (const l of BALL_LEVELS) if (l.task <= 7 && l.from !== 'вразнобой') {{ const first = NM[(({b} + l.walls[0][0]) % 12 + 12) % 12];
+                if ('от ' + first !== l.from) out.push(l.n + ': ' + l.from + ' -> ' + first); }}
+              return out; }})()""")
+            if bad: fails.append(f'база {b}, замер {rng[:3]}: задания не от своих нот: {bad[:4]}')
+    # вразнобой и экзамен: первая нота каждой новой фразы подсказывается, перед ней пауза
+    cue = pg.evaluate("""(() => { state.settings.base = 46; state.range = []; save(); ballRebuild();
+      const ex = BALL_LEVELS.filter(l => l.task >= 8), noCue = ex.filter(l => !l.walls.some(w => w[3])).map(l => l.n);
+      const tight = ex.filter(l => l.walls.some((w, k) => w[3] && l.walls[k - 1][2] < 2)).map(l => l.n);
+      return [noCue, tight, BALL_LEVELS[9].walls.map(w => w[0])]; })()""")
+    if cue[0] or cue[1]: fails.append(f'вразнобой без подсказки фраз {cue[0]} или без паузы перед подсказкой {cue[1]}')
+    pg.evaluate("state.settings.base = 48; state.range = []; save(); ballRebuild()")
     for n in range(91, 101):
         pg.goto(f'{URL}#ball-{n}'); pg.wait_for_timeout(100)
         r = pg.evaluate(SIM, [.12, .08, .15, 0, -99, 0])

@@ -6,6 +6,7 @@ import * as core_piano from './core/piano.js';
 import * as core_router from './core/router.js';
 import * as core_store from './core/store.js';
 import * as core_ui from './core/ui.js';
+import * as core_update from './core/update.js';
 import * as core_util from './core/util.js';
 import * as data_exercises from './data/exercises.js';
 import * as trainer_check from './trainer/check.js';
@@ -78,6 +79,7 @@ beforeRender(features_diary.diaryStop);
 beforeRender(features_songs.songStop);
 beforeRender(features_songkeys.skStop);
 beforeRender(features_cam.camOff);
+beforeRender(core_update.applyUpdate); // новая версия сайта - при смене экрана, когда уже ничего не поёт
 onLeave(trainer_recorder.stopRecordingIfAny);
 
 // --- действия кнопок: всё, что можно вызвать из разметки (data-action / data-change / data-input). Только этот список.
@@ -200,3 +202,4 @@ if (navigator.webdriver) {
 
 document.getElementById('gear').innerHTML = core_util.ICON.gear;
 start();
+core_update.updateWatch();

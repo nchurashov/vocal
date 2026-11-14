@@ -1,6 +1,6 @@
 import { act, onChange, onInput } from '../core/actions.js';
 import { VA } from '../core/analysis.js';
-import { MIC_DIRECT, ac, afterMic, base, click, master, noteShort, openMic, stopAll, strictOct, tone } from '../core/audio.js';
+import { MIC_DEAD, MIC_DIRECT, ac, afterMic, base, click, master, noteShort, openMic, stopAll, strictOct, tone } from '../core/audio.js';
 import { afterHooks, render } from '../core/router.js';
 import { profName, save, state } from '../core/store.js';
 import { toast } from '../core/ui.js';
@@ -14,10 +14,11 @@ import { lastAudio, setLastAudio } from '../trainer/recorder.js';
 // ===== Игра «Шарик»: пой ноту, чтобы пролететь в окно =====
 // walls: [полутон, длина тоннеля в долях, пауза после в долях]
 // 10 глав по 10 заданий = 100 заданий. Глава = одна тема (интервал или приём), задания = та же тема от разных нот:
-// 1-7 - от До, Ре, Ми, Фа, Соль, Ля, Си (ступени До мажора), 8-9 - вразнобой от разных нот, 10 - экзамен (всё вперемешку, без подсказки).
+// 1-7 - от До, Ре, Ми, Фа, Соль, Ля, Си (ступени До мажора), 8-9 - вразнобой от разных нот, 10 - экзамен (всё вперемешку).
+// Вразнобой и в экзамене пианино подсказывает первую ноту каждой новой фразы (скачок между фразами - не тема главы), дальше по слуху.
 // Каждое задание ставится в ту октаву, где помещается в окно голоса: замеренный грудной диапазон или [-7, +12] от базовой ноты.
 // Если нота ни в какую октаву не помещается, её место занимает задание вразнобой. Задания детерминированы (сид = номер).
-// walls: [полутон от базовой ноты, длина тоннеля в долях, пауза после в долях]
+// walls: [полутон от базовой ноты, длина тоннеля в долях, пауза после в долях, подсказать ноту (cue), слог песни (songball)]
 export const BALL_CHAPTERS = [
   { title: 'Одна нота', goal: 'Держи ровно одну ноту. В каждом задании своя высота: до, ре, ми...', kind: 'hold', th: { id: 'note', title: 'Нота и унисон' }, bpm: [58, 70] },
   { title: 'Секунда', goal: 'Соседние ступени: шаг вверх и обратно от разных нот', kind: 'int', deg: 1, th: { id: 'step', title: 'Шаг: полутон и тон' }, bpm: [60, 72] },
@@ -37,16 +38,26 @@ export const ballTheory = C => [`learn-${C.th.id}`, C.th.title];
 export const theoryRead = C => !!(state.learn && state.learn.read && state.learn.read[C.th.id]);
 const theoryLink = C => { const [h, t] = ballTheory(C); return theoryRead(C) ? `<a href="#${h}" class="small">📖 Теория: ${t} ✓</a>` : `<button class="item thnew" ${act('go', h)}><div class="dot pitch">📖</div><div class="t"><b>Сначала теория: ${t} <span class="chip pitch">новое</span></b><span class="small muted">3-5 минут со звуком, к этой главе</span></div><span class="muted">›</span></button>`; };
 export function ballRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const B0 = () => typeof base === 'function' ? base() : 48;
 // окно голоса в полутонах от базовой ноты
 export function ballWindow() {
   const r = typeof lastRange === 'function' ? lastRange() : null, b = typeof base === 'function' ? base() : 48;
   if (r) { const lo = r.lo - b, hi = (r.chestHi ?? r.hi) - b; if (hi - lo >= 7) return [Math.max(-12, lo), Math.min(19, hi)]; }
   return [-7, 12];
 }
-// корень задания: ступень dg (0 = до) в октаве, где вся фраза (от 0 до top ступеней вверх) помещается в окно; null - не помещается
-export function ballRoot(dg, top, W) {
-  for (const oct of [0, -1, 1]) { const r = DEG_SEMI(dg) + 12 * oct, hi = DEG_SEMI(dg + top) + 12 * oct; if (r >= W[0] && hi <= W[1]) return { dg: dg + 7 * oct, r }; }
-  return null;
+// корень задания: настоящая нота ступени dg (0 = до, 1 = ре...) в октаве, где вся фраза (от 0 до top ступеней вверх)
+// помещается в окно голоса W (полутоны от базовой ноты); r - полутон от базовой ноты; null - не помещается.
+// pc - насколько база выше своего «до» (у базы Ля# это 10): без него «от до» у базы Ля# звучало бы Ля#.
+// Из подходящих октав - та, где фраза ближе к середине окна.
+export function ballRoot(dg, top, W, pc = 0) {
+  let best = null;
+  for (const oct of [-2, -1, 0, 1, 2]) {
+    const r = DEG_SEMI(dg) + 12 * oct - pc, hi = DEG_SEMI(dg + top) + 12 * oct - pc;
+    if (r < W[0] || hi > W[1]) continue;
+    const d = Math.abs((r + hi) / 2 - (W[0] + W[1]) / 2);
+    if (!best || d < best.d) best = { dg: dg + 7 * oct, r, d };
+  }
+  return best && { dg: best.dg, r: best.r };
 }
 // фраза темы от корня (в ступенях от корня)
 export function ballPhrase(C, R, n) {
@@ -62,16 +73,17 @@ export function ballPhrase(C, R, n) {
 }
 export function ballGen(ci, ti, W) {
   const C = BALL_CHAPTERS[ci], exam = ti === 9, d = ti / 9, R = ballRng((ci + 1) * 1000 + ti + 7);
-  const top = C.kind === 'hold' ? 0 : C.deg, roots = [0, 1, 2, 3, 4, 5, 6].map(g => ballRoot(g, top, W)).filter(Boolean);
-  const fixed = ti < 7 ? ballRoot(ti, top, W) : null; // задания 1-7: от до, ре, ми, фа, соль, ля, си
+  const pc = ((B0() % 12) + 12) % 12, top = C.kind === 'hold' ? 0 : C.deg, roots = [0, 1, 2, 3, 4, 5, 6].map(g => ballRoot(g, top, W, pc)).filter(Boolean);
+  const fixed = ti < 7 ? ballRoot(ti, top, W, pc) : null; // задания 1-7: от до, ре, ми, фа, соль, ля, си
   const n = exam ? 10 : 5 + Math.round(3 * d), legato = C.kind === 'melody' || (C.kind === 'scale' && ti >= 4) || (exam && C.kind !== 'hold');
   const bpm = Math.round(C.bpm[0] + (C.bpm[1] - C.bpm[0]) * d), guide = exam ? false : ti < 6;
-  const walls = [];
+  const walls = [], cues = new Set();
   if (fixed) {
     ballPhrase(C, R, n).forEach(g => walls.push(DEG_SEMI(fixed.dg + g) + (fixed.r - DEG_SEMI(fixed.dg))));
   } else {
     // вразнобой: короткие фразы от разных корней
-    while (walls.length < n) { const rt = roots[Math.floor(R() * roots.length)] || { dg: 0, r: 0 }; ballPhrase(C, R, C.kind === 'hold' ? 2 : C.kind === 'int' ? 2 : 3).forEach(g => { if (walls.length < n) walls.push(DEG_SEMI(rt.dg + g)); }); }
+    // новая фраза - от другой ноты: скачок между фразами не тема главы, поэтому её первую ноту пианино подскажет (cue)
+    while (walls.length < n) { const rt = roots[Math.floor(R() * roots.length)] || { dg: 0, r: -pc }; if (walls.length) cues.add(walls.length); ballPhrase(C, R, C.kind === 'hold' ? 2 : C.kind === 'int' ? 2 : 3).forEach(g => { if (walls.length < n) walls.push(DEG_SEMI(rt.dg + g) + (rt.r - DEG_SEMI(rt.dg))); }); }
   }
   const out = walls.map((s, k) => {
     const jump = k ? Math.abs(s - walls[k - 1]) : 0;
@@ -79,6 +91,8 @@ export function ballGen(ci, ti, W) {
     return [s, len, legato ? 0 : Math.max(1, 2 - Math.round(d * 2) * .5)];
   });
   out[out.length - 1][1] = Math.max(2, out[out.length - 1][1]); out[out.length - 1][2] = 1;
+  // перед подсказанной фразой пауза 2 доли: подсказка звучит за 1.4 доли до стены и не налезает на прошлую ноту
+  for (const k of cues) { out[k - 1][2] = Math.max(2, out[k - 1][2]); out[k][3] = 1; }
   const from = fixed ? `от ${DEG_NAME[ti]}` : 'вразнобой';
   return { n: ci * 10 + ti + 1, ch: ci, task: ti + 1, exam, from, title: exam ? `Экзамен: ${C.title.toLowerCase()}` : `${C.title} ${from}`, hint: C.goal, bpm, guide, walls: out };
 }
@@ -131,7 +145,7 @@ export function viewBall() {
         const best = g.best[lv.n], o = ballUnlocked(lv.n), ok = ballDone(lv.n);
         h += `<button class="gtile ${o ? '' : 'locked'}" ${o ? `${act('go', `ball-${lv.n}`)}` : ''}>
           <span class="gnum">${o ? (lv.exam ? '🎓' : lv.task) : '🔒'}</span><b>${lv.exam ? 'Экзамен' : lv.from[0].toUpperCase() + lv.from.slice(1)}</b><span class="gstars">${starStr(best ? best.stars : 0)}</span>
-          <span class="tiny muted">${ok ? 'пройдено' : best ? 'нужно ' + BALL_NEED(lv.n) + '★, есть ' + best.stars : o ? (lv.exam ? 'без ударов, 3★' : lv.guide ? 'с подсказкой' : 'без подсказки') : 'закрыто'}</span></button>`;
+          <span class="tiny muted">${ok ? 'пройдено' : best ? 'нужно ' + BALL_NEED(lv.n) + '★, есть ' + best.stars : o ? (lv.exam ? 'без ударов, 3★' : lv.guide ? 'с подсказкой' : lv.walls.some(w => w[3]) ? 'подсказка фраз' : 'без подсказки') : 'закрыто'}</span></button>`;
       }
       h += `</div>`;
     }
@@ -157,7 +171,7 @@ export function viewBallLevel(n) {
   afterHooks.push(() => ballSetup(lv)); afterHooks.push(() => { if (camOn()) camStart(); });
   return `<button class="back" ${act('go', 'ball')}>${ICON.back} Все уровни</button>
     <div class="row between"><div><div class="tiny muted">Глава ${lv.ch + 1} «${esc(BALL_CHAPTERS[lv.ch].title)}» · ${lv.exam ? 'экзамен' : 'задание ' + lv.task + ' из 10'} · точность ±${ballTol()} ц</div><h1 style="margin-top:2px">${esc(lv.title)}</h1></div><div style="font-size:22px" id="bstars">${starStr(best ? best.stars : 0)}</div></div>
-    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. ${lv.exam ? 'Экзамен: нужно пролететь все стены без удара, тогда откроется следующая глава.' : `Чтобы засчитать, нужно 2 звезды (80% стен).${lv.guide ? '' : ' Без подсказки пианино перед стеной.'}`}</p>${theoryRead(BALL_CHAPTERS[lv.ch]) ? `<p style="margin:4px 0 0">${theoryLink(BALL_CHAPTERS[lv.ch])}</p>` : `<div style="margin-top:10px">${theoryLink(BALL_CHAPTERS[lv.ch])}</div>`}${octaveHint()}${camToggleHTML()}
+    <p class="muted" style="margin:4px 0 0">${esc(lv.hint)}. ${lv.exam ? 'Экзамен: нужно пролететь все стены без удара, тогда откроется следующая глава.' : 'Чтобы засчитать, нужно 2 звезды (80% стен).'}${lv.guide ? '' : lv.walls.some(w => w[3]) ? ' Пианино подскажет только первую ноту каждой новой фразы, дальше - по слуху.' : ' Без подсказки пианино перед стеной.'}</p>${theoryRead(BALL_CHAPTERS[lv.ch]) ? `<p style="margin:4px 0 0">${theoryLink(BALL_CHAPTERS[lv.ch])}</p>` : `<div style="margin-top:10px">${theoryLink(BALL_CHAPTERS[lv.ch])}</div>`}${octaveHint()}${camToggleHTML()}
     ${diffSeg()}
     <div id="bbest">${ballBestHTML(lv)}</div>
     <div class="gstage sec"><canvas id="bcv"></canvas></div>
@@ -172,11 +186,11 @@ export function ballBestHTML(lv) {
 }
 export function ballBuild(lv) {
   const b = 60 / lv.bpm; let t = 0; const walls = [];
-  lv.walls.forEach(([s, len, gap, word], i) => {
+  lv.walls.forEach(([s, len, gap, cue, word], i) => {
     // окно для смены ноты: если нота идёт сразу за другой, тоннель начинается чуть позже её начала
     const prev = lv.walls[i - 1];
     const open = prev && prev[2] < .5 && prev[0] !== s ? Math.min(Math.max(.4, .45 * b), len * b * .55) : 0;
-    walls.push({ rel: s, t0: t + open, t1: t + len * b, crashed: false, passed: false, inT: 0, outT: 0, ...(word ? { word } : {}) });
+    walls.push({ rel: s, t0: t + open, t1: t + len * b, cue: !!cue, crashed: false, passed: false, inT: 0, outT: 0, ...(word ? { word } : {}) });
     t += (len + gap) * b;
   });
   // соседние тоннели без паузы склеиваются визуально
@@ -262,6 +276,8 @@ export function ballDraw(now) {
   const dupName = B.dupName; // октава: одинаковые названия - подписываем с номером октавы
   for (const r of targets) ctx.fillText(dupName ? noteShort(base() + r) : VA.noteName(base() + r).slice(0, 4), 3, bY(r) + 3);
   if (B.voice != null) { ctx.fillStyle = '#FFD27A'; ctx.beginPath(); ctx.moveTo(30, bY(B.voice)); ctx.lineTo(38, bY(B.voice) - 5); ctx.lineTo(38, bY(B.voice) + 5); ctx.fill(); }
+  // что слышит микрофон: видно, что шарик слушает и какую ноту ты поёшь
+  if (B.mode === 'live') { ctx.font = '700 12px Manrope, system-ui'; ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(B.voice != null ? 'Слышу: ' + VA.noteName(base() + B.voice) : B.micZero > 1.5 ? 'Микрофон молчит' : 'Слышу: тишина', 40, B.H - 14); }
   // след шарика
   for (let i = 0; i < B.trail.length; i++) { const p = B.trail[i]; const x = B.bx - (now - p.t) * B.pps; if (x < 0) continue; ctx.fillStyle = `rgba(255,230,190,${.05 + .35 * i / B.trail.length})`; ctx.beginPath(); ctx.arc(x, p.y, B.r * (.4 + .5 * i / B.trail.length), 0, 7); ctx.fill(); }
   // шарик
@@ -320,7 +336,7 @@ export function ballSchedule(t0, withMelody) {
   const b = 60 / B.lv.bpm;
   B.walls.forEach((w, i) => {
     if (withMelody) tone(base() + w.rel, t0 + w.t0, w.t1 - w.t0, .2);
-    else if (B.guide && (i === 0 || B.walls[i - 1].t1 < w.t0 - .01)) tone(base() + w.rel, t0 + w.t0 - 1.4 * b, .35, .12);
+    else if ((B.guide || w.cue) && (i === 0 || B.walls[i - 1].t1 < w.t0 - .01)) tone(base() + w.rel, t0 + w.t0 - 1.4 * b, .35, .12);
   });
 }
 export function ballCountIn() {
@@ -353,7 +369,7 @@ export async function ballLive() {
   let stream;
   try { stream = await openMic(); }
   catch (e) { $('#bres').innerHTML = '<div class="note" style="margin-top:10px"><b>Нет доступа к микрофону.</b><br>1. Если открыл ссылку из Telegram или другого приложения, нажми «Открыть в Safari» (или скопируй ссылку в Safari).<br>2. В Safari нажми «аА» слева от адреса → «Настройки веб-сайта» → «Микрофон» → «Разрешить», потом обнови страницу.<br>3. Если не помогло: Настройки iPhone → Приложения → Safari → Микрофон → «Спросить» или «Разрешить».</div>'; return; }
-  const c = ac(); ballReset(); B.mode = 'live'; B.stream = stream; setBusy(true);
+  const c = ac(); ballReset(); B.mode = 'live'; B.stream = stream; B.micZero = 0; B.deadShown = false; setBusy(true);
   const src = c.createMediaStreamSource(stream), an = c.createAnalyser(); an.fftSize = 4096; src.connect(an);
   const buf = new Float32Array(an.fftSize), hist = [];
   const t0 = ballCountIn(); ballSchedule(t0, false);
@@ -364,6 +380,10 @@ export async function ballLive() {
     if (!B || B.stopped || B.mode !== 'live') return;
     const now = c.currentTime - t0, dt = last < -8 ? 0 : Math.min(.05, now - last); last = now;
     an.getFloatTimeDomainData(buf);
+    // ровный ноль с микрофона (AirPods, сбой звука iOS) - шарик не может ответить: честно говорим об этом
+    let mx = 0; for (let i = 0; i < buf.length; i += 4) { const a = buf[i] < 0 ? -buf[i] : buf[i]; if (a > mx) mx = a; }
+    B.micZero = mx === 0 ? (B.micZero || 0) + Math.max(0, dt) : 0;
+    if (B.micZero > 1.5 && !B.deadShown) { B.deadShown = true; $('#bnote').innerHTML = `<div class="note small" style="margin-top:10px">${MIC_DEAD.replace('«Готово»', '«Остановить»')}</div>`; }
     hist.push(VA.livePitch(buf, c.sampleRate)); if (hist.length > 3) hist.shift();
     const v = hist.filter(x => x != null);
     ballStep(now, dt, v.length >= 2 && !(B.pre != null && now < B.pre) ? VA.median(v) - base() : null); ballDraw(now);
